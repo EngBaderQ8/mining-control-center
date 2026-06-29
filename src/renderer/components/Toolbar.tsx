@@ -7,6 +7,7 @@ interface Props {
   onAddDevice: () => void;
   onScan: () => void;
   onCheckUpdate: () => void;
+  onTelegram: () => void;
 }
 
 export function Toolbar({
@@ -15,6 +16,7 @@ export function Toolbar({
   onAddDevice,
   onScan,
   onCheckUpdate,
+  onTelegram,
 }: Props): React.ReactElement {
   return (
     <div className="bar">
@@ -52,6 +54,9 @@ export function Toolbar({
       </button>
       <button className="btn" onClick={onAddDevice}>
         + إضافة يدوي
+      </button>
+      <button className="btn" onClick={onTelegram} title="تنبيهات على جوالك عبر تيليجرام">
+        🔔 تنبيهات الجوال
       </button>
       <button className="btn" onClick={onCheckUpdate} title="تحقق من وجود تحديث">
         🔄 تحديث

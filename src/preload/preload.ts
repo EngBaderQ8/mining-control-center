@@ -23,6 +23,10 @@ const api: Api = {
   testHost: (ip: string) => ipcRenderer.invoke(CH.deviceTest, ip),
   getLocalIps: () => ipcRenderer.invoke(CH.localIps),
   getNetworkStats: () => ipcRenderer.invoke(CH.networkStats),
+  getTelegram: () => ipcRenderer.invoke(CH.telegramGet),
+  setTelegram: (s) => ipcRenderer.invoke(CH.telegramSet, s),
+  testTelegram: (s) => ipcRenderer.invoke(CH.telegramTest, s),
+  detectChatId: (token: string) => ipcRenderer.invoke(CH.telegramDetect, token),
   deleteDevice: (deviceId: string) => ipcRenderer.invoke(CH.deviceDelete, deviceId),
   deleteSite: (siteId: string) => ipcRenderer.invoke(CH.siteDelete, siteId),
 

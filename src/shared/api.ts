@@ -18,6 +18,12 @@ export interface AuthStatusResponse {
   serverAddr?: string;
 }
 
+export interface TelegramSettings {
+  enabled: boolean;
+  token: string;
+  chatId: string;
+}
+
 export interface UpdateStatus {
   state: "checking" | "available" | "downloading" | "ready" | "none" | "error" | "uptodate";
   percent?: number;
@@ -55,6 +61,11 @@ export const CH = {
   siteDelete: "site:delete",
   // profit / network
   networkStats: "profit:netstats",
+  // telegram alerts
+  telegramGet: "tg:get",
+  telegramSet: "tg:set",
+  telegramTest: "tg:test",
+  telegramDetect: "tg:detect",
   // updates
   updateCheck: "update:check",
   appVersion: "app:version",
@@ -108,6 +119,11 @@ export interface Api {
   }>;
   getLocalIps(): Promise<string[]>;
   getNetworkStats(): Promise<{ priceUsd: number; difficulty: number; blockRewardBtc: number }>;
+  // telegram alerts
+  getTelegram(): Promise<TelegramSettings>;
+  setTelegram(s: TelegramSettings): Promise<void>;
+  testTelegram(s: TelegramSettings): Promise<{ ok: boolean; error?: string }>;
+  detectChatId(token: string): Promise<{ chatId?: string; error?: string }>;
   // updates
   checkUpdate(): Promise<UpdateCheckResult>;
   getVersion(): Promise<string>;

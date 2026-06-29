@@ -17,8 +17,12 @@ import type { Transport } from "../core/drivers/types";
 import { ConnectionConfig } from "./agent/config";
 import { ServerBridge } from "./agent/serverBridge";
 import { getNetworkStats } from "./profit/networkStats";
+import { AlertConfig } from "./alerts/config";
+import { sendTelegram, detectChatId } from "./alerts/telegram";
+import type { TelegramSettings } from "../shared/api";
 
 let mainWindow: BrowserWindow | null = null;
+let alertConfig: AlertConfig | null = null;
 // Set by setupAutoUpdate so the startup check can be deferred until the renderer
 // has loaded and subscribed (otherwise its events are emitted into the void).
 let triggerUpdateCheck: ((trigger: string) => void) | null = null;
@@ -70,6 +74,7 @@ function buildBridge(): ServerBridge {
   const userData = app.getPath("userData");
   const repo = new DeviceRepo(join(userData, "mining.json"));
   const config = new ConnectionConfig(join(userData, "connection.json"));
+  alertConfig = new AlertConfig(join(userData, "telegram.json"));
   const transport: Transport = { tcp4028, http: httpRequest };
   // Short-timeout transport for fast LAN scanning (don't wait 5s per dead host).
   const scanTransport: Transport = {
@@ -88,6 +93,11 @@ function buildBridge(): ServerBridge {
     emitStatuses: (statuses) => sendToWindow(CH.statusesUpdate, statuses),
     notify: (msg) => {
       notifyMessage("تنبيه", msg);
+      // Also push to the user's phone via Telegram, if configured.
+      const tg = alertConfig?.get();
+      if (tg?.enabled && tg.token && tg.chatId) {
+        void sendTelegram(tg.token, tg.chatId, `⛏ تنبيه التعدين:\n${msg}`);
+      }
     },
   });
 }
@@ -197,6 +207,12 @@ app.whenReady().then(() => {
   // on the bridge or the updater succeeding, so the running build is always known.
   ipcMain.handle(CH.appVersion, () => app.getVersion());
   ipcMain.handle(CH.networkStats, () => getNetworkStats());
+  ipcMain.handle(CH.telegramGet, () => alertConfig?.get() ?? { enabled: false, token: "", chatId: "" });
+  ipcMain.handle(CH.telegramSet, (_e, s: TelegramSettings) => alertConfig?.set(s));
+  ipcMain.handle(CH.telegramTest, (_e, s: TelegramSettings) =>
+    sendTelegram(s.token, s.chatId, "✅ اختبار: تنبيهات مركز التحكم بالتعدين تعمل!"),
+  );
+  ipcMain.handle(CH.telegramDetect, (_e, token: string) => detectChatId(token));
 
   try {
     const bridge = buildBridge();

@@ -23,6 +23,7 @@ import { SiteSection } from "./components/SiteSection";
 import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDialog";
 import { SetPoolDialog, type PoolInput } from "./components/SetPoolDialog";
 import { ScanDialog } from "./components/ScanDialog";
+import { TelegramDialog } from "./components/TelegramDialog";
 import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import type { UpdateStatus } from "../shared/api";
@@ -109,6 +110,7 @@ export function App(): React.ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [tgOpen, setTgOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   // Collapsed site IDs — persisted so the layout survives reloads (key for many sites).
@@ -400,6 +402,7 @@ export function App(): React.ReactElement {
         onChange={setFilter}
         onAddDevice={() => setDialogOpen(true)}
         onScan={() => setScanOpen(true)}
+        onTelegram={() => setTgOpen(true)}
         onCheckUpdate={() => {
           // The persistent banner (driven by main-process events) shows the full
           // result: checking -> up-to-date / downloading / error. No transient toast.
@@ -499,6 +502,8 @@ export function App(): React.ReactElement {
           }}
         />
       )}
+
+      {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
 
       {poolOpen && (
         <SetPoolDialog count={selectedIds.size} onClose={() => setPoolOpen(false)} onSubmit={onSetPool} />
