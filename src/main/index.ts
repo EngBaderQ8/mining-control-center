@@ -101,7 +101,12 @@ function setupAutoUpdate(win: BrowserWindow): void {
     const current = app.getVersion();
     if (!app.isPackaged) return { current, available: false, dev: true };
     try {
-      const r = await updater.checkForUpdates();
+      const r = await Promise.race([
+        updater.checkForUpdates(),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error("انتهت المهلة — ما قدر يوصل GitHub")), 20000),
+        ),
+      ]);
       const latest = r?.updateInfo?.version;
       return { current, latest, available: !!latest && latest !== current };
     } catch (e) {

@@ -95,6 +95,10 @@ export interface Api {
     gotData: boolean;
     sample: string;
     firmware: string | null;
+    state: string;
+    hashrateTHs: number;
+    maxTempC: number;
+    summarySample: string;
     error?: string;
   }>;
   // updates

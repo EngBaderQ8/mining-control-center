@@ -63,7 +63,12 @@ export interface HostDiagnosis {
 }
 
 /** Probe a single host on 4028 with detailed step-by-step results (for debugging). */
-export function diagnoseHost(host: string, port = 4028, timeoutMs = 3000): Promise<HostDiagnosis> {
+export function diagnoseHost(
+  host: string,
+  port = 4028,
+  timeoutMs = 3000,
+  command = "version",
+): Promise<HostDiagnosis> {
   return new Promise((resolve) => {
     const sock = createConnection({ host, port });
     let raw = "";
@@ -78,7 +83,7 @@ export function diagnoseHost(host: string, port = 4028, timeoutMs = 3000): Promi
     sock.setTimeout(timeoutMs, () => finish(connected ? "اتصل لكن ما ردّ (timeout)" : "ما قدر يتصل (timeout)"));
     sock.on("connect", () => {
       connected = true;
-      sock.write(JSON.stringify({ command: "version" }));
+      sock.write(JSON.stringify({ command }));
     });
     sock.on("data", (c) => {
       raw += c.toString("utf8");

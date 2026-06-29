@@ -45,12 +45,15 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     setTestResult(null);
     const r = await api.testHost(testIp.trim());
     setTestBusy(false);
-    if (!r.connected) setTestResult(`❌ ما قدر يتصل بـ ${testIp} على المنفذ 4028. (${r.error ?? ""})`);
-    else if (!r.gotData) setTestResult(`⚠ اتصل بـ ${testIp} لكن ما ردّ. (${r.error ?? ""})`);
-    else
-      setTestResult(
-        `✓ اتصل وردّ! الفرمور: ${r.firmware ?? "غير معروف"}. عيّنة الرد: ${r.sample.slice(0, 90)}…`,
-      );
+    if (!r.connected) {
+      setTestResult(`❌ ما قدر يتصل بـ ${testIp} على المنفذ 4028. (${r.error ?? ""})`);
+      return;
+    }
+    setTestResult(
+      `✓ اتصل وردّ · الفرمور: ${r.firmware ?? "؟"} · المراقبة: ${r.state} · هاش: ${r.hashrateTHs.toFixed(
+        1,
+      )} TH · حرارة: ${r.maxTempC}\nعيّنة summary: ${r.summarySample || "(فاضي)"}`,
+    );
   }
 
   return (
@@ -109,7 +112,11 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
             onChange={(e) => setTestIp(e.target.value)}
           />
         </div>
-        {testResult && <div style={{ fontSize: 12.5, margin: "8px 0", lineHeight: 1.7 }}>{testResult}</div>}
+        {testResult && (
+          <div style={{ fontSize: 12.5, margin: "8px 0", lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+            {testResult}
+          </div>
+        )}
         <div className="actions">
           <button className="btn" disabled={testBusy || !testIp.trim()} onClick={() => void test()}>
             {testBusy ? "جاري الاختبار…" : "اختبر هذا الجهاز"}

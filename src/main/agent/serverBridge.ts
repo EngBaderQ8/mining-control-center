@@ -10,6 +10,7 @@ import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
 import { subnetHosts, type DiscoveredDevice } from "../../core/discovery/scan";
 import { detectFromVersion } from "../../core/discovery/detect";
+import { pollDevice } from "../../core/monitor/poller";
 import { localPrivateBases } from "../discovery/localSubnet";
 import { diagnoseHost } from "../transport/tcp";
 
@@ -134,22 +135,43 @@ export class ServerBridge {
     this.requestSnapshot();
   }
 
-  /** Diagnose connectivity to a single ASIC IP (for troubleshooting the scan). */
+  /** Diagnose a single ASIC IP end-to-end: connectivity, the raw summary reply,
+   *  and the values the monitor would actually extract. */
   async testHost(ip: string): Promise<{
     connected: boolean;
     gotData: boolean;
     sample: string;
     firmware: string | null;
+    state: string;
+    hashrateTHs: number;
+    maxTempC: number;
+    summarySample: string;
     error?: string;
   }> {
-    const d = await diagnoseHost(ip, 4028);
-    const detected = d.gotData ? detectFromVersion(d.raw) : null;
+    const ver = await diagnoseHost(ip, 4028, 3000, "version");
+    const sum = await diagnoseHost(ip, 4028, 3000, "summary");
+    const detected = ver.gotData ? detectFromVersion(ver.raw) : null;
+    const device: Device = {
+      id: "test",
+      siteId: "",
+      name: "test",
+      model: detected?.model ?? "",
+      firmware: detected?.firmware ?? "stock",
+      host: ip,
+      apiPort: 4028,
+      controlPort: 80,
+    };
+    const status = await pollDevice(device, this.deps.transport, Date.now());
     return {
-      connected: d.connected,
-      gotData: d.gotData,
-      sample: d.raw.replace(/\0/g, "").slice(0, 160),
+      connected: ver.connected,
+      gotData: ver.gotData,
+      sample: ver.raw.replace(/\0/g, "").slice(0, 120),
       firmware: detected?.firmware ?? null,
-      ...(d.error ? { error: d.error } : {}),
+      state: status.state,
+      hashrateTHs: status.hashrateTHs,
+      maxTempC: status.maxTempC,
+      summarySample: sum.raw.replace(/\0/g, "").slice(0, 160),
+      ...(ver.error ? { error: ver.error } : {}),
     };
   }
 
