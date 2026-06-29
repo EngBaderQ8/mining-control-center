@@ -3,6 +3,14 @@
  * back to the Arabic text. Placeholders {name} are identical on both sides.
  */
 export const EN: Record<string, string> = {
+  "التنبؤ بالأعطال": "Failure prediction",
+  "يحلّل اتجاهات الحرارة والهاش لكل جهاز ويحذّرك قبل العطل. يحتاج البرنامج يشتغل فترة لجمع البيانات.":
+    "Analyzes each device's temperature and hashrate trends and warns you before a failure. The app needs to run for a while to gather data.",
+  "كل الأجهزة بصحة جيدة — لا توجد مؤشرات أعطال.": "All devices are healthy — no failure indicators.",
+  "الحرارة تتصاعد (~{slope}° بالساعة، الآن {temp}°)":
+    "Temperature rising (~{slope}°/hour, now {temp}°)",
+  "هبوط هاش تدريجي (من ~{from} إلى {to} TH)": "Gradual hashrate drop (from ~{from} to {to} TH)",
+  "انقطاعات متكررة ({count} مرات)": "Repeated disconnects ({count} times)",
   " · يفحص التحديث…": " · Checking for update…",
   " · ✅ آخر نسخة": " · ✅ Up to date",
   " · ⬇ يتوفّر تحديث": " · ⬇ Update available",

@@ -17,7 +17,14 @@ import { ProfitBar } from "./components/ProfitBar";
 import { Heatmap } from "./components/Heatmap";
 import { SiteBreakdown } from "./components/SiteBreakdown";
 import { HistoryCharts } from "./components/HistoryChart";
+import { PredictionsView } from "./components/PredictionsView";
 import { appendPoint, loadHistory, saveHistory, type HistoryPoint } from "./state/history";
+import {
+  recordSamples,
+  loadDeviceHistory,
+  saveDeviceHistory,
+  type DeviceHistory,
+} from "./state/deviceHistory";
 import { Toolbar } from "./components/Toolbar";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
@@ -105,8 +112,9 @@ export function App(): React.ReactElement {
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
-  const [view, setView] = useState<"table" | "heatmap" | "charts" | "sites">("table");
+  const [view, setView] = useState<"table" | "heatmap" | "charts" | "sites" | "predict">("table");
   const [history, setHistory] = useState<HistoryPoint[]>(loadHistory);
+  const [deviceHistory, setDeviceHistory] = useState<DeviceHistory>(loadDeviceHistory);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const onSort = useCallback((key: SortKey) => {
     setSort((prev) =>
@@ -273,6 +281,19 @@ export function App(): React.ReactElement {
       return next;
     });
   }, [summary, authed]);
+
+  // Per-device samples (1/min) feeding the failure-prediction engine.
+  useEffect(() => {
+    if (!authed || statusById.size === 0) return;
+    setDeviceHistory((prev) => {
+      const next = recordSamples(prev, [...statusById.values()], Date.now(), {
+        maxPerDevice: 180,
+        minIntervalMs: 60_000,
+      });
+      if (next !== prev) saveDeviceHistory(next);
+      return next;
+    });
+  }, [statusById, authed]);
   // "Visible" = actually on screen: exclude devices hidden inside collapsed
   // sites so select-all / bulk commands never touch unseen miners.
   const visibleIds = useMemo(
@@ -473,9 +494,23 @@ export function App(): React.ReactElement {
         >
           💵 {t("لكل موقع")}
         </button>
+        <button
+          className={`btn ${view === "predict" ? "primary" : ""}`}
+          onClick={() => setView("predict")}
+        >
+          🔮 {t("التنبؤ بالأعطال")}
+        </button>
       </div>
 
-      {view === "sites" ? (
+      {view === "predict" ? (
+        groups.length === 0 ? (
+          <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+            {t("لا توجد أجهزة مطابقة.")}
+          </div>
+        ) : (
+          <PredictionsView groups={groups} history={deviceHistory} />
+        )
+      ) : view === "sites" ? (
         groups.length === 0 ? (
           <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
             {t("لا توجد مواقع.")}
