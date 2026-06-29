@@ -1,0 +1,20 @@
+appId: com.bader.miningcontrolcenter
+productName: Mining Control Center
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+  - "!**/*.map"
+# better-sqlite3 is a native module and must live outside the asar archive.
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: "MiningControlCenter-Setup-${version}.${ext}"
