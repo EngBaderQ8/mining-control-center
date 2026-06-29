@@ -114,6 +114,10 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
         <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
           📊 لما تفعّل تيليجرام، يوصلك <b>تقرير يومي تلقائي</b> بملخص الإنتاج والمشاكل.
         </p>
+        <p style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7, background: "var(--surface2)", padding: "8px 10px", borderRadius: 8 }}>
+          🤖 <b>الأقوى — تتحكم من جوالك:</b> أرسل للبوت أوامر مثل «<b>الوضع</b>» · «<b>أوقف 105</b>» ·
+          «<b>شغّل الرياض</b>» · «<b>ريبوت الكل</b>» · «<b>مساعدة</b>» — وينفّذ ويردّ عليك. تتحكم بمزرعتك من أي مكان!
+        </p>
         <div className="actions" style={{ marginTop: 6 }}>
           <button className="btn primary" disabled={busy} onClick={() => void save()}>
             حفظ

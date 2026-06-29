@@ -21,6 +21,7 @@ import { AlertConfig } from "./alerts/config";
 import { sendTelegram, detectChatId } from "./alerts/telegram";
 import { RecoveryConfig } from "./recovery/config";
 import { buildDailyReport } from "../core/report/daily";
+import { startBotPoller } from "./alerts/botPoller";
 import type { TelegramSettings, RecoverySettings } from "../shared/api";
 
 let mainWindow: BrowserWindow | null = null;
@@ -256,6 +257,13 @@ app.whenReady().then(() => {
     };
     ipcMain.handle(CH.telegramReport, () => sendDailyReport());
     setInterval(() => void sendDailyReport(), 24 * 60 * 60 * 1000);
+    // Two-way Telegram control: text the bot to command the farm from anywhere.
+    startBotPoller({
+      getSettings: () => alertConfig?.get() ?? { enabled: false, token: "", chatId: "" },
+      getSnapshot: () => bridge.getSnapshot(),
+      sendCommand: (id, command) => bridge.sendCommand(id, command),
+      getNetworkStats: () => getNetworkStats(),
+    });
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);

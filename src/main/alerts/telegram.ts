@@ -24,6 +24,29 @@ export async function sendTelegram(token: string, chatId: string, text: string):
   }
 }
 
+export interface TgUpdate {
+  update_id: number;
+  message?: { text?: string; chat?: { id?: number } };
+}
+
+/** Long-poll the bot for new messages from a given offset (for two-way control). */
+export async function getUpdates(token: string, offset: number): Promise<TgUpdate[]> {
+  try {
+    const res = await request(
+      `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=20`,
+      { headersTimeout: 25000, bodyTimeout: 25000 },
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      await res.body.text();
+      return [];
+    }
+    const data = (await res.body.json()) as { ok?: boolean; result?: TgUpdate[] };
+    return data.ok && Array.isArray(data.result) ? data.result : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Find the chat id of whoever last messaged the bot — so a non-technical user
  * just sends any message to their bot, then clicks "detect" instead of hunting
