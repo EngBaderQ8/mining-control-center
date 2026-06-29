@@ -1,6 +1,6 @@
 import type { Device, DeviceStatus, Site } from "../core/model/device";
 import type { CommandOutcome } from "../core/model/result";
-import type { Transport, ControlCommand } from "../core/drivers/types";
+import type { Transport, ControlCommand, CommandParams } from "../core/drivers/types";
 import { getDriver } from "../core/drivers/registry";
 import { pollDevice } from "../core/monitor/poller";
 import { pollAll } from "../core/monitor/scheduler";
@@ -77,7 +77,11 @@ export class MiningService {
     return enc ? this.deps.decrypt(enc) : undefined;
   }
 
-  async sendCommand(deviceId: string, command: ControlCommand): Promise<CommandOutcome> {
+  async sendCommand(
+    deviceId: string,
+    command: ControlCommand,
+    params?: CommandParams,
+  ): Promise<CommandOutcome> {
     const device = this.deps.repo.listDevices().find((d) => d.id === deviceId);
     if (!device) return { deviceId, ok: false, error: "device not found" };
     return getDriver(device.firmware).execute(
@@ -85,14 +89,19 @@ export class MiningService {
       command,
       this.deps.transport,
       this.secretFor(deviceId),
+      params,
     );
   }
 
-  async sendBulk(deviceIds: string[], command: ControlCommand): Promise<CommandOutcome[]> {
+  async sendBulk(
+    deviceIds: string[],
+    command: ControlCommand,
+    params?: CommandParams,
+  ): Promise<CommandOutcome[]> {
     const all = this.deps.repo.listDevices();
     const targets = all.filter((d) => deviceIds.includes(d.id));
     return runBulk(targets, command, { maxConcurrency: this.config.maxConcurrency }, (d) =>
-      getDriver(d.firmware).execute(d, command, this.deps.transport, this.secretFor(d.id)),
+      getDriver(d.firmware).execute(d, command, this.deps.transport, this.secretFor(d.id), params),
     );
   }
 

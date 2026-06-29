@@ -5,6 +5,7 @@ interface Props {
   selectedCount: number;
   totalVisible: number;
   onBulk: (cmd: ControlCommand) => void;
+  onSetPool: () => void;
   onSelectAll: () => void;
   onClear: () => void;
 }
@@ -13,6 +14,7 @@ export function BulkActionBar({
   selectedCount,
   totalVisible,
   onBulk,
+  onSetPool,
   onSelectAll,
   onClear,
 }: Props): React.ReactElement {
@@ -31,6 +33,9 @@ export function BulkActionBar({
       </button>
       <button className="btn" disabled={none} onClick={() => onBulk("reboot")}>
         ⟳ Reboot
+      </button>
+      <button className="btn" disabled={none} onClick={onSetPool}>
+        ⛏ تغيير البول
       </button>
       <span className="spacer" style={{ marginInlineStart: "auto", fontSize: 13 }}>
         محدّد: <b>{selectedCount}</b> / {totalVisible} ·{" "}

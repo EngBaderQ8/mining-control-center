@@ -31,4 +31,18 @@ describe("StockDriver", () => {
     expect(reqs[0]?.path).toContain("reboot.cgi");
     expect(reqs[0]?.auth?.kind).toBe("digest");
   });
+
+  it("setPool posts the pool config to set_miner_conf.cgi with digest auth", async () => {
+    const reqs: HttpRequest[] = [];
+    const r = await new StockDriver().execute(dev, "setPool", http(reqs), "root:root", {
+      url: "stratum+tcp://p:3333",
+      user: "acct.w1",
+      pass: "x",
+    });
+    expect(r.ok).toBe(true);
+    expect(reqs[0]?.path).toContain("set_miner_conf.cgi");
+    expect(reqs[0]?.method).toBe("POST");
+    expect(reqs[0]?.auth?.kind).toBe("digest");
+    expect(reqs[0]?.body).toContain("stratum+tcp://p:3333");
+  });
 });

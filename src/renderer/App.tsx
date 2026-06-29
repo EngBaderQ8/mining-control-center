@@ -13,6 +13,7 @@ import { Toolbar } from "./components/Toolbar";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
 import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDialog";
+import { SetPoolDialog, type PoolInput } from "./components/SetPoolDialog";
 import { LoginScreen } from "./components/LoginScreen";
 
 const DESTRUCTIVE: ReadonlySet<ControlCommand> = new Set(["stopMining", "reboot"]);
@@ -21,6 +22,7 @@ const CMD_LABEL: Record<ControlCommand, string> = {
   restartMining: "إعادة تشغيل التعدين",
   stopMining: "إيقاف التعدين",
   reboot: "إعادة تشغيل الجهاز (Reboot)",
+  setPool: "تغيير البول",
 };
 
 export function App(): React.ReactElement {
@@ -31,6 +33,7 @@ export function App(): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [poolOpen, setPoolOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -128,6 +131,20 @@ export function App(): React.ReactElement {
     [selectedIds, showToast],
   );
 
+  const onSetPool = useCallback(
+    async (pool: PoolInput) => {
+      const ids = [...selectedIds];
+      setPoolOpen(false);
+      if (ids.length === 0) return;
+      const results = await Promise.all(
+        ids.map((id) => api.sendCommand(id, "setPool", { ...pool })),
+      );
+      const ok = results.filter((r) => r.ok).length;
+      showToast(`تغيير البول: نجح ${ok} / ${results.length}`);
+    },
+    [selectedIds, showToast],
+  );
+
   const onAddDevice = useCallback(
     async (p: NewDevicePayload) => {
       let siteId = p.siteId;
@@ -165,6 +182,7 @@ export function App(): React.ReactElement {
         selectedCount={selectedIds.size}
         totalVisible={visibleIds.length}
         onBulk={onBulk}
+        onSetPool={() => setPoolOpen(true)}
         onSelectAll={() => setSelectedIds(new Set(visibleIds))}
         onClear={() => setSelectedIds(new Set())}
       />
@@ -184,6 +202,10 @@ export function App(): React.ReactElement {
             onCommand={onCommand}
           />
         ))
+      )}
+
+      {poolOpen && (
+        <SetPoolDialog count={selectedIds.size} onClose={() => setPoolOpen(false)} onSubmit={onSetPool} />
       )}
 
       {dialogOpen && (

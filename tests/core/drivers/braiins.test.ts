@@ -36,4 +36,17 @@ describe("BraiinsDriver", () => {
       expect(seq[0]).toContain(`"${verb}"`);
     }
   });
+
+  it("setPool sends addpool with the pool url/user/pass", async () => {
+    const seq: string[] = [];
+    const r = await new BraiinsDriver().execute(dev, "setPool", tcp(seq), undefined, {
+      url: "stratum+tcp://p:3333",
+      user: "acct.w1",
+      pass: "x",
+    });
+    expect(r.ok).toBe(true);
+    expect(seq[0]).toContain('"addpool"');
+    expect(seq[0]).toContain("stratum+tcp://p:3333");
+    expect(seq[0]).toContain("acct.w1");
+  });
 });

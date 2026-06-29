@@ -1,8 +1,8 @@
-import type { DeviceDriver, Transport, ControlCommand } from "./types";
+import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 
-const PATHS: Record<ControlCommand, string> = {
+const PATHS: Record<Exclude<ControlCommand, "setPool">, string> = {
   restartMining: "/api/v1/mining/restart",
   stopMining: "/api/v1/mining/pause",
   startMining: "/api/v1/mining/resume",
@@ -17,6 +17,7 @@ export class VnishDriver implements DeviceDriver {
     command: ControlCommand,
     t: Transport,
     secret?: string,
+    params?: CommandParams,
   ): Promise<CommandOutcome> {
     try {
       const unlock = await t.http({
@@ -28,13 +29,35 @@ export class VnishDriver implements DeviceDriver {
         headers: { "content-type": "application/json" },
       });
       const token = String((JSON.parse(unlock.body || "{}") as { token?: string }).token ?? "");
-      const res = await t.http({
-        host: device.host,
-        port: device.controlPort,
-        method: "POST",
-        path: PATHS[command],
-        auth: { kind: "bearer", token },
-      });
+
+      const req =
+        command === "setPool"
+          ? {
+              host: device.host,
+              port: device.controlPort,
+              method: "POST" as const,
+              path: "/api/v1/settings/pools",
+              auth: { kind: "bearer" as const, token },
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                pools: [
+                  {
+                    url: params?.["url"] ?? "",
+                    user: params?.["user"] ?? "",
+                    pass: params?.["pass"] ?? "",
+                  },
+                ],
+              }),
+            }
+          : {
+              host: device.host,
+              port: device.controlPort,
+              method: "POST" as const,
+              path: PATHS[command],
+              auth: { kind: "bearer" as const, token },
+            };
+
+      const res = await t.http(req);
       return res.status >= 200 && res.status < 300
         ? { deviceId: device.id, ok: true }
         : { deviceId: device.id, ok: false, error: `HTTP ${res.status}` };

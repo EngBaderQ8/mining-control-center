@@ -21,8 +21,10 @@ export function registerIpc(bridge: ServerBridge): void {
   ipcMain.handle(CH.authLogout, () => bridge.logout());
 
   ipcMain.handle(CH.snapshotGet, () => bridge.getSnapshot());
-  ipcMain.handle(CH.deviceCommand, (_e, deviceId: string, command: ControlCommand) =>
-    bridge.sendCommand(deviceId, command),
+  ipcMain.handle(
+    CH.deviceCommand,
+    (_e, deviceId: string, command: ControlCommand, params?: Record<string, string>) =>
+      bridge.sendCommand(deviceId, command, params),
   );
   ipcMain.handle(CH.deviceBulk, (_e, deviceIds: string[], command: ControlCommand) =>
     bridge.sendBulk(deviceIds, command),

@@ -48,7 +48,11 @@ export interface Api {
   logout(): Promise<void>;
   // data
   getSnapshot(): Promise<Snapshot>;
-  sendCommand(deviceId: string, command: ControlCommand): Promise<CommandOutcome>;
+  sendCommand(
+    deviceId: string,
+    command: ControlCommand,
+    params?: Record<string, string>,
+  ): Promise<CommandOutcome>;
   sendBulk(deviceIds: string[], command: ControlCommand): Promise<CommandOutcome[]>;
   addDevice(device: Device, secret?: string): Promise<void>;
   addSite(site: Site): Promise<void>;

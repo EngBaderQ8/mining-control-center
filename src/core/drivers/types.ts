@@ -22,7 +22,21 @@ export interface Transport {
   http(req: HttpRequest): Promise<HttpResponse>;
 }
 
-export type ControlCommand = "restartMining" | "stopMining" | "startMining" | "reboot";
+export type ControlCommand =
+  | "restartMining"
+  | "stopMining"
+  | "startMining"
+  | "reboot"
+  | "setPool";
+
+/** Parameters for setPool. */
+export interface PoolParams {
+  url: string;
+  user: string;
+  pass: string;
+}
+
+export type CommandParams = Record<string, string>;
 
 export interface DeviceDriver {
   firmware: Firmware;
@@ -31,5 +45,6 @@ export interface DeviceDriver {
     command: ControlCommand,
     t: Transport,
     secret?: string,
+    params?: CommandParams,
   ): Promise<CommandOutcome>;
 }

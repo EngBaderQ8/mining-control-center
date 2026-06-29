@@ -1,4 +1,4 @@
-import type { DeviceDriver, Transport, ControlCommand } from "./types";
+import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 import { parseResponse } from "../cgminer/parse";
@@ -10,7 +10,13 @@ interface SessionResponse {
 export class LuxOsDriver implements DeviceDriver {
   firmware = "luxos" as const;
 
-  async execute(device: Device, command: ControlCommand, t: Transport): Promise<CommandOutcome> {
+  async execute(
+    device: Device,
+    command: ControlCommand,
+    t: Transport,
+    _secret?: string,
+    params?: CommandParams,
+  ): Promise<CommandOutcome> {
     try {
       const logon = await t.tcp4028(
         device.host,
@@ -37,6 +43,14 @@ export class LuxOsDriver implements DeviceDriver {
         case "reboot":
           await send({ command: "reboot", parameter: session });
           break;
+        case "setPool": {
+          const p = params ?? {};
+          await send({
+            command: "addpool",
+            parameter: `${session},${p["url"] ?? ""},${p["user"] ?? ""},${p["pass"] ?? ""}`,
+          });
+          break;
+        }
       }
       return { deviceId: device.id, ok: true };
     } catch (e) {

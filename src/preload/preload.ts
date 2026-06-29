@@ -12,8 +12,8 @@ const api: Api = {
   logout: () => ipcRenderer.invoke(CH.authLogout),
 
   getSnapshot: () => ipcRenderer.invoke(CH.snapshotGet),
-  sendCommand: (deviceId: string, command: ControlCommand) =>
-    ipcRenderer.invoke(CH.deviceCommand, deviceId, command),
+  sendCommand: (deviceId: string, command: ControlCommand, params?: Record<string, string>) =>
+    ipcRenderer.invoke(CH.deviceCommand, deviceId, command, params),
   sendBulk: (deviceIds: string[], command: ControlCommand) =>
     ipcRenderer.invoke(CH.deviceBulk, deviceIds, command),
   addDevice: (device: Device, secret?: string) => ipcRenderer.invoke(CH.deviceAdd, device, secret),

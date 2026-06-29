@@ -1,8 +1,8 @@
-import type { DeviceDriver, Transport, ControlCommand } from "./types";
+import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 
-const PATH: Record<ControlCommand, string> = {
+const PATH: Record<Exclude<ControlCommand, "setPool">, string> = {
   reboot: "/cgi-bin/reboot.cgi",
   restartMining: "/cgi-bin/miner_restart.cgi",
   stopMining: "/cgi-bin/miner_restart.cgi", // stock has no pause; honest restart fallback
@@ -17,16 +17,40 @@ export class StockDriver implements DeviceDriver {
     command: ControlCommand,
     t: Transport,
     secret?: string,
+    params?: CommandParams,
   ): Promise<CommandOutcome> {
     const [user, pass] = (secret ?? "root:root").split(":");
     try {
-      const res = await t.http({
-        host: device.host,
-        port: device.controlPort,
-        method: "GET",
-        path: PATH[command],
-        auth: { kind: "digest", user, pass },
-      });
+      // setPool posts the pool configuration to the miner config CGI; other
+      // commands are simple GETs. Exact conf schema varies by model (see risks).
+      const req =
+        command === "setPool"
+          ? {
+              host: device.host,
+              port: device.controlPort,
+              method: "POST" as const,
+              path: "/cgi-bin/set_miner_conf.cgi",
+              auth: { kind: "digest" as const, user, pass },
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                pools: [
+                  {
+                    url: params?.["url"] ?? "",
+                    user: params?.["user"] ?? "",
+                    pass: params?.["pass"] ?? "",
+                  },
+                ],
+              }),
+            }
+          : {
+              host: device.host,
+              port: device.controlPort,
+              method: "GET" as const,
+              path: PATH[command],
+              auth: { kind: "digest" as const, user, pass },
+            };
+
+      const res = await t.http(req);
       return res.status >= 200 && res.status < 300
         ? { deviceId: device.id, ok: true }
         : { deviceId: device.id, ok: false, error: `HTTP ${res.status}` };

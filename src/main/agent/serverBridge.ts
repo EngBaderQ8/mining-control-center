@@ -124,6 +124,7 @@ export class ServerBridge {
   async sendCommand(
     deviceId: string,
     command: ControlCommand,
+    params?: Record<string, string>,
   ): Promise<CommandOutcome> {
     if (!this.connected) return { deviceId, ok: false, error: "غير متصل بالخادم" };
     const commandId = randomUUID();
@@ -136,12 +137,16 @@ export class ServerBridge {
         clearTimeout(timer);
         resolve(o);
       });
-      this.client.send({ type: "command.send", commandId, deviceId, command });
+      this.client.send({ type: "command.send", commandId, deviceId, command, ...(params ? { params } : {}) });
     });
   }
 
-  async sendBulk(deviceIds: string[], command: ControlCommand): Promise<CommandOutcome[]> {
-    return Promise.all(deviceIds.map((id) => this.sendCommand(id, command)));
+  async sendBulk(
+    deviceIds: string[],
+    command: ControlCommand,
+    params?: Record<string, string>,
+  ): Promise<CommandOutcome[]> {
+    return Promise.all(deviceIds.map((id) => this.sendCommand(id, command, params)));
   }
 
   private onConnected(): void {
@@ -153,7 +158,7 @@ export class ServerBridge {
       conn: this.client,
       listSites: () => this.deps.repo.listSites(),
       listDevices: () => this.deps.repo.listDevices(),
-      execute: (deviceId, command) => this.service.sendCommand(deviceId, command),
+      execute: (deviceId, command, params) => this.service.sendCommand(deviceId, command, params),
     });
     this.agent.start();
     this.client.send({ type: "snapshot.request" });

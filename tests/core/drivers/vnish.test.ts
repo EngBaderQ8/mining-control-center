@@ -36,4 +36,17 @@ describe("VnishDriver", () => {
     expect(reqs[1]?.path).toContain("/mining/restart");
     expect(reqs[1]?.auth?.token).toBe("T");
   });
+
+  it("setPool posts the pool config with the given url/user", async () => {
+    const reqs: HttpRequest[] = [];
+    const r = await new VnishDriver().execute(dev, "setPool", fakeHttp(reqs), "pw", {
+      url: "stratum+tcp://p:3333",
+      user: "acct.w1",
+      pass: "x",
+    });
+    expect(r.ok).toBe(true);
+    expect(reqs[1]?.path).toContain("/pools");
+    expect(reqs[1]?.body).toContain("stratum+tcp://p:3333");
+    expect(reqs[1]?.body).toContain("acct.w1");
+  });
 });

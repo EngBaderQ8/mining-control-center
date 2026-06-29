@@ -42,4 +42,17 @@ describe("LuxOsDriver", () => {
     expect(r.ok).toBe(true);
     expect(seq[1]).toContain('"reboot"');
   });
+
+  it("setPool logs on then addpool with url/user/pass", async () => {
+    const seq: string[] = [];
+    const r = await new LuxOsDriver().execute(dev, "setPool", fakeTcp(seq), undefined, {
+      url: "stratum+tcp://p:3333",
+      user: "acct.w1",
+      pass: "x",
+    });
+    expect(r.ok).toBe(true);
+    expect(seq[0]).toContain('"logon"');
+    expect(seq[1]).toContain('"addpool"');
+    expect(seq[1]).toContain("stratum+tcp://p:3333");
+  });
 });
