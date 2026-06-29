@@ -6,6 +6,7 @@ interface Props {
   onScan: (
     siteName: string,
     base: string,
+    secret: string,
   ) => Promise<{
     found: number;
     reachable: boolean;
@@ -18,6 +19,7 @@ interface Props {
 export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
   const [siteName, setSiteName] = useState("");
   const [base, setBase] = useState("");
+  const [secret, setSecret] = useState("");
   const [detectedIps, setDetectedIps] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     setBusy(true);
     setResult(null);
     try {
-      const r = await onScan(siteName.trim(), base.trim());
+      const r = await onScan(siteName.trim(), base.trim(), secret);
       const scanned = r.bases.length ? r.bases.join("، ") : "—";
       const diag = `(النطاق ${scanned} · اتصل بـ ${r.connected} جهاز على 4028 · ردّ ${r.responded})`;
       if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
@@ -132,6 +134,21 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
             style={{ marginTop: 6 }}
           />
         </details>
+
+        <div className="field">
+          <label>باسورد واجهة الأسيك (اختياري — لتفعيل التحكم)</label>
+          <input
+            className="input"
+            type="password"
+            placeholder="اتركه فاضي لو على الافتراضي root:root"
+            value={secret}
+            disabled={busy}
+            onChange={(e) => setSecret(e.target.value)}
+          />
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+            🔑 نفس الباسورد اللي تدخل فيه صفحة الجهاز. يُحفظ مشفّراً ويتطبّق على كل الأجهزة — عشان أوامر التشغيل/الإيقاف تشتغل.
+          </div>
+        </div>
 
         {busy && <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>⏳ جاري الفحص والإضافة…</div>}
         {result && <div style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.7 }}>{result}</div>}

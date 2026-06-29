@@ -101,6 +101,7 @@ export interface Api {
   scanNetwork(
     siteName: string,
     base?: string,
+    secret?: string,
   ): Promise<{
     found: number;
     reachable: boolean;

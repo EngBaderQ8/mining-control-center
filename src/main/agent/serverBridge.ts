@@ -239,6 +239,7 @@ export class ServerBridge {
   async scanNetwork(
     siteName: string,
     base?: string,
+    secret?: string,
   ): Promise<{
     found: number;
     reachable: boolean;
@@ -270,7 +271,9 @@ export class ServerBridge {
         apiPort: 4028,
         controlPort,
       };
-      this.service.addDevice(device, "root:root");
+      // Use the password the user typed once (applies to the whole fleet);
+      // fall back to the Antminer default if they left it empty.
+      this.service.addDevice(device, secret && secret.trim() ? secret.trim() : "root:root");
       this.agent?.registerDevice(device);
     }
     this.requestSnapshot(); // one refresh after registering everything

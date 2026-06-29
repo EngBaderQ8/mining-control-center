@@ -18,8 +18,8 @@ const api: Api = {
     ipcRenderer.invoke(CH.deviceBulk, deviceIds, command),
   addDevice: (device: Device, secret?: string) => ipcRenderer.invoke(CH.deviceAdd, device, secret),
   addSite: (site: Site) => ipcRenderer.invoke(CH.siteAdd, site),
-  scanNetwork: (siteName: string, base?: string) =>
-    ipcRenderer.invoke(CH.deviceScan, siteName, base),
+  scanNetwork: (siteName: string, base?: string, secret?: string) =>
+    ipcRenderer.invoke(CH.deviceScan, siteName, base, secret),
   testHost: (ip: string) => ipcRenderer.invoke(CH.deviceTest, ip),
   getLocalIps: () => ipcRenderer.invoke(CH.localIps),
   getNetworkStats: () => ipcRenderer.invoke(CH.networkStats),
