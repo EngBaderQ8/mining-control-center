@@ -26,14 +26,14 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
-  // Auto-detect this machine's network and pre-fill the range — no typing needed.
+  // Auto-detect this machine's real IP(s) from the OS (any subnet — 192.168.0,
+  // 192.168.8, 10.x …). We DON'T pre-fill the manual field, so an empty value
+  // means "scan ALL of my detected networks" (robust for multi-adapter machines).
   useEffect(() => {
-    void api.getLocalIps().then((ips) => {
-      setDetectedIps(ips);
-      const first = ips[0];
-      if (first) setBase(first.split(".").slice(0, 3).join("."));
-    });
+    void api.getLocalIps().then(setDetectedIps);
   }, []);
+
+  const bases = [...new Set(detectedIps.map((ip) => ip.split(".").slice(0, 3).join(".")))];
 
   async function go(): Promise<void> {
     if (!siteName.trim()) return;
@@ -76,7 +76,6 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     }
   }
 
-  const detected = detectedIps[0];
   return (
     <div className="overlay" onClick={busy || testBusy ? undefined : onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
@@ -97,20 +96,42 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         </div>
 
         <div className="field">
-          <label>نطاق الشبكة (تلقائي)</label>
+          <label>الشبكة (تلقائي بالكامل — ما تحتاج تكتب شي)</label>
+          <div
+            style={{
+              fontSize: 13,
+              background: "var(--surface2)",
+              border: "1px solid var(--border)",
+              padding: "9px 11px",
+              borderRadius: 8,
+              lineHeight: 1.9,
+            }}
+          >
+            {detectedIps.length > 0 ? (
+              <>
+                📡 جهازك على: <b>{detectedIps.join("، ")}</b>
+                <br />
+                ✅ بيفحص تلقائياً: <b>{base.trim() ? `${base.trim()}.x` : bases.map((b) => `${b}.x`).join("، ")}</b>
+              </>
+            ) : (
+              "…جاري كشف شبكتك تلقائياً"
+            )}
+          </div>
+        </div>
+
+        <details style={{ marginBottom: 10 }}>
+          <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>
+            نطاق محدد يدوياً (اختياري — لو أجهزتك على شبكة غير شبكة جهازك)
+          </summary>
           <input
             className="input"
-            placeholder="يُكتشف تلقائياً…"
+            placeholder="مثال: 192.168.8"
             value={base}
             disabled={busy}
             onChange={(e) => setBase(e.target.value)}
+            style={{ marginTop: 6 }}
           />
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-            {detected
-              ? `📡 اكتُشف جهازك تلقائياً: ${detected} — سيُفحص النطاق ${base || "؟"}.x`
-              : "…جاري كشف شبكتك تلقائياً"}
-          </div>
-        </div>
+        </details>
 
         {busy && <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>⏳ جاري الفحص والإضافة…</div>}
         {result && <div style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.7 }}>{result}</div>}
