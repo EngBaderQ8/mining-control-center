@@ -7,3 +7,6 @@ release/
 .DS_Store
 .superpowers/
 coverage/
+server/data/
+dist-server/
+*.pem

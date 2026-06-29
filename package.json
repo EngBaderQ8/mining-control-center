@@ -13,6 +13,9 @@
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "dev:renderer": "vite",
     "start": "npm run build && electron .",
+    "server:dev": "tsx watch server/src/index.ts",
+    "server:start": "tsx server/src/index.ts",
+    "server:build": "tsc -p server/tsconfig.json",
     "dist": "npm run build && electron-builder"
   },
   "keywords": [],
@@ -20,20 +23,30 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.3",
     "electron": "^42.5.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
+    "jsonwebtoken": "^9.0.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "undici": "^8.5.0"
+    "selfsigned": "^5.5.0",
+    "undici": "^8.5.0",
+    "ws": "^8.21.0"
   }
 }
