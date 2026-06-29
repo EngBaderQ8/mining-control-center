@@ -6,9 +6,16 @@ interface Props {
   onChange: (f: Filter) => void;
   onAddDevice: () => void;
   onScan: () => void;
+  onCheckUpdate: () => void;
 }
 
-export function Toolbar({ filter, onChange, onAddDevice, onScan }: Props): React.ReactElement {
+export function Toolbar({
+  filter,
+  onChange,
+  onAddDevice,
+  onScan,
+  onCheckUpdate,
+}: Props): React.ReactElement {
   return (
     <div className="bar">
       <input
@@ -45,6 +52,9 @@ export function Toolbar({ filter, onChange, onAddDevice, onScan }: Props): React
       </button>
       <button className="btn" onClick={onAddDevice}>
         + إضافة يدوي
+      </button>
+      <button className="btn" onClick={onCheckUpdate} title="تحقق من وجود تحديث">
+        🔄 تحديث
       </button>
     </div>
   );

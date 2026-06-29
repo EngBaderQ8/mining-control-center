@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { CH, type Api, type Snapshot } from "../shared/api";
+import { CH, type Api, type Snapshot, type UpdateStatus } from "../shared/api";
 import type { DeviceStatus, Device, Site } from "../core/model/device";
 import type { ControlCommand } from "../core/drivers/types";
 import type { Alert } from "../core/alerts/rules";
@@ -38,6 +38,13 @@ const api: Api = {
     const handler = (_e: unknown, alerts: Alert[]): void => cb(alerts);
     ipcRenderer.on(CH.alerts, handler);
     return () => ipcRenderer.removeListener(CH.alerts, handler);
+  },
+
+  checkUpdate: () => ipcRenderer.invoke(CH.updateCheck),
+  onUpdateStatus: (cb: (s: UpdateStatus) => void) => {
+    const handler = (_e: unknown, s: UpdateStatus): void => cb(s);
+    ipcRenderer.on(CH.updateStatus, handler);
+    return () => ipcRenderer.removeListener(CH.updateStatus, handler);
   },
 };
 

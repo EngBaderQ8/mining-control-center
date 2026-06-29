@@ -16,6 +16,8 @@ import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDi
 import { SetPoolDialog, type PoolInput } from "./components/SetPoolDialog";
 import { ScanDialog } from "./components/ScanDialog";
 import { LoginScreen } from "./components/LoginScreen";
+import { UpdateBanner } from "./components/UpdateBanner";
+import type { UpdateStatus } from "../shared/api";
 
 const DESTRUCTIVE: ReadonlySet<ControlCommand> = new Set(["stopMining", "reboot"]);
 const CMD_LABEL: Record<ControlCommand, string> = {
@@ -37,6 +39,7 @@ export function App(): React.ReactElement {
   const [poolOpen, setPoolOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -57,6 +60,11 @@ export function App(): React.ReactElement {
   // Auth gate: decide whether to show login or the dashboard.
   useEffect(() => {
     void api.authStatus().then((s) => setAuthed(s.loggedIn));
+  }, []);
+
+  // Update banner — subscribe regardless of auth so updates are always visible.
+  useEffect(() => {
+    return api.onUpdateStatus((s) => setUpdateStatus(s));
   }, []);
 
   // Data feed (server-driven) — only while authenticated.
@@ -195,16 +203,27 @@ export function App(): React.ReactElement {
 
   if (authed === null)
     return <div className="app" style={{ color: "var(--muted)" }}>…تحميل</div>;
-  if (!authed) return <LoginScreen onAuthed={() => setAuthed(true)} />;
+  if (!authed)
+    return (
+      <>
+        <UpdateBanner status={updateStatus} />
+        <LoginScreen onAuthed={() => setAuthed(true)} />
+      </>
+    );
 
   return (
     <div className="app">
+      <UpdateBanner status={updateStatus} />
       <SummaryBar summary={summary} />
       <Toolbar
         filter={filter}
         onChange={setFilter}
         onAddDevice={() => setDialogOpen(true)}
         onScan={() => setScanOpen(true)}
+        onCheckUpdate={() => {
+          showToast("جاري التحقق من التحديثات…");
+          void api.checkUpdate();
+        }}
       />
       <BulkActionBar
         selectedCount={selectedIds.size}

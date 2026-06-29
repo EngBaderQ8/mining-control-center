@@ -24,6 +24,16 @@ a { color: var(--blue); text-decoration: none; }
 
 .app { padding: 16px; max-width: 1400px; margin: 0 auto; }
 
+/* auto-update banner */
+.updatebar {
+  background: #1d4ed8;
+  color: #fff;
+  text-align: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* summary */
 .topbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .stat {

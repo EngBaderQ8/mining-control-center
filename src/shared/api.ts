@@ -18,6 +18,13 @@ export interface AuthStatusResponse {
   serverAddr?: string;
 }
 
+export interface UpdateStatus {
+  state: "checking" | "available" | "downloading" | "ready" | "none" | "error";
+  percent?: number;
+  version?: string;
+  error?: string;
+}
+
 /** IPC channel names shared between main, preload, and renderer. */
 export const CH = {
   // auth / server
@@ -36,10 +43,13 @@ export const CH = {
   deviceDelete: "device:delete",
   siteAdd: "site:add",
   siteDelete: "site:delete",
+  // updates
+  updateCheck: "update:check",
   // push (main -> renderer)
   snapshotUpdate: "snapshot:update",
   statusesUpdate: "statuses:update",
   alerts: "alerts",
+  updateStatus: "update:status",
 } as const;
 
 /** The typed surface exposed on `window.api` by the preload bridge. */
@@ -79,8 +89,11 @@ export interface Api {
     firmware: string | null;
     error?: string;
   }>;
+  // updates
+  checkUpdate(): Promise<void>;
   // subscriptions (return an unsubscribe function)
   onSnapshot(cb: (snap: Snapshot) => void): () => void;
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;
   onAlerts(cb: (alerts: Alert[]) => void): () => void;
+  onUpdateStatus(cb: (s: UpdateStatus) => void): () => void;
 }

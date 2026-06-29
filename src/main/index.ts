@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
 import electronUpdater from "electron-updater";
 import { DeviceRepo } from "./db/repo";
@@ -85,19 +85,44 @@ function buildBridge(win: BrowserWindow): ServerBridge {
  * background and installs + relaunches automatically — so the whole fleet of
  * site laptops stays current without manual re-installs.
  */
-function setupAutoUpdate(): void {
-  if (!app.isPackaged) return;
+function setupAutoUpdate(win: BrowserWindow): void {
   const updater = electronUpdater.autoUpdater;
-  updater.autoDownload = true;
-  updater.on("update-available", (i) => console.log(`[update] available ${i.version}`));
-  updater.on("update-not-available", () => console.log("[update] up to date"));
-  updater.on("error", (e) => console.error(`[update] error: ${e.message}`));
-  updater.on("update-downloaded", (i) => {
-    console.log(`[update] downloaded ${i.version} — installing`);
-    setTimeout(() => updater.quitAndInstall(true, true), 3000);
+  const send = (s: {
+    state: string;
+    percent?: number;
+    version?: string;
+    error?: string;
+  }): void => {
+    if (!win.isDestroyed()) win.webContents.send(CH.updateStatus, s);
+  };
+
+  // Manual check is always available (so the UI button works, even in dev).
+  ipcMain.handle(CH.updateCheck, async () => {
+    if (!app.isPackaged) {
+      send({ state: "none" });
+      return;
+    }
+    await updater.checkForUpdates();
   });
+
+  if (!app.isPackaged) return;
+
+  updater.autoDownload = true;
+  updater.on("checking-for-update", () => send({ state: "checking" }));
+  updater.on("update-available", (i) => send({ state: "available", version: i.version }));
+  updater.on("update-not-available", () => send({ state: "none" }));
+  updater.on("download-progress", (p) =>
+    send({ state: "downloading", percent: Math.round(p.percent) }),
+  );
+  updater.on("error", (e) => send({ state: "error", error: e.message }));
+  updater.on("update-downloaded", (i) => {
+    send({ state: "ready", version: i.version });
+    // Apply automatically so the whole fleet stays current (brief restart).
+    setTimeout(() => updater.quitAndInstall(true, true), 8000);
+  });
+
   void updater.checkForUpdates();
-  setInterval(() => void updater.checkForUpdates(), 6 * 60 * 60 * 1000); // every 6h
+  setInterval(() => void updater.checkForUpdates(), 60 * 60 * 1000); // hourly
 }
 
 app.whenReady().then(() => {
@@ -106,7 +131,7 @@ app.whenReady().then(() => {
     const bridge = buildBridge(mainWindow);
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
-    setupAutoUpdate();
+    setupAutoUpdate(mainWindow);
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);
