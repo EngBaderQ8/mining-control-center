@@ -9,7 +9,9 @@ import { ConnectionConfig } from "./config";
 import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
 import { scanHosts, subnetHosts } from "../../core/discovery/scan";
+import { detectFromVersion } from "../../core/discovery/detect";
 import { localPrivateBases } from "../discovery/localSubnet";
+import { diagnoseHost } from "../transport/tcp";
 
 export interface BridgeDeps {
   config: ConnectionConfig;
@@ -123,6 +125,25 @@ export class ServerBridge {
   addDevice(device: Device, secret?: string): void {
     this.service.addDevice(device, secret);
     this.agent?.registerDevice(device);
+  }
+
+  /** Diagnose connectivity to a single ASIC IP (for troubleshooting the scan). */
+  async testHost(ip: string): Promise<{
+    connected: boolean;
+    gotData: boolean;
+    sample: string;
+    firmware: string | null;
+    error?: string;
+  }> {
+    const d = await diagnoseHost(ip, 4028);
+    const detected = d.gotData ? detectFromVersion(d.raw) : null;
+    return {
+      connected: d.connected,
+      gotData: d.gotData,
+      sample: d.raw.replace(/\0/g, "").slice(0, 160),
+      firmware: detected?.firmware ?? null,
+      ...(d.error ? { error: d.error } : {}),
+    };
   }
 
   /** Delete a device locally (so this agent won't re-register it) and on the server. */

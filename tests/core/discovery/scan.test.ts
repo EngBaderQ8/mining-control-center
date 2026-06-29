@@ -32,11 +32,14 @@ describe("scan", () => {
     expect(found.find((d) => d.host.endsWith(".51"))?.firmware).toBe("luxos");
   });
 
-  it("subnetHosts builds .1–.254 for a /24", () => {
-    const hosts = subnetHosts("192.168.1.77");
-    expect(hosts).toHaveLength(254);
-    expect(hosts[0]).toBe("192.168.1.1");
-    expect(hosts[253]).toBe("192.168.1.254");
+  it("subnetHosts builds .1–.254 from a base or full IP", () => {
+    for (const input of ["192.168.1.77", "192.168.1"]) {
+      const hosts = subnetHosts(input);
+      expect(hosts).toHaveLength(254);
+      expect(hosts[0]).toBe("192.168.1.1");
+      expect(hosts[253]).toBe("192.168.1.254");
+    }
     expect(subnetHosts("bad")).toEqual([]);
+    expect(subnetHosts("192.168")).toEqual([]);
   });
 });

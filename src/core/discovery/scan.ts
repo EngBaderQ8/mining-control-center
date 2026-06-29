@@ -9,10 +9,14 @@ export interface DiscoveredDevice {
   model: string;
 }
 
-/** All host addresses (.1–.254) on the /24 of the given local IPv4. */
-export function subnetHosts(localIp: string): string[] {
-  const parts = localIp.split(".");
-  if (parts.length !== 4 || parts.some((p) => p === "" || Number.isNaN(Number(p)))) return [];
+/**
+ * All host addresses (.1–.254) on the /24 of the given input. Accepts either a
+ * 3-octet base ("192.168.0") or a full IP ("192.168.0.113") — both yield the
+ * same /24 host list.
+ */
+export function subnetHosts(input: string): string[] {
+  const parts = input.split(".").filter((p) => p !== "");
+  if (parts.length < 3 || parts.slice(0, 3).some((p) => Number.isNaN(Number(p)))) return [];
   const base = parts.slice(0, 3).join(".");
   return Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`);
 }

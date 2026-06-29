@@ -32,6 +32,7 @@ export const CH = {
   deviceBulk: "device:bulk",
   deviceAdd: "device:add",
   deviceScan: "device:scan",
+  deviceTest: "device:test",
   deviceDelete: "device:delete",
   siteAdd: "site:add",
   siteDelete: "site:delete",
@@ -65,6 +66,13 @@ export interface Api {
     siteName: string,
     base?: string,
   ): Promise<{ found: number; reachable: boolean; bases: string[] }>;
+  testHost(ip: string): Promise<{
+    connected: boolean;
+    gotData: boolean;
+    sample: string;
+    firmware: string | null;
+    error?: string;
+  }>;
   // subscriptions (return an unsubscribe function)
   onSnapshot(cb: (snap: Snapshot) => void): () => void;
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;
