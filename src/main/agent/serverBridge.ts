@@ -117,14 +117,21 @@ export class ServerBridge {
     return this.snapshot;
   }
 
+  /** Ask the server for a fresh snapshot so the UI reflects structural changes. */
+  private requestSnapshot(): void {
+    if (this.connected) this.client.send({ type: "snapshot.request" });
+  }
+
   addSite(site: Site): void {
     this.deps.repo.upsertSite(site);
     this.agent?.registerSite(site);
+    this.requestSnapshot();
   }
 
   addDevice(device: Device, secret?: string): void {
     this.service.addDevice(device, secret);
     this.agent?.registerDevice(device);
+    this.requestSnapshot();
   }
 
   /** Diagnose connectivity to a single ASIC IP (for troubleshooting the scan). */
@@ -206,24 +213,26 @@ export class ServerBridge {
     if (found.length === 0) return { found: 0, reachable: true, bases, connected, responded };
 
     const siteId = randomUUID();
-    this.addSite({ id: siteId, name: siteName });
+    const site = { id: siteId, name: siteName };
+    this.deps.repo.upsertSite(site);
+    this.agent?.registerSite(site);
     for (const d of found) {
       const last = d.host.split(".").pop() ?? "";
       const controlPort = d.firmware === "stock" || d.firmware === "vnish" ? 80 : 4028;
-      this.addDevice(
-        {
-          id: randomUUID(),
-          siteId,
-          name: `${d.model}-${last}`,
-          model: d.model,
-          firmware: d.firmware,
-          host: d.host,
-          apiPort: 4028,
-          controlPort,
-        },
-        "root:root",
-      );
+      const device: Device = {
+        id: randomUUID(),
+        siteId,
+        name: `${d.model}-${last}`,
+        model: d.model,
+        firmware: d.firmware,
+        host: d.host,
+        apiPort: 4028,
+        controlPort,
+      };
+      this.service.addDevice(device, "root:root");
+      this.agent?.registerDevice(device);
     }
+    this.requestSnapshot(); // one refresh after registering everything
     return { found: found.length, reachable: true, bases, connected, responded };
   }
 

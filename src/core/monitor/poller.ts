@@ -1,49 +1,45 @@
 import type { Device, DeviceStatus } from "../model/device";
 import type { Transport } from "../drivers/types";
 import { buildRequest } from "../cgminer/protocol";
-import { parseResponse, type CgminerSection } from "../cgminer/parse";
-import { normalizeStatus } from "../cgminer/normalize";
+import { extractStatusFromRaw } from "../cgminer/normalize";
 
-function firstSection(raw: string, key: "SUMMARY" | "STATS" | "POOLS"): CgminerSection {
-  const p = parseResponse(raw);
-  if (!p.ok) return {};
-  const arr = p.value[key];
-  return Array.isArray(arr) && arr[0] ? arr[0] : {};
+function offline(deviceId: string, now: number): DeviceStatus {
+  return {
+    deviceId,
+    state: "offline",
+    hashrateTHs: 0,
+    avgHashrateTHs: 0,
+    maxTempC: 0,
+    fanRpm: 0,
+    pool: "",
+    worker: "",
+    hwErrorRate: 0,
+    uptimeSec: 0,
+    lastSeen: now,
+  };
 }
 
+/**
+ * Poll one device. Requests summary/stats/pools SEQUENTIALLY (one connection at
+ * a time) because Antminer firmware often refuses concurrent 4028 connections,
+ * and parses leniently from the raw text.
+ */
 export async function pollDevice(
   device: Device,
   t: Transport,
   now: number,
 ): Promise<DeviceStatus> {
-  try {
-    const [sumRaw, statRaw, poolRaw] = await Promise.all([
-      t.tcp4028(device.host, device.apiPort, buildRequest("summary")),
-      t.tcp4028(device.host, device.apiPort, buildRequest("stats")),
-      t.tcp4028(device.host, device.apiPort, buildRequest("pools")),
-    ]);
-    return normalizeStatus(
-      device.id,
-      {
-        summary: firstSection(sumRaw, "SUMMARY"),
-        stats: firstSection(statRaw, "STATS"),
-        pools: firstSection(poolRaw, "POOLS"),
-      },
-      now,
-    );
-  } catch {
-    return {
-      deviceId: device.id,
-      state: "offline",
-      hashrateTHs: 0,
-      avgHashrateTHs: 0,
-      maxTempC: 0,
-      fanRpm: 0,
-      pool: "",
-      worker: "",
-      hwErrorRate: 0,
-      uptimeSec: 0,
-      lastSeen: now,
-    };
-  }
+  const fetch = async (cmd: string): Promise<string> => {
+    try {
+      return await t.tcp4028(device.host, device.apiPort, buildRequest(cmd));
+    } catch {
+      return "";
+    }
+  };
+
+  const sumRaw = await fetch("summary");
+  if (!sumRaw) return offline(device.id, now); // unreachable / no API
+  const statRaw = await fetch("stats");
+  const poolRaw = await fetch("pools");
+  return extractStatusFromRaw(device.id, sumRaw, statRaw, poolRaw, now);
 }
