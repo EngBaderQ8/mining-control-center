@@ -1,9 +1,10 @@
 import type { DeviceStatus } from "../model/device";
+import type { CgminerSection } from "./parse";
 
 interface RawBundle {
-  summary: Record<string, number | string>;
-  stats: Record<string, number | string>;
-  pools: Record<string, number | string>;
+  summary: CgminerSection;
+  stats: CgminerSection;
+  pools: CgminerSection;
 }
 
 const num = (v: unknown): number => (typeof v === "number" ? v : Number(v) || 0);

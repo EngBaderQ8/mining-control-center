@@ -1,12 +1,16 @@
 import { cleanRawResponse } from "./protocol";
 import type { Result } from "../model/result";
 
+/** A single section row from a cgminer/bmminer API response. Real firmware mixes
+ *  numbers, strings, and booleans (e.g. POOLS."Stratum Active"). */
+export type CgminerSection = Record<string, number | string | boolean>;
+
 export interface CgminerResponse {
   STATUS?: Array<Record<string, unknown>>;
-  SUMMARY?: Array<Record<string, number | string>>;
-  STATS?: Array<Record<string, number | string>>;
-  POOLS?: Array<Record<string, number | string>>;
-  DEVS?: Array<Record<string, number | string>>;
+  SUMMARY?: CgminerSection[];
+  STATS?: CgminerSection[];
+  POOLS?: CgminerSection[];
+  DEVS?: CgminerSection[];
   id?: number;
 }
 
