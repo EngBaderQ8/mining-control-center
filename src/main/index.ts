@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import electronUpdater from "electron-updater";
 import { DeviceRepo } from "./db/repo";
 import { registerIpc } from "./ipc";
 import { notifyMessage } from "./notify";
@@ -79,12 +80,33 @@ function buildBridge(win: BrowserWindow): ServerBridge {
   });
 }
 
+/**
+ * Auto-update from the public releases repo. Downloads new versions in the
+ * background and installs + relaunches automatically — so the whole fleet of
+ * site laptops stays current without manual re-installs.
+ */
+function setupAutoUpdate(): void {
+  if (!app.isPackaged) return;
+  const updater = electronUpdater.autoUpdater;
+  updater.autoDownload = true;
+  updater.on("update-available", (i) => console.log(`[update] available ${i.version}`));
+  updater.on("update-not-available", () => console.log("[update] up to date"));
+  updater.on("error", (e) => console.error(`[update] error: ${e.message}`));
+  updater.on("update-downloaded", (i) => {
+    console.log(`[update] downloaded ${i.version} — installing`);
+    setTimeout(() => updater.quitAndInstall(true, true), 3000);
+  });
+  void updater.checkForUpdates();
+  setInterval(() => void updater.checkForUpdates(), 6 * 60 * 60 * 1000); // every 6h
+}
+
 app.whenReady().then(() => {
   mainWindow = createWindow();
   try {
     const bridge = buildBridge(mainWindow);
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
+    setupAutoUpdate();
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);

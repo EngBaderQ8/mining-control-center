@@ -3,6 +3,11 @@ productName: Mining Control Center
 directories:
   output: release
   buildResources: build
+# Auto-update source: the public releases repo.
+publish:
+  provider: github
+  owner: EngBaderQ8
+  repo: mining-releases
 files:
   - dist/**
   - package.json
