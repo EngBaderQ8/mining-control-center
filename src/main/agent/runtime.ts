@@ -1,5 +1,5 @@
 import type { ClientMessage, ServerMessage } from "../../shared/protocol";
-import type { Device, DeviceStatus } from "../../core/model/device";
+import type { Device, DeviceStatus, Site } from "../../core/model/device";
 import type { ControlCommand } from "../../core/drivers/types";
 import type { CommandOutcome } from "../../core/model/result";
 
@@ -13,6 +13,7 @@ export interface AgentDeps {
   agentName: string;
   conn: ServerConnection;
   listDevices: () => Device[];
+  listSites?: () => Site[];
   execute: (
     deviceId: string,
     command: ControlCommand,
@@ -31,8 +32,14 @@ export class AgentRuntime {
   start(): void {
     this.deps.conn.onMessage((m) => this.onMessage(m));
     this.deps.conn.send({ type: "agent.hello", agentId: this.deps.agentId, name: this.deps.agentName });
+    for (const site of this.deps.listSites?.() ?? [])
+      this.deps.conn.send({ type: "site.register", site });
     for (const device of this.deps.listDevices())
       this.deps.conn.send({ type: "device.register", device });
+  }
+
+  registerSite(site: Site): void {
+    this.deps.conn.send({ type: "site.register", site });
   }
 
   registerDevice(device: Device): void {

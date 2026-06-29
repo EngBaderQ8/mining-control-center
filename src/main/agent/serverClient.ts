@@ -16,15 +16,20 @@ const normFp = (fp: string): string => fp.replace(/:/g, "").toUpperCase();
  */
 export class ServerClient implements ServerConnection {
   private ws: WebSocket | null = null;
-  private handler: (m: ServerMessage) => void = () => {};
+  private handlers: ((m: ServerMessage) => void)[] = [];
   private stateCb: (connected: boolean) => void = () => {};
   private wantConnected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private config: ConnectionConfig) {}
 
+  /** Register a message handler. Multiple subscribers all receive every message. */
   onMessage(handler: (m: ServerMessage) => void): void {
-    this.handler = handler;
+    this.handlers.push(handler);
+  }
+
+  private dispatch(m: ServerMessage): void {
+    for (const h of this.handlers) h(m);
   }
   onState(cb: (connected: boolean) => void): void {
     this.stateCb = cb;
@@ -114,7 +119,7 @@ export class ServerClient implements ServerConnection {
     ws.on("open", () => this.stateCb(true));
     ws.on("message", (raw: WebSocket.RawData) => {
       try {
-        this.handler(JSON.parse(raw.toString()) as ServerMessage);
+        this.dispatch(JSON.parse(raw.toString()) as ServerMessage);
       } catch {
         /* ignore malformed */
       }

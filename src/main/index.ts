@@ -1,14 +1,15 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { DeviceRepo } from "./db/repo";
-import { MiningService } from "./service";
 import { registerIpc } from "./ipc";
-import { notifyAlerts } from "./notify";
+import { notifyMessage } from "./notify";
 import { encryptSecret, decryptSecret } from "./secrets";
 import { tcp4028 } from "./transport/tcp";
 import { httpRequest } from "./transport/http";
 import { CH } from "../shared/api";
 import type { Transport } from "../core/drivers/types";
+import { ConnectionConfig } from "./agent/config";
+import { ServerBridge } from "./agent/serverBridge";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -48,32 +49,37 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-function buildService(win: BrowserWindow): MiningService {
-  const repo = new DeviceRepo(join(app.getPath("userData"), "mining.json"));
+function buildBridge(win: BrowserWindow): ServerBridge {
+  const userData = app.getPath("userData");
+  const repo = new DeviceRepo(join(userData, "mining.json"));
+  const config = new ConnectionConfig(join(userData, "connection.json"));
   const transport: Transport = { tcp4028, http: httpRequest };
 
-  return new MiningService({
+  return new ServerBridge({
+    config,
     repo,
     transport,
     encrypt: encryptSecret,
     decrypt: decryptSecret,
+    emitSnapshot: (snap) => {
+      if (!win.isDestroyed()) win.webContents.send(CH.snapshotUpdate, snap);
+    },
     emitStatuses: (statuses) => {
       if (!win.isDestroyed()) win.webContents.send(CH.statusesUpdate, statuses);
     },
-    emitAlerts: (alerts) => {
-      if (!win.isDestroyed()) win.webContents.send(CH.alerts, alerts);
-      notifyAlerts(alerts);
+    notify: (msg) => {
+      notifyMessage("تنبيه", msg);
     },
-    now: () => Date.now(),
   });
 }
 
 app.whenReady().then(() => {
   mainWindow = createWindow();
   try {
-    const service = buildService(mainWindow);
-    registerIpc(service);
-    console.log("[mcc] service ready");
+    const bridge = buildBridge(mainWindow);
+    registerIpc(bridge);
+    bridge.resume(); // reconnect if already logged in
+    console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);
   }

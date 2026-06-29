@@ -6,33 +6,54 @@ import type { Snapshot } from "../main/service";
 
 export type { Device, DeviceStatus, Site, CommandOutcome, ControlCommand, Alert, Snapshot };
 
+export interface AuthResponse {
+  ok: boolean;
+  error?: string;
+}
+
+export interface AuthStatusResponse {
+  hasServer: boolean;
+  loggedIn: boolean;
+  connected: boolean;
+  serverAddr?: string;
+}
+
 /** IPC channel names shared between main, preload, and renderer. */
 export const CH = {
+  // auth / server
+  authSignup: "auth:signup",
+  authLogin: "auth:login",
+  authStatus: "auth:status",
+  authLogout: "auth:logout",
+  serverSet: "server:set",
+  // data
   snapshotGet: "snapshot:get",
-  monitorStart: "monitor:start",
-  monitorStop: "monitor:stop",
   deviceCommand: "device:command",
   deviceBulk: "device:bulk",
   deviceAdd: "device:add",
-  deviceDelete: "device:delete",
   siteAdd: "site:add",
   // push (main -> renderer)
+  snapshotUpdate: "snapshot:update",
   statusesUpdate: "statuses:update",
   alerts: "alerts",
 } as const;
 
 /** The typed surface exposed on `window.api` by the preload bridge. */
 export interface Api {
+  // auth / server
+  setServer(addr: string, fingerprint: string): Promise<void>;
+  signup(email: string, password: string): Promise<AuthResponse>;
+  login(email: string, password: string): Promise<AuthResponse>;
+  authStatus(): Promise<AuthStatusResponse>;
+  logout(): Promise<void>;
+  // data
   getSnapshot(): Promise<Snapshot>;
-  startMonitoring(): Promise<void>;
-  stopMonitoring(): Promise<void>;
   sendCommand(deviceId: string, command: ControlCommand): Promise<CommandOutcome>;
   sendBulk(deviceIds: string[], command: ControlCommand): Promise<CommandOutcome[]>;
   addDevice(device: Device, secret?: string): Promise<void>;
-  deleteDevice(id: string): Promise<void>;
   addSite(site: Site): Promise<void>;
-  /** Subscribe to live status pushes; returns an unsubscribe function. */
+  // subscriptions (return an unsubscribe function)
+  onSnapshot(cb: (snap: Snapshot) => void): () => void;
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;
-  /** Subscribe to alert pushes; returns an unsubscribe function. */
   onAlerts(cb: (alerts: Alert[]) => void): () => void;
 }

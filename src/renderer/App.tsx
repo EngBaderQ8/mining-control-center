@@ -13,6 +13,7 @@ import { Toolbar } from "./components/Toolbar";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
 import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDialog";
+import { LoginScreen } from "./components/LoginScreen";
 
 const DESTRUCTIVE: ReadonlySet<ControlCommand> = new Set(["stopMining", "reboot"]);
 const CMD_LABEL: Record<ControlCommand, string> = {
@@ -23,6 +24,7 @@ const CMD_LABEL: Record<ControlCommand, string> = {
 };
 
 export function App(): React.ReactElement {
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
@@ -47,9 +49,20 @@ export function App(): React.ReactElement {
     });
   }, []);
 
+  // Auth gate: decide whether to show login or the dashboard.
   useEffect(() => {
+    void api.authStatus().then((s) => setAuthed(s.loggedIn));
+  }, []);
+
+  // Data feed (server-driven) — only while authenticated.
+  useEffect(() => {
+    if (!authed) return;
     void reload();
-    void api.startMonitoring();
+    const offSnapshot = api.onSnapshot((snap) => {
+      setSites(snap.sites);
+      setDevices(snap.devices);
+      setStatusById(() => new Map(snap.statuses.map((s) => [s.deviceId, s])));
+    });
     const offStatuses = api.onStatuses((statuses) => {
       setStatusById((prev) => {
         const next = new Map(prev);
@@ -61,11 +74,11 @@ export function App(): React.ReactElement {
       if (alerts.length) showToast(`⚠ ${alerts.length} تنبيه: ${alerts[0]?.message ?? ""}`);
     });
     return () => {
+      offSnapshot();
       offStatuses();
       offAlerts();
-      void api.stopMonitoring();
     };
-  }, [reload, showToast]);
+  }, [authed, reload, showToast]);
 
   const groups = useMemo(
     () => groupBySite(sites, devices, statusById, filter),
@@ -139,6 +152,10 @@ export function App(): React.ReactElement {
     },
     [reload, showToast],
   );
+
+  if (authed === null)
+    return <div className="app" style={{ color: "var(--muted)" }}>…تحميل</div>;
+  if (!authed) return <LoginScreen onAuthed={() => setAuthed(true)} />;
 
   return (
     <div className="app">

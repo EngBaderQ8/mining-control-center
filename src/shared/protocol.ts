@@ -8,6 +8,10 @@ export interface AgentHello {
   agentId: string;
   name: string;
 }
+export interface SiteRegister {
+  type: "site.register";
+  site: Site;
+}
 export interface DeviceRegister {
   type: "device.register";
   device: Device;
@@ -56,13 +60,19 @@ export interface CommandExec {
   params?: Record<string, string>;
 }
 
-export type AgentMessage = AgentHello | DeviceRegister | StatusUpdate | CommandResult;
+export type AgentMessage =
+  | AgentHello
+  | SiteRegister
+  | DeviceRegister
+  | StatusUpdate
+  | CommandResult;
 export type ViewerMessage = SnapshotRequest | CommandSend;
 export type ClientMessage = AgentMessage | ViewerMessage;
 export type ServerMessage = SnapshotMsg | CommandAck | CommandExec | StatusUpdate;
 
 const CLIENT_TYPES = new Set<string>([
   "agent.hello",
+  "site.register",
   "device.register",
   "status.update",
   "command.result",

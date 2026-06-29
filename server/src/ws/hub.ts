@@ -28,6 +28,9 @@ export class ConnectionHub {
         this.repo.touchAgent(msg.agentId, this.userId, msg.name);
         this.router.attachAgent(msg.agentId, (exec) => this.send(exec));
         break;
+      case "site.register":
+        this.repo.upsertSite({ ...msg.site, userId: this.userId });
+        break;
       case "device.register":
         this.repo.upsertDevice({
           ...msg.device,

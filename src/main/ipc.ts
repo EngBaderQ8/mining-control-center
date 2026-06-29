@@ -1,27 +1,36 @@
 import { ipcMain } from "electron";
 import { CH } from "../shared/api";
-import type { MiningService } from "./service";
+import type { ServerBridge } from "./agent/serverBridge";
 import type { Device, Site } from "../core/model/device";
 import type { ControlCommand } from "../core/drivers/types";
 
-/** Wire request/response IPC channels to the service. */
-export function registerIpc(service: MiningService): void {
-  ipcMain.handle(CH.snapshotGet, () => service.getSnapshot());
-  ipcMain.handle(CH.monitorStart, () => service.startMonitoring());
-  ipcMain.handle(CH.monitorStop, () => service.stopMonitoring());
+/** Wire request/response IPC channels to the server bridge. */
+export function registerIpc(bridge: ServerBridge): void {
+  ipcMain.handle(CH.serverSet, (_e, addr: string, fingerprint: string) =>
+    bridge.setServer(addr, fingerprint),
+  );
+  ipcMain.handle(CH.authSignup, async (_e, email: string, password: string) => {
+    const r = await bridge.signup(email, password);
+    return r.ok ? { ok: true } : { ok: false, error: r.error };
+  });
+  ipcMain.handle(CH.authLogin, async (_e, email: string, password: string) => {
+    const r = await bridge.login(email, password);
+    return r.ok ? { ok: true } : { ok: false, error: r.error };
+  });
+  ipcMain.handle(CH.authStatus, () => bridge.authStatus());
+  ipcMain.handle(CH.authLogout, () => bridge.logout());
+
+  ipcMain.handle(CH.snapshotGet, () => bridge.getSnapshot());
   ipcMain.handle(CH.deviceCommand, (_e, deviceId: string, command: ControlCommand) =>
-    service.sendCommand(deviceId, command),
+    bridge.sendCommand(deviceId, command),
   );
   ipcMain.handle(CH.deviceBulk, (_e, deviceIds: string[], command: ControlCommand) =>
-    service.sendBulk(deviceIds, command),
+    bridge.sendBulk(deviceIds, command),
   );
   ipcMain.handle(CH.deviceAdd, (_e, device: Device, secret?: string) => {
-    service.addDevice(device, secret);
-  });
-  ipcMain.handle(CH.deviceDelete, (_e, id: string) => {
-    service.deleteDevice(id);
+    bridge.addDevice(device, secret);
   });
   ipcMain.handle(CH.siteAdd, (_e, site: Site) => {
-    service.addSite(site);
+    bridge.addSite(site);
   });
 }
