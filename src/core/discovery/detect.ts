@@ -20,11 +20,9 @@ export function detectFromVersion(raw: string): Detected | null {
   const keys = Object.keys(v).map((k) => k.toLowerCase());
   const has = (needle: string): boolean => keys.some((k) => k.includes(needle));
 
-  // Must look like a miner (a Type plus a known miner field).
-  const isMiner =
-    "Type" in v &&
-    (has("miner") || has("luxminer") || has("vnish") || has("bos") || has("api"));
-  if (!isMiner) return null;
+  // Anything that answers the 4028 `version` command with a VERSION entry is a
+  // miner. Prefer a "Type" but accept any non-empty version row.
+  if (Object.keys(v).length === 0) return null;
 
   let firmware: Firmware = "stock";
   if (has("luxminer") || has("luxos")) firmware = "luxos";

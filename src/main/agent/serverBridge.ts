@@ -9,7 +9,7 @@ import { ConnectionConfig } from "./config";
 import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
 import { scanHosts, subnetHosts } from "../../core/discovery/scan";
-import { localIpv4 } from "../discovery/localSubnet";
+import { localPrivateBases } from "../discovery/localSubnet";
 
 export interface BridgeDeps {
   config: ConnectionConfig;
@@ -131,12 +131,15 @@ export class ServerBridge {
    * many were found. Discovered devices get default stock creds (root:root) —
    * monitoring works immediately; control may need real creds for modded firmware.
    */
-  async scanNetwork(siteName: string): Promise<{ found: number; reachable: boolean }> {
-    const ip = localIpv4();
-    if (!ip) return { found: 0, reachable: false };
-    const hosts = subnetHosts(ip);
-    const found = await scanHosts(hosts, 4028, this.deps.scanTransport, 32);
-    if (found.length === 0) return { found: 0, reachable: true };
+  async scanNetwork(
+    siteName: string,
+    base?: string,
+  ): Promise<{ found: number; reachable: boolean; bases: string[] }> {
+    const bases = base && base.trim() ? [base.trim()] : localPrivateBases();
+    if (bases.length === 0) return { found: 0, reachable: false, bases: [] };
+    const hosts = bases.flatMap((b) => subnetHosts(b));
+    const found = await scanHosts(hosts, 4028, this.deps.scanTransport, 64);
+    if (found.length === 0) return { found: 0, reachable: true, bases };
 
     const siteId = randomUUID();
     this.addSite({ id: siteId, name: siteName });
@@ -157,7 +160,7 @@ export class ServerBridge {
         "root:root",
       );
     }
-    return { found: found.length, reachable: true };
+    return { found: found.length, reachable: true, bases };
   }
 
   async sendCommand(

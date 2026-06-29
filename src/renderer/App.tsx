@@ -214,8 +214,8 @@ export function App(): React.ReactElement {
       {scanOpen && (
         <ScanDialog
           onClose={() => setScanOpen(false)}
-          onScan={async (siteName) => {
-            const r = await api.scanNetwork(siteName);
+          onScan={async (siteName, base) => {
+            const r = await api.scanNetwork(siteName, base);
             await reload();
             return r;
           }}

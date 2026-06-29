@@ -2,11 +2,12 @@ import React, { useState } from "react";
 
 interface Props {
   onClose: () => void;
-  onScan: (siteName: string) => Promise<{ found: number; reachable: boolean }>;
+  onScan: (siteName: string, base: string) => Promise<{ found: number; reachable: boolean; bases: string[] }>;
 }
 
 export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
   const [siteName, setSiteName] = useState("");
+  const [base, setBase] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -14,11 +15,13 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     if (!siteName.trim()) return;
     setBusy(true);
     setResult(null);
-    const r = await onScan(siteName.trim());
+    const r = await onScan(siteName.trim(), base.trim());
     setBusy(false);
-    if (!r.reachable) setResult("⚠ ما لقيت شبكة محلية على هذا الجهاز (تأكد إنه موصول بشبكة الأسيكات).");
-    else if (r.found === 0) setResult("ما لقيت أي جهاز تعدين في الشبكة.");
-    else setResult(`✓ تم العثور على ${r.found} جهاز وإضافتها للموقع.`);
+    const scanned = r.bases.length ? r.bases.map((b) => `${b}.x`).join("، ") : "—";
+    if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
+    else if (r.found === 0)
+      setResult(`ما لقيت أجهزة. النطاقات اللي فُحصت: ${scanned}. لو أسيكاتك على نطاق ثاني، اكتبه بالأسفل وأعد الفحص.`);
+    else setResult(`✓ تم العثور على ${r.found} جهاز (فُحص: ${scanned}) وإضافتها للموقع.`);
   }
 
   return (
@@ -40,30 +43,47 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
           />
         </div>
 
+        <div className="field">
+          <label>نطاق الشبكة (اختياري — اتركه فاضي للكشف التلقائي)</label>
+          <input
+            className="input"
+            placeholder="مثال: 192.168.0"
+            value={base}
+            disabled={busy}
+            onChange={(e) => setBase(e.target.value)}
+          />
+        </div>
+
         {busy && (
           <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>
-            ⏳ جاري فحص الشبكة… (قد يأخذ ١٠–٢٠ ثانية)
+            ⏳ جاري فحص الشبكة… (قد يأخذ ١٠–٣٠ ثانية)
           </div>
         )}
-        {result && <div style={{ fontSize: 13, margin: "8px 0" }}>{result}</div>}
+        {result && <div style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.7 }}>{result}</div>}
 
         <div className="actions">
-          {!result ? (
-            <button className="btn primary" disabled={busy || !siteName.trim()} onClick={() => void go()}>
-              {busy ? "جاري الفحص…" : "🔍 ابدأ الفحص"}
-            </button>
-          ) : (
+          {r_done(result) ? (
             <button className="btn primary" onClick={onClose}>
               تمام
             </button>
+          ) : (
+            <button className="btn primary" disabled={busy || !siteName.trim()} onClick={() => void go()}>
+              {busy ? "جاري الفحص…" : "🔍 ابدأ الفحص"}
+            </button>
           )}
-          {!busy && !result && (
+          {!busy && (
             <button className="btn" onClick={onClose}>
-              إلغاء
+              إغلاق
             </button>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+// Show the "تمام" button only on a successful find; keep "ابدأ الفحص" otherwise so
+// the user can retry with a manual range.
+function r_done(result: string | null): boolean {
+  return !!result && result.startsWith("✓");
 }

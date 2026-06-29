@@ -57,7 +57,10 @@ export interface Api {
   sendBulk(deviceIds: string[], command: ControlCommand): Promise<CommandOutcome[]>;
   addDevice(device: Device, secret?: string): Promise<void>;
   addSite(site: Site): Promise<void>;
-  scanNetwork(siteName: string): Promise<{ found: number; reachable: boolean }>;
+  scanNetwork(
+    siteName: string,
+    base?: string,
+  ): Promise<{ found: number; reachable: boolean; bases: string[] }>;
   // subscriptions (return an unsubscribe function)
   onSnapshot(cb: (snap: Snapshot) => void): () => void;
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;
