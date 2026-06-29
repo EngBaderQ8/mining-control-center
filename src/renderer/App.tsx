@@ -15,6 +15,8 @@ import {
 import { SummaryBar } from "./components/SummaryBar";
 import { ProfitBar } from "./components/ProfitBar";
 import { Heatmap } from "./components/Heatmap";
+import { HistoryCharts } from "./components/HistoryChart";
+import { appendPoint, loadHistory, saveHistory, type HistoryPoint } from "./state/history";
 import { Toolbar } from "./components/Toolbar";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
@@ -94,7 +96,8 @@ export function App(): React.ReactElement {
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
-  const [view, setView] = useState<"table" | "heatmap">("table");
+  const [view, setView] = useState<"table" | "heatmap" | "charts">("table");
+  const [history, setHistory] = useState<HistoryPoint[]>(loadHistory);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const onSort = useCallback((key: SortKey) => {
     setSort((prev) =>
@@ -234,6 +237,23 @@ export function App(): React.ReactElement {
     () => computeSummary(sites, devices, statusById),
     [sites, devices, statusById],
   );
+
+  // Record one fleet snapshot per minute for the historical charts (persisted).
+  useEffect(() => {
+    if (!authed || summary.total === 0) return;
+    const point: HistoryPoint = {
+      t: Date.now(),
+      ths: summary.totalTHs,
+      temp: summary.avgTempC,
+      online: summary.online,
+      total: summary.total,
+    };
+    setHistory((prev) => {
+      const next = appendPoint(prev, point, { maxPoints: 2880, minIntervalMs: 60_000 });
+      if (next !== prev) saveHistory(next);
+      return next;
+    });
+  }, [summary, authed]);
   // "Visible" = actually on screen: exclude devices hidden inside collapsed
   // sites so select-all / bulk commands never touch unseen miners.
   const visibleIds = useMemo(
@@ -408,9 +428,17 @@ export function App(): React.ReactElement {
         >
           🔥 خريطة حرارية
         </button>
+        <button
+          className={`btn ${view === "charts" ? "primary" : ""}`}
+          onClick={() => setView("charts")}
+        >
+          📊 الرسوم
+        </button>
       </div>
 
-      {view === "heatmap" ? (
+      {view === "charts" ? (
+        <HistoryCharts history={history} />
+      ) : view === "heatmap" ? (
         groups.length === 0 ? (
           <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
             لا توجد أجهزة مطابقة.

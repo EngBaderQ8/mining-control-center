@@ -92,8 +92,15 @@ a { color: var(--blue); text-decoration: none; }
 }
 .sitehead .chev.open { transform: rotate(90deg); }
 
-/* view toggle (table / heatmap) */
+/* view toggle (table / heatmap / charts) */
 .viewtoggle { display: flex; gap: 8px; margin-bottom: 14px; }
+
+/* history charts */
+.charts { display: flex; flex-direction: column; gap: 14px; }
+.chartcard { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.chartcard .charthd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+.chartcard .charthd b { font-size: 18px; }
+.chartcard .chartft { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
 
 /* heatmap */
 .heatlegend { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }

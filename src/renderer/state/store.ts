@@ -20,6 +20,7 @@ export interface Summary {
   offline: number;
   warning: number;
   totalTHs: number;
+  avgTempC: number;
 }
 
 export function computeSummary(
@@ -30,15 +31,29 @@ export function computeSummary(
   let online = 0,
     offline = 0,
     warning = 0,
-    totalTHs = 0;
+    totalTHs = 0,
+    tempSum = 0,
+    tempCount = 0;
   for (const d of devices) {
     const s = statusById.get(d.id);
     if (!s || s.state === "offline") offline++;
     else if (s.state === "warning") warning++;
     else online++;
     if (s) totalTHs += s.hashrateTHs;
+    if (s && s.maxTempC > 0) {
+      tempSum += s.maxTempC;
+      tempCount++;
+    }
   }
-  return { siteCount: sites.length, total: devices.length, online, offline, warning, totalTHs };
+  return {
+    siteCount: sites.length,
+    total: devices.length,
+    online,
+    offline,
+    warning,
+    totalTHs,
+    avgTempC: tempCount ? tempSum / tempCount : 0,
+  };
 }
 
 export function matchesFilter(
