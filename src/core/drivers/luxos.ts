@@ -68,6 +68,8 @@ export class LuxOsDriver implements DeviceDriver {
           });
           break;
         }
+        case "setProfile":
+          return { deviceId: device.id, ok: false, error: "بروفايلات الطاقة غير مدعومة على LuxOS بعد" };
       }
       if (!r.ok) return { deviceId: device.id, ok: false, error: r.error };
       return { deviceId: device.id, ok: true };

@@ -6,6 +6,7 @@ interface Props {
   totalVisible: number;
   onBulk: (cmd: ControlCommand) => void;
   onSetPool: () => void;
+  onSetProfile: () => void;
   onSetCredentials: () => void;
   onSelectAll: () => void;
   onClear: () => void;
@@ -16,6 +17,7 @@ export function BulkActionBar({
   totalVisible,
   onBulk,
   onSetPool,
+  onSetProfile,
   onSetCredentials,
   onSelectAll,
   onClear,
@@ -38,6 +40,9 @@ export function BulkActionBar({
       </button>
       <button className="btn" disabled={none} onClick={onSetPool}>
         ⛏ تغيير البول
+      </button>
+      <button className="btn" disabled={none} onClick={onSetProfile}>
+        ⚡ وضع الطاقة
       </button>
       <button className="btn" disabled={none} onClick={onSetCredentials}>
         🔑 بيانات الدخول

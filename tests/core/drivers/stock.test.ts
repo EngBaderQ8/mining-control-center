@@ -46,6 +46,16 @@ describe("StockDriver", () => {
     expect(reqs[0]?.auth?.pass).toBe("myWebPass");
   });
 
+  it("setProfile posts the work mode to set_miner_conf.cgi", async () => {
+    const reqs: HttpRequest[] = [];
+    const r = await new StockDriver().execute(dev, "setProfile", http(reqs), "root:root", { mode: "lowpower" });
+    expect(r.ok).toBe(true);
+    expect(reqs[0]?.path).toContain("set_miner_conf.cgi");
+    expect(reqs[0]?.method).toBe("POST");
+    expect(reqs[0]?.body).toContain("bitmain-work-mode");
+    expect(reqs[0]?.body).toContain('"1"'); // lowpower -> "1"
+  });
+
   it("setPool posts the pool config to set_miner_conf.cgi with digest auth", async () => {
     const reqs: HttpRequest[] = [];
     const r = await new StockDriver().execute(dev, "setPool", http(reqs), "root:root", {

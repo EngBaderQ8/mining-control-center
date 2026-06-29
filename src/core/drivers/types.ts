@@ -29,7 +29,11 @@ export type ControlCommand =
   | "stopMining"
   | "startMining"
   | "reboot"
-  | "setPool";
+  | "setPool"
+  | "setProfile";
+
+/** Power profile applied via setProfile (params.mode). */
+export type PowerProfile = "normal" | "lowpower" | "highperf";
 
 /** Parameters for setPool. */
 export interface PoolParams {

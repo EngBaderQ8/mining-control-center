@@ -2,7 +2,7 @@ import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./t
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 
-const PATHS: Record<Exclude<ControlCommand, "setPool">, string> = {
+const PATHS: Record<Exclude<ControlCommand, "setPool" | "setProfile">, string> = {
   restartMining: "/api/v1/mining/restart",
   stopMining: "/api/v1/mining/pause",
   startMining: "/api/v1/mining/resume",
@@ -19,6 +19,8 @@ export class VnishDriver implements DeviceDriver {
     secret?: string,
     params?: CommandParams,
   ): Promise<CommandOutcome> {
+    if (command === "setProfile")
+      return { deviceId: device.id, ok: false, error: "بروفايلات الطاقة غير مدعومة على Vnish بعد" };
     try {
       // Vnish unlock takes the PASSWORD only. Accept a bare password or a
       // "user:pass" string (shared credential format) and use just the password.

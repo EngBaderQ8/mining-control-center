@@ -24,6 +24,8 @@ import { SiteSection } from "./components/SiteSection";
 import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDialog";
 import { SetPoolDialog, type PoolInput } from "./components/SetPoolDialog";
 import { CredentialsDialog } from "./components/CredentialsDialog";
+import { ProfileDialog } from "./components/ProfileDialog";
+import type { PowerProfile } from "../core/drivers/types";
 import { ScanDialog } from "./components/ScanDialog";
 import { TelegramDialog } from "./components/TelegramDialog";
 import { RecoveryDialog } from "./components/RecoveryDialog";
@@ -49,6 +51,7 @@ const CMD_LABEL: Record<ControlCommand, string> = {
   stopMining: "إيقاف التعدين",
   reboot: "إعادة تشغيل الجهاز (Reboot)",
   setPool: "تغيير البول",
+  setProfile: "تغيير وضع الطاقة",
 };
 
 function VersionBadge({
@@ -113,6 +116,7 @@ export function App(): React.ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);
   const [credOpen, setCredOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [tgOpen, setTgOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
@@ -425,6 +429,7 @@ export function App(): React.ReactElement {
         totalVisible={visibleIds.length}
         onBulk={onBulk}
         onSetPool={() => setPoolOpen(true)}
+        onSetProfile={() => setProfileOpen(true)}
         onSetCredentials={() => setCredOpen(true)}
         onSelectAll={() => setSelectedIds(new Set(visibleIds))}
         onClear={() => setSelectedIds(new Set())}
@@ -531,6 +536,27 @@ export function App(): React.ReactElement {
 
       {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
       {recOpen && <RecoveryDialog onClose={() => setRecOpen(false)} />}
+
+      {profileOpen && (
+        <ProfileDialog
+          count={selectedIds.size}
+          onClose={() => setProfileOpen(false)}
+          onSubmit={(mode: PowerProfile) => {
+            const ids = [...selectedIds];
+            setProfileOpen(false);
+            if (ids.length === 0) return;
+            void Promise.all(ids.map((id) => api.sendCommand(id, "setProfile", { mode }))).then((results) => {
+              const ok = results.filter((r) => r.ok).length;
+              const firstErr = results.find((r) => !r.ok)?.error;
+              showToast(
+                ok === results.length
+                  ? `⚡ وضع الطاقة: نجح ${ok}/${results.length}`
+                  : `⚡ وضع الطاقة: نجح ${ok}/${results.length}${firstErr ? ` · مثال: ${firstErr}` : ""}`,
+              );
+            });
+          }}
+        />
+      )}
 
       {credOpen && (
         <CredentialsDialog
