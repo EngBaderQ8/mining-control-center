@@ -11,6 +11,9 @@ export interface ProfitSettings {
 }
 
 const KEY = "mcc.profitSettings";
+// Approximate recent BTC network difficulty — only used as a fallback when the
+// live value can't be fetched, so a manual price still yields an estimate.
+const FALLBACK_DIFFICULTY = 9e13;
 const DEFAULTS: ProfitSettings = {
   currency: "$",
   usdRate: 1,
@@ -56,9 +59,11 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
   };
 
   const priceUsd = settings.manualPriceUsd > 0 ? settings.manualPriceUsd : (net?.priceUsd ?? 0);
+  // Fall back to a recent network difficulty when the live fetch is unavailable,
+  // so a manually-entered price still produces a number (escape hatch works offline).
   const effectiveNet: NetworkStats = {
     priceUsd,
-    difficulty: net?.difficulty ?? 0,
+    difficulty: net?.difficulty || FALLBACK_DIFFICULTY,
     blockRewardBtc: net?.blockRewardBtc ?? 3.125,
   };
   const powerKw = powerKwFromHashrate(hashrateTHs, settings.jPerTh);
@@ -132,7 +137,7 @@ function ProfitSettingsDialog({
   const [s, setS] = useState<ProfitSettings>(settings);
   const num = (v: string, prev: number): number => {
     const n = parseFloat(v);
-    return Number.isFinite(n) ? n : prev;
+    return Number.isFinite(n) && n >= 0 ? n : prev; // reject negatives
   };
   return (
     <div className="overlay" onClick={onClose}>
@@ -189,7 +194,7 @@ function ProfitSettingsDialog({
           <button
             className="btn primary"
             onClick={() => {
-              onSave(s);
+              onSave({ ...s, usdRate: s.usdRate > 0 ? s.usdRate : 1 }); // 0 rate would zero all revenue
               onClose();
             }}
           >

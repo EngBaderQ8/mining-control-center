@@ -180,9 +180,14 @@ export function App(): React.ReactElement {
     });
   }, []);
 
-  // Auth gate: decide whether to show login or the dashboard.
+  // Auth gate: decide whether to show login or the dashboard. On any failure
+  // (e.g. the main bridge failed to start), fall to the login screen instead of
+  // hanging forever on the loading spinner.
   useEffect(() => {
-    void api.authStatus().then((s) => setAuthed(s.loggedIn));
+    void api
+      .authStatus()
+      .then((s) => setAuthed(s.loggedIn))
+      .catch(() => setAuthed(false));
   }, []);
 
   // App version — shown always in a corner badge so the running build is obvious.

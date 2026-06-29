@@ -49,8 +49,10 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
           <input
             className="input"
             type="number"
+            min={1}
+            max={1440}
             value={s.rebootOfflineMin}
-            onChange={(e) => setS({ ...s, rebootOfflineMin: num(e.target.value, s.rebootOfflineMin) })}
+            onChange={(e) => setS({ ...s, rebootOfflineMin: Math.max(1, num(e.target.value, s.rebootOfflineMin)) })}
           />
         </div>
         <div className="field">
@@ -58,6 +60,8 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
           <input
             className="input"
             type="number"
+            min={50}
+            max={120}
             value={s.overheatStopC}
             onChange={(e) => setS({ ...s, overheatStopC: num(e.target.value, s.overheatStopC) })}
           />

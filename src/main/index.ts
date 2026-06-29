@@ -94,6 +94,7 @@ function buildBridge(): ServerBridge {
     decrypt: decryptSecret,
     emitSnapshot: (snap) => sendToWindow(CH.snapshotUpdate, snap),
     emitStatuses: (statuses) => sendToWindow(CH.statusesUpdate, statuses),
+    emitAlerts: (alerts) => sendToWindow(CH.alerts, alerts),
     notify: (msg) => {
       notifyMessage("تنبيه", msg);
       // Also push to the user's phone via Telegram, if configured.
@@ -225,8 +226,8 @@ app.whenReady().then(() => {
     if (recoveryConfig) bridge.setRecovery(recoveryConfig.get());
     ipcMain.handle(CH.recoveryGet, () => recoveryConfig?.get());
     ipcMain.handle(CH.recoverySet, (_e, s: RecoverySettings) => {
-      recoveryConfig?.set(s);
-      bridge.setRecovery(s);
+      recoveryConfig?.set(s); // clamps bad values
+      if (recoveryConfig) bridge.setRecovery(recoveryConfig.get()); // apply the clamped values
     });
     console.log("[mcc] bridge ready");
   } catch (e) {

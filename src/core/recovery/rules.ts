@@ -33,7 +33,11 @@ export function evaluateRecovery(
   now: number,
 ): RecoveryDecision {
   if (!settings.enabled) return { action: null, reason: "" };
-  if (lastActionAtMs !== null && now - lastActionAtMs < settings.cooldownMin * 60_000) {
+  // Defensive: never let a non-positive interval disable the throttle / fire instantly.
+  const cooldownMin = settings.cooldownMin > 0 ? settings.cooldownMin : DEFAULT_RECOVERY.cooldownMin;
+  const rebootOfflineMin =
+    settings.rebootOfflineMin > 0 ? settings.rebootOfflineMin : DEFAULT_RECOVERY.rebootOfflineMin;
+  if (lastActionAtMs !== null && now - lastActionAtMs < cooldownMin * 60_000) {
     return { action: null, reason: "" }; // still cooling down
   }
   // Overheat — stop to protect the hardware.
@@ -44,9 +48,9 @@ export function evaluateRecovery(
   if (
     status.state === "offline" &&
     offlineSinceMs !== null &&
-    now - offlineSinceMs >= settings.rebootOfflineMin * 60_000
+    now - offlineSinceMs >= rebootOfflineMin * 60_000
   ) {
-    return { action: "reboot", reason: `غير متصل ${settings.rebootOfflineMin} دقيقة` };
+    return { action: "reboot", reason: `غير متصل ${rebootOfflineMin} دقيقة` };
   }
   return { action: null, reason: "" };
 }

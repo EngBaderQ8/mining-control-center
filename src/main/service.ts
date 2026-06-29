@@ -28,6 +28,9 @@ export interface ServiceConfig {
   hashDropFrac: number;
 }
 
+/** Max auto-reboots while a device stays in one offline episode (resets when it returns). */
+const MAX_REBOOTS_PER_EPISODE = 2;
+
 export const DEFAULT_CONFIG: ServiceConfig = {
   pollIntervalMs: 10_000,
   maxConcurrency: 16,
@@ -48,15 +51,20 @@ export class MiningService {
   private recovery: RecoverySettings = DEFAULT_RECOVERY;
   private offlineSince = new Map<string, number>();
   private lastRecoveryAt = new Map<string, number>();
+  private rebootAttempts = new Map<string, number>();
 
   constructor(
     private deps: ServiceDeps,
     private config: ServiceConfig = DEFAULT_CONFIG,
   ) {}
 
-  /** Configure self-healing (auto reboot offline / stop overheating). */
+  /** Configure self-healing (auto reboot offline / stop overheating). Resets the
+   *  per-device timing state so windows restart cleanly under the new settings. */
   setRecovery(s: RecoverySettings): void {
     this.recovery = s;
+    this.offlineSince.clear();
+    this.lastRecoveryAt.clear();
+    this.rebootAttempts.clear();
   }
 
   getSnapshot(): Snapshot {
@@ -143,18 +151,21 @@ export class MiningService {
     }
     this.deps.emitStatuses(statuses);
     if (alerts.length) this.deps.emitAlerts(alerts);
-    this.runRecovery(statuses, devices, now);
+    await this.runRecovery(statuses, devices, now);
     return statuses;
   }
 
-  /** Self-healing: auto-reboot devices offline too long, stop overheating ones. */
-  private runRecovery(statuses: DeviceStatus[], devices: Device[], now: number): void {
+  /** Self-healing: auto-reboot devices offline too long, stop overheating ones.
+   *  Caps reboots per offline episode and only starts the cooldown on a
+   *  successfully-dispatched command (so a failed action retries next poll). */
+  private async runRecovery(statuses: DeviceStatus[], devices: Device[], now: number): Promise<void> {
     if (!this.recovery.enabled) return;
     for (const s of statuses) {
       if (s.state === "offline") {
         if (!this.offlineSince.has(s.deviceId)) this.offlineSince.set(s.deviceId, now);
       } else {
         this.offlineSince.delete(s.deviceId);
+        this.rebootAttempts.delete(s.deviceId); // back online — reset attempts
       }
       const decision = evaluateRecovery(
         s,
@@ -164,13 +175,26 @@ export class MiningService {
         now,
       );
       if (!decision.action) continue;
-      this.lastRecoveryAt.set(s.deviceId, now);
+      // Stop hammering a device that won't come back: cap reboots per episode.
+      if (decision.action === "reboot" && (this.rebootAttempts.get(s.deviceId) ?? 0) >= MAX_REBOOTS_PER_EPISODE) {
+        continue;
+      }
       const name = devices.find((d) => d.id === s.deviceId)?.name ?? s.deviceId;
       const label = decision.action === "reboot" ? "إعادة تشغيل" : "إيقاف وقائي";
-      this.deps.emitAlerts([
-        { deviceId: s.deviceId, kind: "recovery", message: `🤖 إصلاح ذاتي: ${label} لـ ${name} (${decision.reason})` },
-      ]);
-      void this.sendCommand(s.deviceId, decision.action);
+      const outcome = await this.sendCommand(s.deviceId, decision.action);
+      if (outcome.ok) {
+        this.lastRecoveryAt.set(s.deviceId, now);
+        if (decision.action === "reboot")
+          this.rebootAttempts.set(s.deviceId, (this.rebootAttempts.get(s.deviceId) ?? 0) + 1);
+        this.deps.emitAlerts([
+          { deviceId: s.deviceId, kind: "recovery", message: `🤖 إصلاح ذاتي: ${label} لـ ${name} (${decision.reason})` },
+        ]);
+      } else {
+        // Don't start the cooldown on failure — retry next poll, and surface it.
+        this.deps.emitAlerts([
+          { deviceId: s.deviceId, kind: "recovery", message: `⚠️ فشل الإصلاح الذاتي (${label}) لـ ${name}: ${outcome.error ?? ""}` },
+        ]);
+      }
     }
   }
 

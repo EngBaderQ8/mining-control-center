@@ -29,7 +29,20 @@ const KEY = "mcc.history";
 export function loadHistory(): HistoryPoint[] {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as HistoryPoint[];
+    if (raw) {
+      const arr: unknown = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        // Drop malformed/NaN points so chart math never gets non-finite input.
+        return arr.filter(
+          (p): p is HistoryPoint =>
+            !!p &&
+            typeof p === "object" &&
+            (["t", "ths", "temp", "online", "total"] as const).every((k) =>
+              Number.isFinite((p as Record<string, unknown>)[k]),
+            ),
+        );
+      }
+    }
   } catch {
     /* ignore */
   }

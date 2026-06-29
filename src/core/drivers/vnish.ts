@@ -20,12 +20,16 @@ export class VnishDriver implements DeviceDriver {
     params?: CommandParams,
   ): Promise<CommandOutcome> {
     try {
+      // Vnish unlock takes the PASSWORD only. Accept a bare password or a
+      // "user:pass" string (shared credential format) and use just the password.
+      const raw = secret ?? "";
+      const pw = raw.includes(":") ? raw.slice(raw.indexOf(":") + 1) : raw;
       const unlock = await t.http({
         host: device.host,
         port: device.controlPort,
         method: "POST",
         path: "/api/v1/unlock",
-        body: JSON.stringify({ pw: secret ?? "" }),
+        body: JSON.stringify({ pw }),
         headers: { "content-type": "application/json" },
       });
       if (unlock.status < 200 || unlock.status >= 300)

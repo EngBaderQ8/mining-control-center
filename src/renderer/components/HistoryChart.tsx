@@ -39,12 +39,14 @@ function LineChart({
   const vals = points.map(getValue);
   const min = Math.min(...vals);
   const max = Math.max(...vals);
+  const flat = max === min;
   const range = max - min || 1;
   const t0 = points[0]!.t;
   const t1 = points[points.length - 1]!.t;
   const span = t1 - t0 || 1;
   const x = (t: number): number => PAD + ((t - t0) / span) * (W - 2 * PAD);
-  const y = (v: number): number => H - PAD - ((v - min) / range) * (H - 2 * PAD);
+  // A constant series draws as a horizontal mid-line (not pinned to the bottom).
+  const y = (v: number): number => (flat ? H / 2 : H - PAD - ((v - min) / range) * (H - 2 * PAD));
   const line = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(getValue(p)).toFixed(1)}`).join(" ");
   const area = `${line} L${x(t1).toFixed(1)},${H - PAD} L${x(t0).toFixed(1)},${H - PAD} Z`;
   const last = getValue(points[points.length - 1]!);

@@ -69,6 +69,13 @@ describe("VnishDriver", () => {
     expect(reqs).toHaveLength(1);
   });
 
+  it("sends only the password to unlock when given a 'user:pass' secret", async () => {
+    const reqs: HttpRequest[] = [];
+    await new VnishDriver().execute(dev, "reboot", fakeHttp(reqs), "root:secretpw");
+    expect(reqs[0]?.path).toContain("unlock");
+    expect(reqs[0]?.body).toBe(JSON.stringify({ pw: "secretpw" }));
+  });
+
   it("setPool posts the pool config with the given url/user", async () => {
     const reqs: HttpRequest[] = [];
     const r = await new VnishDriver().execute(dev, "setPool", fakeHttp(reqs), "pw", {

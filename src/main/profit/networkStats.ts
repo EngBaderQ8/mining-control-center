@@ -17,9 +17,11 @@ export async function getNetworkStats(now = Date.now()): Promise<NetworkStats> {
       request("https://blockchain.info/ticker", { headersTimeout: 8000, bodyTimeout: 8000 }),
       request("https://blockchain.info/q/getdifficulty", { headersTimeout: 8000, bodyTimeout: 8000 }),
     ]);
-    const ticker = (await priceRes.body.json()) as Record<string, { last?: number }>;
+    // Drain both bodies before any parse can throw, so neither stream leaks.
+    const [tickerText, diffText] = await Promise.all([priceRes.body.text(), diffRes.body.text()]);
+    const ticker = JSON.parse(tickerText) as Record<string, { last?: number }>;
     const priceUsd = Number(ticker?.["USD"]?.last) || 0;
-    const difficulty = Number((await diffRes.body.text()).trim()) || 0;
+    const difficulty = Number(diffText.trim()) || 0;
     const stats: NetworkStats = { priceUsd, difficulty, blockRewardBtc: 3.125 };
     if (priceUsd > 0 && difficulty > 0) cache = { at: now, stats };
     return cache?.stats ?? stats;

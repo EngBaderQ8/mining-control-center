@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Device, Site, DeviceStatus } from "../../core/model/device";
 import type { ControlCommand, Transport } from "../../core/drivers/types";
 import type { CommandOutcome } from "../../core/model/result";
+import type { Alert } from "../../core/alerts/rules";
 import type { ServerMessage } from "../../shared/protocol";
 import { MiningService, type Snapshot } from "../service";
 import type { DeviceRepo } from "../db/repo";
@@ -24,6 +25,7 @@ export interface BridgeDeps {
   decrypt: (enc: Buffer) => string;
   emitSnapshot: (snap: Snapshot) => void;
   emitStatuses: (statuses: DeviceStatus[]) => void;
+  emitAlerts: (alerts: Alert[]) => void;
   notify: (msg: string) => void;
 }
 
@@ -62,7 +64,8 @@ export class ServerBridge {
         this.deps.emitStatuses(statuses);
       },
       emitAlerts: (alerts) => {
-        for (const a of alerts) this.deps.notify(a.message);
+        this.deps.emitAlerts(alerts); // -> renderer toast (CH.alerts)
+        for (const a of alerts) this.deps.notify(a.message); // -> OS notification + Telegram
       },
       now: () => Date.now(),
     });
@@ -195,8 +198,12 @@ export class ServerBridge {
    *  never sent to the server). Needed for control on miners whose password isn't
    *  the default root:root. */
   setSecrets(deviceIds: string[], secret: string): void {
-    if (!secret) return;
-    for (const id of deviceIds) this.deps.repo.setSecret(id, this.deps.encrypt(secret));
+    // An empty password CLEARS the stored secret, so the device reverts to the
+    // firmware default (lets the user undo a wrong saved password).
+    for (const id of deviceIds) {
+      if (secret) this.deps.repo.setSecret(id, this.deps.encrypt(secret));
+      else this.deps.repo.clearSecret(id);
+    }
   }
 
   /** Delete a device locally (so this agent won't re-register it) and on the server. */

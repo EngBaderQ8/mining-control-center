@@ -84,6 +84,11 @@ export class DeviceRepo {
     this.persist();
   }
 
+  clearSecret(deviceId: string): void {
+    delete this.data.secrets[deviceId];
+    this.persist();
+  }
+
   getSecret(deviceId: string): Buffer | null {
     const b64 = this.data.secrets[deviceId];
     return b64 ? Buffer.from(b64, "base64") : null;

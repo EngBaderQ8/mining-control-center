@@ -36,14 +36,30 @@ export async function detectChatId(token: string): Promise<{ chatId?: string; er
       headersTimeout: 8000,
       bodyTimeout: 8000,
     });
-    const data = (await res.body.json()) as {
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      const body = await res.body.text();
+      if (res.statusCode === 401 || res.statusCode === 404) return { error: "توكن غير صحيح" };
+      return { error: `HTTP ${res.statusCode}: ${body.slice(0, 120)}` };
+    }
+    type Chat = { chat?: { id?: number } };
+    let data: {
       ok?: boolean;
-      result?: Array<{ message?: { chat?: { id?: number } } }>;
+      result?: Array<{ message?: Chat; edited_message?: Chat; channel_post?: Chat; edited_channel_post?: Chat }>;
     };
+    try {
+      data = (await res.body.json()) as typeof data;
+    } catch {
+      return { error: "رد غير متوقع من تيليجرام — حاول مرة ثانية" };
+    }
     if (!data.ok) return { error: "توكن غير صحيح" };
     const updates = data.result ?? [];
     for (let i = updates.length - 1; i >= 0; i--) {
-      const id = updates[i]?.message?.chat?.id;
+      const u = updates[i];
+      const id =
+        u?.message?.chat?.id ??
+        u?.channel_post?.chat?.id ??
+        u?.edited_message?.chat?.id ??
+        u?.edited_channel_post?.chat?.id;
       if (id !== undefined) return { chatId: String(id) };
     }
     return { error: "ما لقيت رسالة — أرسل أي رسالة للبوت بتيليجرام ثم جرّب مرة ثانية" };

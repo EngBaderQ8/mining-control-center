@@ -23,7 +23,16 @@ export class RecoveryConfig {
   }
 
   set(s: RecoverySettings): void {
-    this.state = { ...DEFAULT_RECOVERY, ...s };
+    // Clamp so a bad value (e.g. cooldown 0 → action storm, offline 0 → instant
+    // reboot loop) can never be persisted or reach the engine.
+    const clamp = (n: number, lo: number, hi: number, d: number): number =>
+      Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.floor(n))) : d;
+    this.state = {
+      enabled: !!s.enabled,
+      rebootOfflineMin: clamp(s.rebootOfflineMin, 1, 1440, DEFAULT_RECOVERY.rebootOfflineMin),
+      cooldownMin: clamp(s.cooldownMin, 1, 1440, DEFAULT_RECOVERY.cooldownMin),
+      overheatStopC: clamp(s.overheatStopC, 50, 120, DEFAULT_RECOVERY.overheatStopC),
+    };
     this.persist();
   }
 

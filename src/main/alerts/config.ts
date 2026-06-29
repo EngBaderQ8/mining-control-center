@@ -39,8 +39,8 @@ export class AlertConfig {
     try {
       mkdirSync(dirname(this.path), { recursive: true });
       writeFileSync(this.path, JSON.stringify(this.state, null, 2), "utf8");
-    } catch {
-      /* best-effort */
+    } catch (e) {
+      console.error("[alerts] failed to persist telegram.json:", (e as Error).message);
     }
   }
 }

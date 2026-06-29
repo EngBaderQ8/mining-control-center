@@ -39,6 +39,13 @@ describe("StockDriver", () => {
     expect(reqs[0]?.auth?.pass).toBe("pa:ss:word");
   });
 
+  it("treats a bare password (no colon) as the password with user 'root'", async () => {
+    const reqs: HttpRequest[] = [];
+    await new StockDriver().execute(dev, "reboot", http(reqs), "myWebPass");
+    expect(reqs[0]?.auth?.user).toBe("root");
+    expect(reqs[0]?.auth?.pass).toBe("myWebPass");
+  });
+
   it("setPool posts the pool config to set_miner_conf.cgi with digest auth", async () => {
     const reqs: HttpRequest[] = [];
     const r = await new StockDriver().execute(dev, "setPool", http(reqs), "root:root", {

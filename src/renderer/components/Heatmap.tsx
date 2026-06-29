@@ -6,7 +6,7 @@ function tileColor(v: DeviceView): string {
   const s = v.status;
   if (!s || s.state === "offline") return "#3a3d44";
   const t = s.maxTempC;
-  if (t <= 0) return "#2f6b3f";
+  if (t <= 0) return "#3a3d44"; // online but no temp reading — grey (matches the "—" + legend)
   if (t < 65) return "#2f9e54"; // cool — green
   if (t < 72) return "#7fb01e"; // ok
   if (t < 80) return "#d4a017"; // warm — amber
