@@ -1,54 +1,83 @@
-import type Database from "better-sqlite3";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { Device, Site } from "../../core/model/device";
 
+interface DbShape {
+  sites: Site[];
+  devices: Device[];
+  secrets: Record<string, string>; // deviceId -> base64(encrypted)
+}
+
+const EMPTY: DbShape = { sites: [], devices: [], secrets: {} };
+
+/**
+ * Tiny persistent store for the device/site registry, backed by a JSON file.
+ * The dataset is small (a handful of sites + devices), so SQL/native modules
+ * are unnecessary — this keeps the app free of native-ABI coupling.
+ *
+ * Pass a file path to persist; omit it for an in-memory store (used in tests).
+ */
 export class DeviceRepo {
-  constructor(private db: Database.Database) {}
+  private data: DbShape;
+
+  constructor(private path?: string) {
+    this.data = { ...EMPTY, sites: [], devices: [], secrets: {} };
+    if (path && existsSync(path)) {
+      try {
+        const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<DbShape>;
+        this.data = {
+          sites: parsed.sites ?? [],
+          devices: parsed.devices ?? [],
+          secrets: parsed.secrets ?? {},
+        };
+      } catch {
+        // Corrupt/unreadable file — start from an empty store rather than crash.
+        this.data = { sites: [], devices: [], secrets: {} };
+      }
+    }
+  }
+
+  private persist(): void {
+    if (!this.path) return;
+    mkdirSync(dirname(this.path), { recursive: true });
+    writeFileSync(this.path, JSON.stringify(this.data, null, 2), "utf8");
+  }
 
   upsertSite(s: Site): void {
-    this.db
-      .prepare(
-        `INSERT INTO sites(id,name) VALUES(@id,@name)
-         ON CONFLICT(id) DO UPDATE SET name=@name`,
-      )
-      .run(s);
+    const i = this.data.sites.findIndex((x) => x.id === s.id);
+    if (i >= 0) this.data.sites[i] = s;
+    else this.data.sites.push(s);
+    this.persist();
   }
 
   upsertDevice(d: Device): void {
-    this.db
-      .prepare(
-        `INSERT INTO devices(id,siteId,name,model,firmware,host,apiPort,controlPort)
-         VALUES(@id,@siteId,@name,@model,@firmware,@host,@apiPort,@controlPort)
-         ON CONFLICT(id) DO UPDATE SET
-           siteId=@siteId, name=@name, model=@model, firmware=@firmware,
-           host=@host, apiPort=@apiPort, controlPort=@controlPort`,
-      )
-      .run(d);
+    const i = this.data.devices.findIndex((x) => x.id === d.id);
+    if (i >= 0) this.data.devices[i] = d;
+    else this.data.devices.push(d);
+    this.persist();
   }
 
   listSites(): Site[] {
-    return this.db.prepare(`SELECT id,name FROM sites`).all() as Site[];
+    return [...this.data.sites];
   }
 
   listDevices(): Device[] {
-    return this.db
-      .prepare(
-        `SELECT id,siteId,name,model,firmware,host,apiPort,controlPort FROM devices`,
-      )
-      .all() as Device[];
+    return [...this.data.devices];
   }
 
   deleteDevice(id: string): void {
-    this.db.prepare(`DELETE FROM devices WHERE id=?`).run(id);
+    this.data.devices = this.data.devices.filter((d) => d.id !== id);
+    delete this.data.secrets[id];
+    this.persist();
   }
 
   setSecret(deviceId: string, enc: Buffer): void {
-    this.db.prepare(`UPDATE devices SET secretEnc=? WHERE id=?`).run(enc, deviceId);
+    this.data.secrets[deviceId] = enc.toString("base64");
+    this.persist();
   }
 
   getSecret(deviceId: string): Buffer | null {
-    const row = this.db.prepare(`SELECT secretEnc FROM devices WHERE id=?`).get(deviceId) as
-      | { secretEnc: Buffer | null }
-      | undefined;
-    return row?.secretEnc ?? null;
+    const b64 = this.data.secrets[deviceId];
+    return b64 ? Buffer.from(b64, "base64") : null;
   }
 }

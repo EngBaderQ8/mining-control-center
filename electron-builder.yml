@@ -7,9 +7,6 @@ files:
   - dist/**
   - package.json
   - "!**/*.map"
-# better-sqlite3 is a native module and must live outside the asar archive.
-asarUnpack:
-  - "**/node_modules/better-sqlite3/**"
 win:
   target:
     - nsis

@@ -27,15 +27,13 @@ npm run typecheck
 npm run dist     # ينتج مثبّتاً في مجلد release/
 ```
 
-## ملاحظة تقنية: المكتبة الأصلية (better-sqlite3)
-`better-sqlite3` مكتبة native لها نسخة لـ Node ونسخة لـ Electron:
-- `npm test` يعيد بناءها لـ **Node** تلقائياً (عبر `pretest`).
-- `npm start` و `npm run dist` يعيدان بناءها لـ **Electron** تلقائياً.
-لا حاجة لأي خطوة يدوية ما دمت تستخدم هذه الأوامر.
+## ملاحظة تقنية
+لا توجد أي مكتبات native — التخزين عبر ملف JSON بسيط (`mining.json` في مجلد بيانات التطبيق)،
+فلا حاجة لأي إعادة بناء أو خطوات إضافية. `npm test` و`npm start` و`npm run dist` تعمل مباشرة.
 
 ## البنية
 - `src/core/**` — منطق صرف بلا اعتماد على إطار، مغطّى باختبارات (cgminer 4028، محوّلات الفرمور، المراقبة، الأوامر الجماعية، التنبيهات).
-- `src/main/**` — عملية Electron الرئيسية (DB، النقل الفعلي TCP/HTTP، الخدمة، IPC).
-- `src/preload/**` — جسر IPC آمن.
+- `src/main/**` — عملية Electron الرئيسية (تخزين JSON، النقل الفعلي TCP/HTTP، الخدمة، IPC).
+- `src/preload/**` — جسر IPC آمن (مُجمَّع بـ esbuild ليعمل ضمن sandbox).
 - `src/renderer/**` — واجهة React (جدول مضغوط مقسّم حسب الموقع).
-- `docs/` — وثائق التصميم والخطة ودليل Tailscale.
+- `docs/` — وثائق التصميم والخطة وأدلة الربط.

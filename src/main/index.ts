@@ -1,7 +1,5 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
-import Database from "better-sqlite3";
-import { applySchema } from "./db/schema";
 import { DeviceRepo } from "./db/repo";
 import { MiningService } from "./service";
 import { registerIpc } from "./ipc";
@@ -30,6 +28,18 @@ function createWindow(): BrowserWindow {
   win.webContents.on("did-fail-load", (_e, code, desc) =>
     console.error(`[mcc] renderer failed to load: ${code} ${desc}`),
   );
+  // Diagnostic: surface renderer console + crashes into the main-process log.
+  win.webContents.on("console-message", (...args: unknown[]) => {
+    const d = args[0];
+    const text =
+      d && typeof d === "object" && "message" in d
+        ? (d as { message: string }).message
+        : args[2];
+    console.log(`[renderer-console] ${String(text)}`);
+  });
+  win.webContents.on("render-process-gone", (_e, details) =>
+    console.error(`[renderer gone] ${JSON.stringify(details)}`),
+  );
 
   const devUrl = process.env["VITE_DEV_SERVER_URL"];
   if (devUrl) void win.loadURL(devUrl);
@@ -39,9 +49,7 @@ function createWindow(): BrowserWindow {
 }
 
 function buildService(win: BrowserWindow): MiningService {
-  const db = new Database(join(app.getPath("userData"), "mining.db"));
-  applySchema(db);
-  const repo = new DeviceRepo(db);
+  const repo = new DeviceRepo(join(app.getPath("userData"), "mining.json"));
   const transport: Transport = { tcp4028, http: httpRequest };
 
   return new MiningService({

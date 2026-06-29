@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import Database from "better-sqlite3";
-import { applySchema } from "../../src/main/db/schema";
 import { DeviceRepo } from "../../src/main/db/repo";
 import { MiningService, DEFAULT_CONFIG } from "../../src/main/service";
 import type { Transport } from "../../src/core/drivers/types";
@@ -8,9 +6,7 @@ import type { DeviceStatus } from "../../src/core/model/device";
 import type { Alert } from "../../src/core/alerts/rules";
 
 function makeService(transport: Transport, emitted: { statuses: DeviceStatus[][]; alerts: Alert[][] }) {
-  const db = new Database(":memory:");
-  applySchema(db);
-  const repo = new DeviceRepo(db);
+  const repo = new DeviceRepo();
   const service = new MiningService(
     {
       repo,
