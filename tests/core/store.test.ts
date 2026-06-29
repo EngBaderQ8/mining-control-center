@@ -55,6 +55,20 @@ describe("store helpers", () => {
     expect(matchesFilter(d, s, { ...EMPTY_FILTER, firmware: "stock" })).toBe(false);
   });
 
+  it("matches by site name so an operator can narrow to one of many sites", () => {
+    const d = mk("rig-01");
+    const s = st("rig-01", "online", 95);
+    // The text doesn't match the device but does match the site name passed in.
+    expect(matchesFilter(d, s, { ...EMPTY_FILTER, text: "الرياض" })).toBe(false);
+    expect(matchesFilter(d, s, { ...EMPTY_FILTER, text: "الرياض" }, "الرياض — المستودع")).toBe(true);
+    // groupBySite threads site.name through, so filtering by site name keeps it.
+    const groups = groupBySite([site], [d], new Map([["rig-01", s]]), {
+      ...EMPTY_FILTER,
+      text: "الرياض",
+    });
+    expect(groups).toHaveLength(1);
+  });
+
   it("groups by site and drops empty sites after filtering", () => {
     const devices = [mk("a"), mk("b")];
     const map = new Map([["a", st("a", "online", 95)]]);

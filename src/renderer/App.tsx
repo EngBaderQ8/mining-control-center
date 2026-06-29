@@ -78,6 +78,17 @@ export function App(): React.ReactElement {
     },
     [],
   );
+  // On the first populated load only: a fresh install with many sites starts
+  // collapsed (overview, not an 855-row wall). Decided once — never re-collapses
+  // sites the user later expands.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || sites.length === 0) return;
+    seededRef.current = true;
+    if (localStorage.getItem(COLLAPSE_KEY) === null && sites.length >= 4) {
+      persistCollapsed(new Set(sites.map((s) => s.id)));
+    }
+  }, [sites, persistCollapsed]);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((msg: string) => {
@@ -147,9 +158,15 @@ export function App(): React.ReactElement {
     () => computeSummary(sites, devices, statusById),
     [sites, devices, statusById],
   );
+  // "Visible" = actually on screen: exclude devices hidden inside collapsed
+  // sites so select-all / bulk commands never touch unseen miners.
   const visibleIds = useMemo(
-    () => groups.flatMap((g) => g.views.map((v) => v.device.id)),
-    [groups],
+    () => groups.filter((g) => !collapsed.has(g.site.id)).flatMap((g) => g.views.map((v) => v.device.id)),
+    [groups, collapsed],
+  );
+  const collapsedVisibleCount = useMemo(
+    () => groups.filter((g) => collapsed.has(g.site.id)).length,
+    [groups, collapsed],
   );
 
   const toggle = useCallback((id: string) => {
@@ -303,10 +320,12 @@ export function App(): React.ReactElement {
       {groups.length >= 2 && (
         <div className="collapsebar">
           <span className="hint">
-            {collapsed.size > 0 ? `${collapsed.size} موقع مطوي` : `${groups.length} مواقع`}
+            {collapsedVisibleCount > 0
+              ? `${collapsedVisibleCount} / ${groups.length} موقع مطوي`
+              : `${groups.length} مواقع`}
           </span>
-          <button className="btn" onClick={() => persistCollapsed(new Set(sites.map((s) => s.id)))}>
-            ▶ طيّ الكل
+          <button className="btn" onClick={() => persistCollapsed(new Set(groups.map((g) => g.site.id)))}>
+            ◀ طيّ الكل
           </button>
           <button className="btn" onClick={() => persistCollapsed(new Set())}>
             ▼ فتح الكل

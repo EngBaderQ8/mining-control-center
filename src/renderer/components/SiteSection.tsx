@@ -27,46 +27,39 @@ export function SiteSection({
   onDeleteDevice,
 }: Props): React.ReactElement {
   const { site, views } = group;
-  const online = views.filter((v) => v.status && v.status.state !== "offline").length;
-  const offline = views.length - online;
+  // Three explicit, non-overlapping counts that sum to the total.
+  const online = views.filter((v) => v.status?.state === "online").length;
+  const warning = views.filter((v) => v.status?.state === "warning").length;
+  const offline = views.length - online - warning;
   const siteTHs = views.reduce((sum, v) => sum + (v.status?.hashrateTHs ?? 0), 0);
-  const allOnline = online === views.length && views.length > 0;
-  const siteState = online === 0 ? "offline" : allOnline ? "online" : "warning";
-
-  // Stop a button click from also toggling the header's collapse.
-  const stop = (fn: () => void) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fn();
-  };
+  const siteState = online + warning === 0 ? "offline" : offline + warning > 0 ? "warning" : "online";
 
   return (
     <div className="site">
-      <div
-        className="sitehead clickable"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        title={collapsed ? "اضغط لعرض الأجهزة" : "اضغط لطيّ الموقع"}
-        onClick={() => onToggleCollapse(site.id)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggleCollapse(site.id);
-          }
-        }}
-      >
-        <span className={`chev ${collapsed ? "" : "open"}`}>▶</span>
-        <span className={`dot ${siteState}`}></span>
-        <span className="name">موقع: {site.name}</span>
-        <span className="meta">
-          · {views.length} جهاز · {online} شغّال
-          {offline > 0 && <span className="off"> · {offline} غير متصل</span>} · {siteTHs.toFixed(0)} TH/s
-        </span>
+      <div className="sitehead">
+        {/* Only the title area is the disclosure toggle — a real <button> so
+            keyboard works natively and the action buttons are NOT nested in it. */}
+        <button
+          type="button"
+          className="sitetoggle"
+          aria-expanded={!collapsed}
+          title={collapsed ? "اضغط لعرض الأجهزة" : "اضغط لطيّ الموقع"}
+          onClick={() => onToggleCollapse(site.id)}
+        >
+          <span className={`chev ${collapsed ? "" : "open"}`}>◀</span>
+          <span className={`dot ${siteState}`}></span>
+          <span className="name">موقع: {site.name}</span>
+          <span className="meta">
+            · {views.length} جهاز · {online} شغّال
+            {warning > 0 && <span className="warn"> · {warning} تحذير</span>}
+            {offline > 0 && <span className="off"> · {offline} غير متصل</span>} · {siteTHs.toFixed(0)} TH/s
+          </span>
+        </button>
         <span className="spacer" style={{ marginInlineStart: "auto" }} />
-        <button className="btn" onClick={stop(() => onSelectSite(views.map((v) => v.device.id)))}>
+        <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
           تحديد كل الموقع
         </button>
-        <button className="btn stop" onClick={stop(() => onDeleteSite(site.id, site.name))}>
+        <button className="btn stop" onClick={() => onDeleteSite(site.id, site.name)}>
           🗑 حذف الموقع
         </button>
       </div>

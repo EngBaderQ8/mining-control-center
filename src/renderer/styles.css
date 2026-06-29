@@ -76,11 +76,19 @@ a { color: var(--blue); text-decoration: none; }
 .sitehead .name { font-weight: 700; }
 .sitehead .meta { font-size: 12px; color: var(--muted); }
 .sitehead .meta .off { color: var(--red); font-weight: 600; }
-.sitehead.clickable { cursor: pointer; user-select: none; }
-.sitehead.clickable:hover { background: #23272e; }
+.sitehead .meta .warn { color: var(--amber); font-weight: 600; }
+/* The title area is the collapse toggle: a borderless button that looks like text. */
+.sitetoggle {
+  display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0;
+  background: none; border: none; color: inherit; font: inherit; text-align: start;
+  padding: 6px 8px; margin: -6px -8px; border-radius: 8px; cursor: pointer; user-select: none;
+}
+.sitetoggle:hover { background: #23272e; }
+.sitetoggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.sitetoggle .name { white-space: nowrap; }
 .sitehead .chev {
-  font-size: 10px; color: var(--muted); width: 14px; text-align: center;
-  display: inline-block; transition: transform .12s ease;
+  font-size: 14px; color: var(--blue); width: 16px; text-align: center;
+  display: inline-block; transition: transform .12s ease; flex: none;
 }
 .sitehead .chev.open { transform: rotate(90deg); }
 

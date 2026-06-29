@@ -45,10 +45,11 @@ export function matchesFilter(
   device: Device,
   status: DeviceStatus | undefined,
   filter: Filter,
+  siteName = "",
 ): boolean {
   const text = filter.text.trim().toLowerCase();
   if (text) {
-    const hay = `${device.name} ${device.model} ${status?.worker ?? ""}`.toLowerCase();
+    const hay = `${device.name} ${device.model} ${status?.worker ?? ""} ${siteName}`.toLowerCase();
     if (!hay.includes(text)) return false;
   }
   if (filter.state !== "all") {
@@ -77,7 +78,7 @@ export function groupBySite(
       views: devices
         .filter((d) => d.siteId === site.id)
         .map((device) => ({ device, status: statusById.get(device.id) }))
-        .filter((v) => matchesFilter(v.device, v.status, filter)),
+        .filter((v) => matchesFilter(v.device, v.status, filter, site.name)),
     }))
     .filter((g) => g.views.length > 0);
 }
