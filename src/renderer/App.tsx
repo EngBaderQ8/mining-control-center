@@ -19,6 +19,17 @@ import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import type { UpdateStatus } from "../shared/api";
 
+const COLLAPSE_KEY = "mcc.collapsedSites";
+function loadCollapsed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    /* ignore */
+  }
+  return new Set();
+}
+
 const DESTRUCTIVE: ReadonlySet<ControlCommand> = new Set(["stopMining", "reboot"]);
 const CMD_LABEL: Record<ControlCommand, string> = {
   startMining: "تشغيل التعدين",
@@ -40,6 +51,33 @@ export function App(): React.ReactElement {
   const [scanOpen, setScanOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  // Collapsed site IDs — persisted so the layout survives reloads (key for many sites).
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
+
+  const persistCollapsed = useCallback((next: Set<string>) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+    } catch {
+      /* ignore quota/availability errors */
+    }
+  }, []);
+  const toggleCollapse = useCallback(
+    (siteId: string) => {
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        if (next.has(siteId)) next.delete(siteId);
+        else next.add(siteId);
+        try {
+          localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((msg: string) => {
@@ -262,6 +300,20 @@ export function App(): React.ReactElement {
         onClear={() => setSelectedIds(new Set())}
       />
 
+      {groups.length >= 2 && (
+        <div className="collapsebar">
+          <span className="hint">
+            {collapsed.size > 0 ? `${collapsed.size} موقع مطوي` : `${groups.length} مواقع`}
+          </span>
+          <button className="btn" onClick={() => persistCollapsed(new Set(sites.map((s) => s.id)))}>
+            ▶ طيّ الكل
+          </button>
+          <button className="btn" onClick={() => persistCollapsed(new Set())}>
+            ▼ فتح الكل
+          </button>
+        </div>
+      )}
+
       {groups.length === 0 ? (
         <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
           لا توجد أجهزة مطابقة. اضغط «إضافة جهاز» للبدء.
@@ -272,6 +324,8 @@ export function App(): React.ReactElement {
             key={g.site.id}
             group={g}
             selectedIds={selectedIds}
+            collapsed={collapsed.has(g.site.id)}
+            onToggleCollapse={toggleCollapse}
             onToggle={toggle}
             onSelectSite={selectSite}
             onCommand={onCommand}

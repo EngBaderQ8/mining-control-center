@@ -75,6 +75,18 @@ a { color: var(--blue); text-decoration: none; }
 }
 .sitehead .name { font-weight: 700; }
 .sitehead .meta { font-size: 12px; color: var(--muted); }
+.sitehead .meta .off { color: var(--red); font-weight: 600; }
+.sitehead.clickable { cursor: pointer; user-select: none; }
+.sitehead.clickable:hover { background: #23272e; }
+.sitehead .chev {
+  font-size: 10px; color: var(--muted); width: 14px; text-align: center;
+  display: inline-block; transition: transform .12s ease;
+}
+.sitehead .chev.open { transform: rotate(90deg); }
+
+/* collapse-all bar (shown when there are several sites) */
+.collapsebar { display: flex; gap: 8px; align-items: center; margin: 2px 0 14px; flex-wrap: wrap; }
+.collapsebar .hint { font-size: 12px; color: var(--muted); margin-inline-end: auto; }
 
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .dot.online { background: var(--green); }
