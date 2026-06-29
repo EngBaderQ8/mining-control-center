@@ -174,16 +174,30 @@ function setupAutoUpdate(): void {
     }
     ulog("info", `check start (${trigger})`);
     send({ state: "checking" });
-    try {
-      const r = await Promise.race([
+    // Retry transient network failures (e.g. ERR_CONNECTION_RESET) a few times
+    // before surfacing an error — GitHub blips shouldn't read as "update broken".
+    const attempt = (): Promise<{ updateInfo?: { version?: string } } | null> =>
+      Promise.race([
         updater.checkForUpdates(),
         new Promise<never>((_, rej) =>
-          setTimeout(
-            () => rej(new Error("انتهت المهلة (25ث) — البرنامج ما قدر يوصل GitHub")),
-            25000,
-          ),
+          setTimeout(() => rej(new Error("انتهت المهلة (25ث) — ما قدر يوصل GitHub")), 25000),
         ),
       ]);
+    try {
+      let r: { updateInfo?: { version?: string } } | null = null;
+      let lastErr: Error | null = null;
+      for (let i = 1; i <= 3; i++) {
+        try {
+          r = await attempt();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e as Error;
+          ulog("warn", `check attempt ${i}/3 failed (${trigger}): ${lastErr.message}`);
+          if (i < 3) await new Promise((res) => setTimeout(res, 4000));
+        }
+      }
+      if (lastErr) throw lastErr;
       const latest = r?.updateInfo?.version;
       const available = !!latest && latest !== current;
       ulog("info", `check result (${trigger}): current=${current} latest=${latest} available=${available}`);
