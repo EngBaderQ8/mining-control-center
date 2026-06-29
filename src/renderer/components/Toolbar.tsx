@@ -5,9 +5,10 @@ interface Props {
   filter: Filter;
   onChange: (f: Filter) => void;
   onAddDevice: () => void;
+  onScan: () => void;
 }
 
-export function Toolbar({ filter, onChange, onAddDevice }: Props): React.ReactElement {
+export function Toolbar({ filter, onChange, onAddDevice, onScan }: Props): React.ReactElement {
   return (
     <div className="bar">
       <input
@@ -39,8 +40,11 @@ export function Toolbar({ filter, onChange, onAddDevice }: Props): React.ReactEl
         <option value="luxos">LuxOS</option>
       </select>
       <span className="spacer" style={{ marginInlineStart: "auto" }} />
-      <button className="btn primary" onClick={onAddDevice}>
-        + إضافة جهاز
+      <button className="btn primary" onClick={onScan}>
+        🔍 فحص الشبكة
+      </button>
+      <button className="btn" onClick={onAddDevice}>
+        + إضافة يدوي
       </button>
     </div>
   );

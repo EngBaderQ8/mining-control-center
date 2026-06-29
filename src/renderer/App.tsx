@@ -14,6 +14,7 @@ import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
 import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDialog";
 import { SetPoolDialog, type PoolInput } from "./components/SetPoolDialog";
+import { ScanDialog } from "./components/ScanDialog";
 import { LoginScreen } from "./components/LoginScreen";
 
 const DESTRUCTIVE: ReadonlySet<ControlCommand> = new Set(["stopMining", "reboot"]);
@@ -34,6 +35,7 @@ export function App(): React.ReactElement {
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -177,7 +179,12 @@ export function App(): React.ReactElement {
   return (
     <div className="app">
       <SummaryBar summary={summary} />
-      <Toolbar filter={filter} onChange={setFilter} onAddDevice={() => setDialogOpen(true)} />
+      <Toolbar
+        filter={filter}
+        onChange={setFilter}
+        onAddDevice={() => setDialogOpen(true)}
+        onScan={() => setScanOpen(true)}
+      />
       <BulkActionBar
         selectedCount={selectedIds.size}
         totalVisible={visibleIds.length}
@@ -202,6 +209,17 @@ export function App(): React.ReactElement {
             onCommand={onCommand}
           />
         ))
+      )}
+
+      {scanOpen && (
+        <ScanDialog
+          onClose={() => setScanOpen(false)}
+          onScan={async (siteName) => {
+            const r = await api.scanNetwork(siteName);
+            await reload();
+            return r;
+          }}
+        />
       )}
 
       {poolOpen && (

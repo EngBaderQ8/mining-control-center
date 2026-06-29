@@ -35,4 +35,5 @@ export function registerIpc(bridge: ServerBridge): void {
   ipcMain.handle(CH.siteAdd, (_e, site: Site) => {
     bridge.addSite(site);
   });
+  ipcMain.handle(CH.deviceScan, (_e, siteName: string) => bridge.scanNetwork(siteName));
 }

@@ -8,11 +8,15 @@ import type { DeviceRepo } from "../db/repo";
 import { ConnectionConfig } from "./config";
 import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
+import { scanHosts, subnetHosts } from "../../core/discovery/scan";
+import { localIpv4 } from "../discovery/localSubnet";
 
 export interface BridgeDeps {
   config: ConnectionConfig;
   repo: DeviceRepo;
   transport: Transport;
+  /** Same as transport but with a short timeout, used for fast network scanning. */
+  scanTransport: Transport;
   encrypt: (plain: string) => Buffer;
   decrypt: (enc: Buffer) => string;
   emitSnapshot: (snap: Snapshot) => void;
@@ -119,6 +123,41 @@ export class ServerBridge {
   addDevice(device: Device, secret?: string): void {
     this.service.addDevice(device, secret);
     this.agent?.registerDevice(device);
+  }
+
+  /**
+   * Scan the local network for ASICs and auto-register everything found under a
+   * new site. Runs on the agent (the machine on the miners' LAN). Returns how
+   * many were found. Discovered devices get default stock creds (root:root) —
+   * monitoring works immediately; control may need real creds for modded firmware.
+   */
+  async scanNetwork(siteName: string): Promise<{ found: number; reachable: boolean }> {
+    const ip = localIpv4();
+    if (!ip) return { found: 0, reachable: false };
+    const hosts = subnetHosts(ip);
+    const found = await scanHosts(hosts, 4028, this.deps.scanTransport, 32);
+    if (found.length === 0) return { found: 0, reachable: true };
+
+    const siteId = randomUUID();
+    this.addSite({ id: siteId, name: siteName });
+    for (const d of found) {
+      const last = d.host.split(".").pop() ?? "";
+      const controlPort = d.firmware === "stock" || d.firmware === "vnish" ? 80 : 4028;
+      this.addDevice(
+        {
+          id: randomUUID(),
+          siteId,
+          name: `${d.model}-${last}`,
+          model: d.model,
+          firmware: d.firmware,
+          host: d.host,
+          apiPort: 4028,
+          controlPort,
+        },
+        "root:root",
+      );
+    }
+    return { found: found.length, reachable: true };
   }
 
   async sendCommand(

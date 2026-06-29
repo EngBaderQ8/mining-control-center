@@ -11,6 +11,7 @@ export interface CgminerResponse {
   STATS?: CgminerSection[];
   POOLS?: CgminerSection[];
   DEVS?: CgminerSection[];
+  VERSION?: CgminerSection[];
   id?: number;
 }
 

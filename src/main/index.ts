@@ -54,11 +54,17 @@ function buildBridge(win: BrowserWindow): ServerBridge {
   const repo = new DeviceRepo(join(userData, "mining.json"));
   const config = new ConnectionConfig(join(userData, "connection.json"));
   const transport: Transport = { tcp4028, http: httpRequest };
+  // Short-timeout transport for fast LAN scanning (don't wait 5s per dead host).
+  const scanTransport: Transport = {
+    tcp4028: (h, p, c) => tcp4028(h, p, c, 1200),
+    http: httpRequest,
+  };
 
   return new ServerBridge({
     config,
     repo,
     transport,
+    scanTransport,
     encrypt: encryptSecret,
     decrypt: decryptSecret,
     emitSnapshot: (snap) => {
