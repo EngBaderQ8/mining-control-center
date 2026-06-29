@@ -1,11 +1,19 @@
 import { createConnection } from "node:net";
 
-/** True once the buffer looks like a complete cgminer reply (a JSON object/array
- *  end). We don't require strictly-valid JSON — bmminer sometimes emits slightly
- *  malformed JSON, and we still want to capture and use it. */
+/** True once the buffer holds a structurally complete JSON value (balanced
+ *  braces/brackets). We don't require strictly-valid JSON — bmminer sometimes
+ *  emits slightly malformed JSON — only that the top-level structure closed, so
+ *  we don't stop early on the STATUS array before VERSION arrives. The socket
+ *  close/end is the fallback for anything this misses. */
 function looksComplete(raw: string): boolean {
-  const trimmed = raw.replace(/\0/g, "").trim();
-  return trimmed.length > 1 && (trimmed.endsWith("}") || trimmed.endsWith("]"));
+  const t = raw.replace(/\0/g, "").trim();
+  if (t.length < 2 || (!t.startsWith("{") && !t.startsWith("["))) return false;
+  let depth = 0;
+  for (const ch of t) {
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+  }
+  return depth === 0;
 }
 
 /**

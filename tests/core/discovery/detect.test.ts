@@ -22,6 +22,15 @@ describe("detectFromVersion", () => {
     expect(detectFromVersion('{"foo":1}')).toBeNull();
   });
 
+  it("detects the real S19 XP+ Hyd version response (spaces after colons)", () => {
+    const real =
+      '{"STATUS": [{"STATUS": "S", "When": 1782750427, "Code": 22, "Msg": "CGMiner versions", "Description": "bmminer 1.0.0"}], "VERSION": [{"BMMiner": "1.0.0", "API": "3.1", "Miner": "uart", "CompileTime": "x", "Type": "Antminer S19 XP+ Hyd"}], "id": 1}';
+    const d = detectFromVersion(real);
+    expect(d).not.toBeNull();
+    expect(d?.firmware).toBe("stock");
+    expect(d?.model).toBe("Antminer S19 XP+ Hyd");
+  });
+
   it("still detects a miner from MALFORMED JSON (bmminer quirk)", () => {
     // Missing closing brace / trailing junk but clear miner markers.
     const malformed =
