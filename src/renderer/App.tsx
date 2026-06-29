@@ -13,6 +13,8 @@ import {
   type SortState,
 } from "./state/store";
 import { SummaryBar } from "./components/SummaryBar";
+import { ProfitBar } from "./components/ProfitBar";
+import { Heatmap } from "./components/Heatmap";
 import { Toolbar } from "./components/Toolbar";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
@@ -92,6 +94,7 @@ export function App(): React.ReactElement {
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
+  const [view, setView] = useState<"table" | "heatmap">("table");
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const onSort = useCallback((key: SortKey) => {
     setSort((prev) =>
@@ -370,6 +373,7 @@ export function App(): React.ReactElement {
   return (
     <div className="app">
       <UpdateBanner status={updateStatus} />
+      <ProfitBar hashrateTHs={summary.totalTHs} />
       <SummaryBar summary={summary} />
       <Toolbar
         filter={filter}
@@ -391,43 +395,70 @@ export function App(): React.ReactElement {
         onClear={() => setSelectedIds(new Set())}
       />
 
-      {groups.length >= 2 && (
-        <div className="collapsebar">
-          <span className="hint">
-            {collapsedVisibleCount > 0
-              ? `${collapsedVisibleCount} / ${groups.length} موقع مطوي`
-              : `${groups.length} مواقع`}
-          </span>
-          <button className="btn" onClick={() => persistCollapsed(new Set(groups.map((g) => g.site.id)))}>
-            ◀ طيّ الكل
-          </button>
-          <button className="btn" onClick={() => persistCollapsed(new Set())}>
-            ▼ فتح الكل
-          </button>
-        </div>
-      )}
+      <div className="viewtoggle">
+        <button
+          className={`btn ${view === "table" ? "primary" : ""}`}
+          onClick={() => setView("table")}
+        >
+          📋 جدول
+        </button>
+        <button
+          className={`btn ${view === "heatmap" ? "primary" : ""}`}
+          onClick={() => setView("heatmap")}
+        >
+          🔥 خريطة حرارية
+        </button>
+      </div>
 
-      {groups.length === 0 ? (
-        <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
-          لا توجد أجهزة مطابقة. اضغط «إضافة جهاز» للبدء.
-        </div>
+      {view === "heatmap" ? (
+        groups.length === 0 ? (
+          <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+            لا توجد أجهزة مطابقة.
+          </div>
+        ) : (
+          <Heatmap groups={groups} />
+        )
       ) : (
-        groups.map((g) => (
-          <SiteSection
-            key={g.site.id}
-            group={g}
-            selectedIds={selectedIds}
-            collapsed={collapsed.has(g.site.id)}
-            sort={sort}
-            onSort={onSort}
-            onToggleCollapse={toggleCollapse}
-            onToggle={toggle}
-            onSelectSite={selectSite}
-            onCommand={onCommand}
-            onDeleteSite={onDeleteSite}
-            onDeleteDevice={onDeleteDevice}
-          />
-        ))
+        <>
+          {groups.length >= 2 && (
+            <div className="collapsebar">
+              <span className="hint">
+                {collapsedVisibleCount > 0
+                  ? `${collapsedVisibleCount} / ${groups.length} موقع مطوي`
+                  : `${groups.length} مواقع`}
+              </span>
+              <button className="btn" onClick={() => persistCollapsed(new Set(groups.map((g) => g.site.id)))}>
+                ◀ طيّ الكل
+              </button>
+              <button className="btn" onClick={() => persistCollapsed(new Set())}>
+                ▼ فتح الكل
+              </button>
+            </div>
+          )}
+
+          {groups.length === 0 ? (
+            <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+              لا توجد أجهزة مطابقة. اضغط «إضافة جهاز» للبدء.
+            </div>
+          ) : (
+            groups.map((g) => (
+              <SiteSection
+                key={g.site.id}
+                group={g}
+                selectedIds={selectedIds}
+                collapsed={collapsed.has(g.site.id)}
+                sort={sort}
+                onSort={onSort}
+                onToggleCollapse={toggleCollapse}
+                onToggle={toggle}
+                onSelectSite={selectSite}
+                onCommand={onCommand}
+                onDeleteSite={onDeleteSite}
+                onDeleteDevice={onDeleteDevice}
+              />
+            ))
+          )}
+        </>
       )}
 
       {scanOpen && (

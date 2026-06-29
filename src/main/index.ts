@@ -16,6 +16,7 @@ import { CH } from "../shared/api";
 import type { Transport } from "../core/drivers/types";
 import { ConnectionConfig } from "./agent/config";
 import { ServerBridge } from "./agent/serverBridge";
+import { getNetworkStats } from "./profit/networkStats";
 
 let mainWindow: BrowserWindow | null = null;
 // Set by setupAutoUpdate so the startup check can be deferred until the renderer
@@ -195,6 +196,7 @@ app.whenReady().then(() => {
   // Register the version handler FIRST and independently — it must never depend
   // on the bridge or the updater succeeding, so the running build is always known.
   ipcMain.handle(CH.appVersion, () => app.getVersion());
+  ipcMain.handle(CH.networkStats, () => getNetworkStats());
 
   try {
     const bridge = buildBridge();

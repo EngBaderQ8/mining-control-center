@@ -22,6 +22,7 @@ const api: Api = {
     ipcRenderer.invoke(CH.deviceScan, siteName, base),
   testHost: (ip: string) => ipcRenderer.invoke(CH.deviceTest, ip),
   getLocalIps: () => ipcRenderer.invoke(CH.localIps),
+  getNetworkStats: () => ipcRenderer.invoke(CH.networkStats),
   deleteDevice: (deviceId: string) => ipcRenderer.invoke(CH.deviceDelete, deviceId),
   deleteSite: (siteId: string) => ipcRenderer.invoke(CH.siteDelete, siteId),
 

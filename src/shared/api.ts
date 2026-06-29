@@ -53,6 +53,8 @@ export const CH = {
   deviceDelete: "device:delete",
   siteAdd: "site:add",
   siteDelete: "site:delete",
+  // profit / network
+  networkStats: "profit:netstats",
   // updates
   updateCheck: "update:check",
   appVersion: "app:version",
@@ -105,6 +107,7 @@ export interface Api {
     error?: string;
   }>;
   getLocalIps(): Promise<string[]>;
+  getNetworkStats(): Promise<{ priceUsd: number; difficulty: number; blockRewardBtc: number }>;
   // updates
   checkUpdate(): Promise<UpdateCheckResult>;
   getVersion(): Promise<string>;
