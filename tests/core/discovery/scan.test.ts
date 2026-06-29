@@ -42,4 +42,12 @@ describe("scan", () => {
     expect(subnetHosts("bad")).toEqual([]);
     expect(subnetHosts("192.168")).toEqual([]);
   });
+
+  it("rejects out-of-range / malformed octets", () => {
+    expect(subnetHosts("300.1.1")).toEqual([]); // 300 > 255
+    expect(subnetHosts("192..1")).toEqual([]); // empty middle octet
+    expect(subnetHosts("1e2.1.1")).toEqual([]); // exponent form
+    expect(subnetHosts("192.168.1.2.3")).toEqual([]); // too many octets
+    expect(subnetHosts("255.255.255")).toHaveLength(254); // boundary OK
+  });
 });

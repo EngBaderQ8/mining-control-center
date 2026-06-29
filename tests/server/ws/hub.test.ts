@@ -94,6 +94,11 @@ describe("ConnectionHub", () => {
     const { repo, router, uid, broadcast, broadcasts } = setup();
     const sent: ServerMessage[] = [];
     const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast);
+    // The device must be owned by this user for its status to be accepted.
+    repo.upsertDevice({
+      id: "d1", userId: uid, siteId: "s1", agentId: "ag1", name: "n", model: "S19",
+      firmware: "stock", host: "h", apiPort: 4028, controlPort: 80,
+    });
     await hub.handleMessage({
       type: "status.update",
       statuses: [
@@ -115,5 +120,21 @@ describe("ConnectionHub", () => {
     expect(broadcasts.find((m) => m.type === "status.update")).toBeTruthy();
     await hub.handleMessage({ type: "snapshot.request" });
     expect(sent.find((m) => m.type === "snapshot")).toBeTruthy();
+  });
+
+  it("ignores status for a device not owned by the user (no spoofing)", async () => {
+    const { repo, router, uid, broadcast, broadcasts } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    await hub.handleMessage({
+      type: "status.update",
+      statuses: [
+        {
+          deviceId: "not-mine", state: "online", hashrateTHs: 999, avgHashrateTHs: 999,
+          maxTempC: 1, fanRpm: 1, pool: "p", worker: "w", hwErrorRate: 0, uptimeSec: 1, lastSeen: 1,
+        },
+      ],
+    });
+    expect(broadcasts.find((m) => m.type === "status.update")).toBeFalsy();
+    expect(repo.listStatuses(uid)).toHaveLength(0);
   });
 });

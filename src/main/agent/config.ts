@@ -26,6 +26,7 @@ export class ConnectionConfig {
         loaded = {};
       }
     }
+    const generatedId = loaded.agentId === undefined;
     this.state = {
       agentId: loaded.agentId ?? randomUUID(),
       agentName: loaded.agentName ?? "agent",
@@ -33,13 +34,19 @@ export class ConnectionConfig {
       ...(loaded.fingerprint !== undefined ? { fingerprint: loaded.fingerprint } : {}),
       ...(loaded.token !== undefined ? { token: loaded.token } : {}),
     };
-    this.persist();
+    // Only write on first run (when we minted a new agentId); never let a write
+    // failure crash startup.
+    if (generatedId) this.persist();
   }
 
   private persist(): void {
     if (!this.path) return;
-    mkdirSync(dirname(this.path), { recursive: true });
-    writeFileSync(this.path, JSON.stringify(this.state, null, 2), "utf8");
+    try {
+      mkdirSync(dirname(this.path), { recursive: true });
+      writeFileSync(this.path, JSON.stringify(this.state, null, 2), "utf8");
+    } catch {
+      /* best-effort: keep running with in-memory state */
+    }
   }
 
   get(): ConnectionState {

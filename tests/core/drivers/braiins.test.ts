@@ -37,6 +37,20 @@ describe("BraiinsDriver", () => {
     }
   });
 
+  it("reports failure when the miner replies STATUS E", async () => {
+    const t: Transport = {
+      async tcp4028() {
+        return '{"STATUS":[{"STATUS":"E","Msg":"bad command"}]}';
+      },
+      async http() {
+        throw new Error("no");
+      },
+    };
+    const r = await new BraiinsDriver().execute(dev, "reboot", t);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("bad command");
+  });
+
   it("setPool sends addpool with the pool url/user/pass", async () => {
     const seq: string[] = [];
     const r = await new BraiinsDriver().execute(dev, "setPool", tcp(seq), undefined, {

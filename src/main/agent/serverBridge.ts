@@ -55,7 +55,12 @@ export class ServerBridge {
       transport: deps.transport,
       encrypt: deps.encrypt,
       decrypt: deps.decrypt,
-      emitStatuses: (statuses) => this.agent?.pushStatuses(statuses),
+      emitStatuses: (statuses) => {
+        // Always show locally-polled status in the renderer (even before/without a
+        // server connection); also push to the server when connected.
+        if (this.connected) this.agent?.pushStatuses(statuses);
+        this.deps.emitStatuses(statuses);
+      },
       emitAlerts: (alerts) => {
         for (const a of alerts) this.deps.notify(a.message);
       },
@@ -109,6 +114,7 @@ export class ServerBridge {
   }
 
   logout(): void {
+    this.service.stopMonitoring(); // tear down the poll timer
     this.client.disconnect();
     this.deps.config.clearToken();
     this.connected = false;
@@ -287,17 +293,23 @@ export class ServerBridge {
   }
 
   private onConnected(): void {
-    // (Re)build the agent runtime over the live connection and announce ourselves.
+    // Build the agent runtime ONCE (so its message handler subscribes once for the
+    // bridge's lifetime); on later reconnects just re-announce. Otherwise every
+    // reconnect would stack another handler and duplicate command execution.
     const s = this.deps.config.get();
-    this.agent = new AgentRuntime({
-      agentId: s.agentId,
-      agentName: s.agentName,
-      conn: this.client,
-      listSites: () => this.deps.repo.listSites(),
-      listDevices: () => this.deps.repo.listDevices(),
-      execute: (deviceId, command, params) => this.service.sendCommand(deviceId, command, params),
-    });
-    this.agent.start();
+    if (!this.agent) {
+      this.agent = new AgentRuntime({
+        agentId: s.agentId,
+        agentName: s.agentName,
+        conn: this.client,
+        listSites: () => this.deps.repo.listSites(),
+        listDevices: () => this.deps.repo.listDevices(),
+        execute: (deviceId, command, params) => this.service.sendCommand(deviceId, command, params),
+      });
+      this.agent.start();
+    } else {
+      this.agent.announce();
+    }
     this.client.send({ type: "snapshot.request" });
     this.service.startMonitoring(); // poll local devices -> pushStatuses to server
   }

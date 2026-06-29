@@ -24,6 +24,12 @@ export class CommandRouter {
     const send = this.agents.get(agentId);
     if (!send) return Promise.reject(new Error("agent not connected"));
     return new Promise<CommandOutcome>((resolve, reject) => {
+      // A duplicate in-flight commandId would orphan the first waiter; reject the
+      // new one rather than silently overwriting the pending entry.
+      if (this.pending.has(exec.commandId)) {
+        reject(new Error("duplicate commandId"));
+        return;
+      }
       const timer = setTimeout(() => {
         this.pending.delete(exec.commandId);
         reject(new Error("command timed out"));

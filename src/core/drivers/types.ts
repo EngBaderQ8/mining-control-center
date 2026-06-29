@@ -6,6 +6,8 @@ export interface HttpRequest {
   port: number;
   method: "GET" | "POST";
   path: string;
+  /** Explicit scheme; when unset, inferred (port 443 -> https, else http). */
+  scheme?: "http" | "https";
   headers?: Record<string, string>;
   body?: string;
   auth?: { kind: "digest" | "bearer" | "basic"; user?: string; pass?: string; token?: string };

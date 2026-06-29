@@ -16,9 +16,12 @@ const dev: Device = {
 
 function fakeConn() {
   const sent: ClientMessage[] = [];
-  let handler: (m: ServerMessage) => void = () => {};
-  const conn: ServerConnection = { send: (m) => sent.push(m), onMessage: (h) => (handler = h) };
-  return { conn, sent, emit: (m: ServerMessage) => handler(m) };
+  const handlers: ((m: ServerMessage) => void)[] = [];
+  const conn: ServerConnection = {
+    send: (m) => sent.push(m),
+    onMessage: (h) => handlers.push(h),
+  };
+  return { conn, sent, handlers, emit: (m: ServerMessage) => handlers.forEach((h) => h(m)) };
 }
 
 describe("AgentRuntime", () => {
@@ -47,6 +50,25 @@ describe("AgentRuntime", () => {
       commandId: "c1",
       outcome: { ok: true },
     });
+  });
+
+  it("announce() re-registers WITHOUT subscribing another handler (no reconnect leak)", () => {
+    const f = fakeConn();
+    const rt = new AgentRuntime({
+      agentId: "ag1",
+      agentName: "site1",
+      conn: f.conn,
+      listSites: () => [],
+      listDevices: () => [dev],
+      execute: async () => ({ deviceId: "d1", ok: true }),
+    });
+    rt.start();
+    rt.announce(); // simulate a reconnect re-announce
+    rt.announce();
+    // Still exactly one message handler despite multiple announces.
+    expect(f.handlers).toHaveLength(1);
+    // Each announce re-sent agent.hello.
+    expect(f.sent.filter((m) => m.type === "agent.hello")).toHaveLength(3);
   });
 
   it("pushStatuses sends a status.update", () => {

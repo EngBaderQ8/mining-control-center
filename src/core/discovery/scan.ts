@@ -15,9 +15,13 @@ export interface DiscoveredDevice {
  * same /24 host list.
  */
 export function subnetHosts(input: string): string[] {
-  const parts = input.split(".").filter((p) => p !== "");
-  if (parts.length < 3 || parts.slice(0, 3).some((p) => Number.isNaN(Number(p)))) return [];
-  const base = parts.slice(0, 3).join(".");
+  const parts = input.trim().split(".");
+  if (parts.length < 3 || parts.length > 4) return [];
+  const oct = parts.slice(0, 3);
+  // Strict 0–255 check rejects empty/garbage/out-of-range octets
+  // ("192..1", "300.1.1", "1e2.1.1", " 1.2.3" all -> []).
+  if (oct.some((p) => !/^\d{1,3}$/.test(p) || Number(p) > 255)) return [];
+  const base = oct.join(".");
   return Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`);
 }
 

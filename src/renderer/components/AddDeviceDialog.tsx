@@ -35,9 +35,18 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
   const set = <K extends keyof NewDevicePayload>(k: K, v: NewDevicePayload[K]): void =>
     setP((prev) => ({ ...prev, [k]: v }));
 
+  // Keep the previous valid port if the field is cleared/invalid (never store NaN).
+  const setPort = (k: "apiPort" | "controlPort", raw: string): void => {
+    const n = parseInt(raw, 10);
+    setP((prev) => ({ ...prev, [k]: Number.isFinite(n) ? n : prev[k] }));
+  };
+
+  const portOk = (n: number): boolean => Number.isInteger(n) && n >= 1 && n <= 65535;
   const valid =
     p.host.trim() !== "" &&
     p.name.trim() !== "" &&
+    portOk(p.apiPort) &&
+    portOk(p.controlPort) &&
     (p.siteId !== "__new__" || p.siteName.trim() !== "");
 
   return (
@@ -105,7 +114,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
               className="input"
               type="number"
               value={p.apiPort}
-              onChange={(e) => set("apiPort", Number(e.target.value))}
+              onChange={(e) => setPort("apiPort", e.target.value)}
             />
           </div>
           <div className="field" style={{ flex: 1 }}>
@@ -114,7 +123,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
               className="input"
               type="number"
               value={p.controlPort}
-              onChange={(e) => set("controlPort", Number(e.target.value))}
+              onChange={(e) => setPort("controlPort", e.target.value)}
             />
           </div>
         </div>

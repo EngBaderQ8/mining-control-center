@@ -5,7 +5,7 @@ import type { HttpRequest, HttpResponse } from "../../core/drivers/types";
 const md5 = (s: string): string => createHash("md5").update(s).digest("hex");
 
 function buildUrl(req: HttpRequest): string {
-  const scheme = req.port === 443 ? "https" : "http";
+  const scheme = req.scheme ?? (req.port === 443 ? "https" : "http");
   return `${scheme}://${req.host}:${req.port}${req.path}`;
 }
 

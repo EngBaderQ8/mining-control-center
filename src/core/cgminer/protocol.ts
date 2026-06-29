@@ -6,7 +6,8 @@ export function buildRequest(command: string, parameter?: string): string {
 
 export function cleanRawResponse(raw: string): string {
   return raw
-    .replace(/ +$/g, "") // trailing NUL bytes / padding spaces
+    .replace(/\0/g, "") // remove NUL terminators/padding (trim() does NOT strip these)
+    .replace(/[\x00-\x1f]+$/g, "") // drop any other trailing control bytes
     .trim()
     .replace(/,(\s*[}\]])/g, "$1"); // trailing commas some firmwares emit
 }

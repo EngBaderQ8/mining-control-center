@@ -28,7 +28,16 @@ export class VnishDriver implements DeviceDriver {
         body: JSON.stringify({ pw: secret ?? "" }),
         headers: { "content-type": "application/json" },
       });
-      const token = String((JSON.parse(unlock.body || "{}") as { token?: string }).token ?? "");
+      if (unlock.status < 200 || unlock.status >= 300)
+        return { deviceId: device.id, ok: false, error: `unlock failed: HTTP ${unlock.status}` };
+      let token = "";
+      try {
+        token = String((JSON.parse(unlock.body || "{}") as { token?: string }).token ?? "");
+      } catch {
+        return { deviceId: device.id, ok: false, error: "unlock returned invalid response" };
+      }
+      if (!token)
+        return { deviceId: device.id, ok: false, error: "unlock returned no token (check credentials)" };
 
       const req =
         command === "setPool"

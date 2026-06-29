@@ -20,6 +20,7 @@ export class ServerClient implements ServerConnection {
   private stateCb: (connected: boolean) => void = () => {};
   private wantConnected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private token: string | null = null;
 
   constructor(private config: ConnectionConfig) {}
 
@@ -82,18 +83,21 @@ export class ServerClient implements ServerConnection {
           });
         },
       );
+      // Only transmit the credentials AFTER the cert fingerprint is verified, so
+      // the password is never written over an unpinned/attacker-presented cert.
       req.on("socket", (socket) => {
         socket.on("secureConnect", () => {
           const err = this.verifyPin(socket as TLSSocket);
           if (err) {
             req.destroy(err);
             resolve({ ok: false, error: err.message });
+            return;
           }
+          req.write(body);
+          req.end();
         });
       });
       req.on("error", (e) => resolve({ ok: false, error: e.message }));
-      req.write(body);
-      req.end();
     });
   }
 
@@ -106,6 +110,22 @@ export class ServerClient implements ServerConnection {
 
   connect(token: string): void {
     this.wantConnected = true;
+    this.token = token; // always reconnect with the most recent token
+    // A fresh connect takes ownership: cancel any pending reconnect and tear down
+    // any prior socket so a stale-token timer can't clobber this connection.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      try {
+        this.ws.removeAllListeners();
+        this.ws.close();
+      } catch {
+        /* ignore */
+      }
+      this.ws = null;
+    }
     const { host, port } = this.hostPort();
     const ws = new WebSocket(`wss://${host}:${port}/?token=${encodeURIComponent(token)}`, {
       rejectUnauthorized: false,
@@ -126,18 +146,18 @@ export class ServerClient implements ServerConnection {
     });
     ws.on("close", () => {
       this.stateCb(false);
-      if (this.wantConnected) this.scheduleReconnect(token);
+      if (this.wantConnected) this.scheduleReconnect();
     });
     ws.on("error", () => {
       /* close handler will schedule reconnect */
     });
   }
 
-  private scheduleReconnect(token: string): void {
+  private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (this.wantConnected) this.connect(token);
+      if (this.wantConnected && this.token) this.connect(this.token);
     }, 5000);
   }
 
@@ -147,6 +167,7 @@ export class ServerClient implements ServerConnection {
 
   disconnect(): void {
     this.wantConnected = false;
+    this.token = null;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

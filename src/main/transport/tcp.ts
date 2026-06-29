@@ -9,11 +9,26 @@ function looksComplete(raw: string): boolean {
   const t = raw.replace(/\0/g, "").trim();
   if (t.length < 2 || (!t.startsWith("{") && !t.startsWith("["))) return false;
   let depth = 0;
+  let inStr = false;
+  let esc = false;
   for (const ch of t) {
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (ch === "\\") {
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
     if (ch === "{" || ch === "[") depth++;
     else if (ch === "}" || ch === "]") depth--;
   }
-  return depth === 0;
+  return depth === 0 && !inStr;
 }
 
 /**

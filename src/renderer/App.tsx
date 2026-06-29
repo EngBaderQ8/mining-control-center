@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./ipc";
 import type { Device, DeviceStatus, Site } from "../core/model/device";
 import type { ControlCommand } from "../core/drivers/types";
@@ -41,9 +41,17 @@ export function App(): React.ReactElement {
   const [toast, setToast] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
 
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    toastTimer.current = setTimeout(() => {
+      setToast(null);
+      toastTimer.current = null;
+    }, 4000);
+  }, []);
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
   const reload = useCallback(async () => {
@@ -178,25 +186,39 @@ export function App(): React.ReactElement {
 
   const onAddDevice = useCallback(
     async (p: NewDevicePayload) => {
-      let siteId = p.siteId;
-      if (p.siteId === "__new__") {
-        siteId = crypto.randomUUID();
-        await api.addSite({ id: siteId, name: p.siteName.trim() });
+      let createdSiteId: string | null = null;
+      try {
+        let siteId = p.siteId;
+        if (p.siteId === "__new__") {
+          siteId = crypto.randomUUID();
+          await api.addSite({ id: siteId, name: p.siteName.trim() });
+          createdSiteId = siteId; // track for rollback if the device add fails
+        }
+        const device: Device = {
+          id: crypto.randomUUID(),
+          siteId,
+          name: p.name.trim(),
+          model: p.model.trim(),
+          firmware: p.firmware,
+          host: p.host.trim(),
+          apiPort: p.apiPort,
+          controlPort: p.controlPort,
+        };
+        await api.addDevice(device, p.secret || undefined);
+        setDialogOpen(false);
+        await reload();
+        showToast(`✓ أُضيف الجهاز ${device.name}`);
+      } catch (e) {
+        // Roll back a freshly-created (now-empty) site so it isn't orphaned.
+        if (createdSiteId) {
+          try {
+            await api.deleteSite(createdSiteId);
+          } catch {
+            /* best-effort */
+          }
+        }
+        showToast(`⚠ تعذّر إضافة الجهاز: ${(e as Error)?.message ?? e}`);
       }
-      const device: Device = {
-        id: crypto.randomUUID(),
-        siteId,
-        name: p.name.trim(),
-        model: p.model.trim(),
-        firmware: p.firmware,
-        host: p.host.trim(),
-        apiPort: p.apiPort,
-        controlPort: p.controlPort,
-      };
-      await api.addDevice(device, p.secret || undefined);
-      setDialogOpen(false);
-      await reload();
-      showToast(`✓ أُضيف الجهاز ${device.name}`);
     },
     [reload, showToast],
   );

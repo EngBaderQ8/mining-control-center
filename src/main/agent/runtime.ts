@@ -29,8 +29,15 @@ export interface AgentDeps {
 export class AgentRuntime {
   constructor(private deps: AgentDeps) {}
 
+  /** Subscribe once (for the lifetime of the connection object) then announce. */
   start(): void {
     this.deps.conn.onMessage((m) => this.onMessage(m));
+    this.announce();
+  }
+
+  /** (Re)send hello + the local sites/devices. Safe to call again after a
+   *  reconnect WITHOUT re-subscribing the message handler. */
+  announce(): void {
     this.deps.conn.send({ type: "agent.hello", agentId: this.deps.agentId, name: this.deps.agentName });
     for (const site of this.deps.listSites?.() ?? [])
       this.deps.conn.send({ type: "site.register", site });

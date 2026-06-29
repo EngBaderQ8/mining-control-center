@@ -1,17 +1,45 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthService } from "../auth/service";
 
+const MAX_AUTH_BODY = 64 * 1024; // 64 KB — auth bodies are tiny; cap to prevent DoS
+
 function readJson(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
+    const done = (val: unknown): void => {
+      if (settled) return;
+      settled = true;
+      req.removeAllListeners("data");
+      req.removeAllListeners("end");
+      req.removeAllListeners("error");
+      req.removeAllListeners("aborted");
+      req.removeAllListeners("close");
+      resolve(val);
+    };
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_AUTH_BODY) {
+        req.destroy();
+        done({}); // oversized -> handleAuth's email/password check returns 400
+        return;
+      }
+      chunks.push(Buffer.from(c));
+    });
     req.on("end", () => {
+      // Decode once after all chunks: multibyte (Arabic) sequences split across
+      // TCP chunks are reassembled before UTF-8 decoding.
       try {
-        resolve(JSON.parse(body || "{}"));
+        done(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
       } catch {
-        resolve({});
+        done({});
       }
     });
+    // Always settle so handleAuth never hangs and the connection isn't leaked.
+    req.on("error", () => done({}));
+    req.on("aborted", () => done({}));
+    req.on("close", () => done({}));
   });
 }
 

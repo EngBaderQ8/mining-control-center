@@ -55,4 +55,35 @@ describe("LuxOsDriver", () => {
     expect(seq[1]).toContain('"addpool"');
     expect(seq[1]).toContain("stratum+tcp://p:3333");
   });
+
+  it("fails when logon returns no SessionID (no command sent)", async () => {
+    const seq: string[] = [];
+    const t: Transport = {
+      async tcp4028(_h, _p, cmd) {
+        seq.push(cmd);
+        return '{"STATUS":[{"STATUS":"E","Msg":"no session"}]}'; // logon fails
+      },
+      async http() {
+        throw new Error("n/a");
+      },
+    };
+    const r = await new LuxOsDriver().execute(dev, "reboot", t);
+    expect(r.ok).toBe(false);
+    expect(seq).toHaveLength(1); // only the logon attempt, no reboot
+  });
+
+  it("fails when the miner rejects the command (STATUS E)", async () => {
+    const t: Transport = {
+      async tcp4028(_h, _p, cmd) {
+        if (cmd.includes('"logon"')) return '{"SESSION":[{"SessionID":"abc"}]}';
+        return '{"STATUS":[{"STATUS":"E","Msg":"denied"}]}';
+      },
+      async http() {
+        throw new Error("n/a");
+      },
+    };
+    const r = await new LuxOsDriver().execute(dev, "reboot", t);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("denied");
+  });
 });

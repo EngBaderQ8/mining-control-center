@@ -17,6 +17,22 @@ describe("CommandRouter", () => {
     await expect(p).resolves.toMatchObject({ ok: true });
   });
 
+  it("rejects a duplicate in-flight commandId instead of orphaning the first", async () => {
+    const router = new CommandRouter();
+    router.attachAgent("ag1", () => {});
+    const first = router.routeCommand("ag1", {
+      type: "command.exec", commandId: "dup", deviceId: "d1", command: "reboot",
+    });
+    await expect(
+      router.routeCommand("ag1", {
+        type: "command.exec", commandId: "dup", deviceId: "d1", command: "reboot",
+      }),
+    ).rejects.toThrow(/duplicate commandId/);
+    // The original waiter is untouched and still resolves.
+    router.resolveResult("dup", { deviceId: "d1", ok: true });
+    await expect(first).resolves.toMatchObject({ ok: true });
+  });
+
   it("rejects when the agent is not connected", async () => {
     const router = new CommandRouter();
     await expect(

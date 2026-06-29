@@ -50,7 +50,13 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-function buildBridge(win: BrowserWindow): ServerBridge {
+/** Send to whichever window is currently live (mainWindow is reassigned on activate). */
+function sendToWindow(channel: string, payload: unknown): void {
+  const w = mainWindow;
+  if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
+}
+
+function buildBridge(): ServerBridge {
   const userData = app.getPath("userData");
   const repo = new DeviceRepo(join(userData, "mining.json"));
   const config = new ConnectionConfig(join(userData, "connection.json"));
@@ -68,12 +74,8 @@ function buildBridge(win: BrowserWindow): ServerBridge {
     scanTransport,
     encrypt: encryptSecret,
     decrypt: decryptSecret,
-    emitSnapshot: (snap) => {
-      if (!win.isDestroyed()) win.webContents.send(CH.snapshotUpdate, snap);
-    },
-    emitStatuses: (statuses) => {
-      if (!win.isDestroyed()) win.webContents.send(CH.statusesUpdate, statuses);
-    },
+    emitSnapshot: (snap) => sendToWindow(CH.snapshotUpdate, snap),
+    emitStatuses: (statuses) => sendToWindow(CH.statusesUpdate, statuses),
     notify: (msg) => {
       notifyMessage("تنبيه", msg);
     },
@@ -85,16 +87,14 @@ function buildBridge(win: BrowserWindow): ServerBridge {
  * background and installs + relaunches automatically — so the whole fleet of
  * site laptops stays current without manual re-installs.
  */
-function setupAutoUpdate(win: BrowserWindow): void {
+function setupAutoUpdate(): void {
   const updater = electronUpdater.autoUpdater;
   const send = (s: {
     state: string;
     percent?: number;
     version?: string;
     error?: string;
-  }): void => {
-    if (!win.isDestroyed()) win.webContents.send(CH.updateStatus, s);
-  };
+  }): void => sendToWindow(CH.updateStatus, s);
 
   // Manual check returns a clear, diagnosable result (current vs latest, or error).
   ipcMain.handle(CH.updateCheck, async () => {
@@ -137,10 +137,10 @@ function setupAutoUpdate(win: BrowserWindow): void {
 app.whenReady().then(() => {
   mainWindow = createWindow();
   try {
-    const bridge = buildBridge(mainWindow);
+    const bridge = buildBridge();
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
-    setupAutoUpdate(mainWindow);
+    setupAutoUpdate();
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);

@@ -29,31 +29,41 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     if (!siteName.trim()) return;
     setBusy(true);
     setResult(null);
-    const r = await onScan(siteName.trim(), base.trim());
-    setBusy(false);
-    const scanned = r.bases.length ? r.bases.join("، ") : "—";
-    const diag = `(النطاق ${scanned} · اتصل بـ ${r.connected} جهاز على 4028 · ردّ ${r.responded})`;
-    if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
-    else if (r.found === 0)
-      setResult(`ما لقيت أجهزة تعدين. ${diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.`);
-    else setResult(`✓ تم العثور على ${r.found} جهاز ${diag} وإضافتها للموقع.`);
+    try {
+      const r = await onScan(siteName.trim(), base.trim());
+      const scanned = r.bases.length ? r.bases.join("، ") : "—";
+      const diag = `(النطاق ${scanned} · اتصل بـ ${r.connected} جهاز على 4028 · ردّ ${r.responded})`;
+      if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
+      else if (r.found === 0)
+        setResult(`ما لقيت أجهزة تعدين. ${diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.`);
+      else setResult(`✓ تم العثور على ${r.found} جهاز ${diag} وإضافتها للموقع.`);
+    } catch (err) {
+      setResult("⚠ تعذّر الفحص: " + String(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function test(): Promise<void> {
     if (!testIp.trim()) return;
     setTestBusy(true);
     setTestResult(null);
-    const r = await api.testHost(testIp.trim());
-    setTestBusy(false);
-    if (!r.connected) {
-      setTestResult(`❌ ما قدر يتصل بـ ${testIp} على المنفذ 4028. (${r.error ?? ""})`);
-      return;
+    try {
+      const r = await api.testHost(testIp.trim());
+      if (!r.connected) {
+        setTestResult(`❌ ما قدر يتصل بـ ${testIp} على المنفذ 4028. (${r.error ?? ""})`);
+        return;
+      }
+      setTestResult(
+        `✓ اتصل وردّ · الفرمور: ${r.firmware ?? "؟"} · المراقبة: ${r.state} · هاش: ${r.hashrateTHs.toFixed(
+          1,
+        )} TH · حرارة: ${r.maxTempC}\nعيّنة summary: ${r.summarySample || "(فاضي)"}`,
+      );
+    } catch (err) {
+      setTestResult("⚠ تعذّر الاختبار: " + String(err));
+    } finally {
+      setTestBusy(false);
     }
-    setTestResult(
-      `✓ اتصل وردّ · الفرمور: ${r.firmware ?? "؟"} · المراقبة: ${r.state} · هاش: ${r.hashrateTHs.toFixed(
-        1,
-      )} TH · حرارة: ${r.maxTempC}\nعيّنة summary: ${r.summarySample || "(فاضي)"}`,
-    );
   }
 
   return (

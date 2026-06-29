@@ -37,6 +37,38 @@ describe("VnishDriver", () => {
     expect(reqs[1]?.auth?.token).toBe("T");
   });
 
+  it("fails (no second request) when unlock returns 401", async () => {
+    const reqs: HttpRequest[] = [];
+    const t: Transport = {
+      async tcp4028() {
+        throw new Error("n/a");
+      },
+      async http(req) {
+        reqs.push(req);
+        return { status: 401, body: "unauthorized" };
+      },
+    };
+    const r = await new VnishDriver().execute(dev, "reboot", t, "wrong");
+    expect(r.ok).toBe(false);
+    expect(reqs).toHaveLength(1); // never sends the privileged command
+  });
+
+  it("fails when unlock returns no token", async () => {
+    const reqs: HttpRequest[] = [];
+    const t: Transport = {
+      async tcp4028() {
+        throw new Error("n/a");
+      },
+      async http(req) {
+        reqs.push(req);
+        return { status: 200, body: "{}" }; // no token field
+      },
+    };
+    const r = await new VnishDriver().execute(dev, "reboot", t, "pw");
+    expect(r.ok).toBe(false);
+    expect(reqs).toHaveLength(1);
+  });
+
   it("setPool posts the pool config with the given url/user", async () => {
     const reqs: HttpRequest[] = [];
     const r = await new VnishDriver().execute(dev, "setPool", fakeHttp(reqs), "pw", {

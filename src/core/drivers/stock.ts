@@ -19,7 +19,11 @@ export class StockDriver implements DeviceDriver {
     secret?: string,
     params?: CommandParams,
   ): Promise<CommandOutcome> {
-    const [user, pass] = (secret ?? "root:root").split(":");
+    // Split on the FIRST colon only so passwords containing ':' survive intact.
+    const rawSecret = secret ?? "root:root";
+    const sep = rawSecret.indexOf(":");
+    const user = sep === -1 ? rawSecret : rawSecret.slice(0, sep);
+    const pass = sep === -1 ? "" : rawSecret.slice(sep + 1);
     try {
       // setPool posts the pool configuration to the miner config CGI; other
       // commands are simple GETs. Exact conf schema varies by model (see risks).

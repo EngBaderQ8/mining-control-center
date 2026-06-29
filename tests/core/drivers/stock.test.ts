@@ -32,6 +32,13 @@ describe("StockDriver", () => {
     expect(reqs[0]?.auth?.kind).toBe("digest");
   });
 
+  it("keeps colons in the password (splits only on the first ':')", async () => {
+    const reqs: HttpRequest[] = [];
+    await new StockDriver().execute(dev, "reboot", http(reqs), "root:pa:ss:word");
+    expect(reqs[0]?.auth?.user).toBe("root");
+    expect(reqs[0]?.auth?.pass).toBe("pa:ss:word");
+  });
+
   it("setPool posts the pool config to set_miner_conf.cgi with digest auth", async () => {
     const reqs: HttpRequest[] = [];
     const r = await new StockDriver().execute(dev, "setPool", http(reqs), "root:root", {

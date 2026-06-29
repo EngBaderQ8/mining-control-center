@@ -38,10 +38,14 @@ export class ConnectionHub {
           agentId: this.agentId ?? "",
         });
         break;
-      case "status.update":
-        for (const s of msg.statuses) this.repo.upsertStatus(this.userId, s);
-        this.broadcast(this.userId, { type: "status.update", statuses: msg.statuses });
+      case "status.update": {
+        // Only accept status for devices that actually belong to this user —
+        // an agent must not be able to write/overwrite another user's device.
+        const owned = msg.statuses.filter((s) => this.repo.deviceAgent(this.userId, s.deviceId));
+        for (const s of owned) this.repo.upsertStatus(this.userId, s);
+        if (owned.length) this.broadcast(this.userId, { type: "status.update", statuses: owned });
         break;
+      }
       case "command.result":
         this.router.resolveResult(msg.commandId, msg.outcome);
         break;
