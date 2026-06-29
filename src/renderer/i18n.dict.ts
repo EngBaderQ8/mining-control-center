@@ -3,7 +3,27 @@
  * back to the Arabic text. Placeholders {name} are identical on both sides.
  */
 export const EN: Record<string, string> = {
+  "إدارة مزارع التعدين الاحترافية": "Professional mining-farm management",
   "التنبؤ بالأعطال": "Failure prediction",
+  "حارس الربحية": "Profit Guard",
+  "حارس الربحية التلقائي": "Automatic Profit Guard",
+  "إيقاف/تشغيل التعدين تلقائياً حسب الربحية": "Auto stop/start mining based on profitability",
+  "تفعيل حارس الربحية": "Enable Profit Guard",
+  "🛡️ حارس الربحية: أوقف التعدين — غير مربح (الهامش {m}%)":
+    "🛡️ Profit Guard: mining paused — unprofitable (margin {m}%)",
+  "🛡️ حارس الربحية: عاد التعدين — صار مربحاً (الهامش {m}%)":
+    "🛡️ Profit Guard: mining resumed — profitable again (margin {m}%)",
+  "⏸ التعدين متوقف تلقائياً بواسطة حارس الربحية — غير مربح حالياً (الهامش {m}%)":
+    "⏸ Mining auto-paused by Profit Guard — currently unprofitable (margin {m}%)",
+  "ميزة فريدة: يوقف التعدين تلقائياً لما تصير خسران (سعر BTC أقل من كلفة الكهرباء)، ويرجّعه لما يصير مربحاً — فما تخسر كهرباء على تعدين خاسر.":
+    "A unique feature: it auto-pauses mining when you'd lose money (BTC price below electricity cost) and resumes when profitable — so you never waste power on loss-making mining.",
+  "أوقف التعدين إذا نزل هامش الربح تحت (%) — 0 يعني نقطة التعادل":
+    "Pause mining if the profit margin drops below (%) — 0 means break-even",
+  "الهامش الحالي:": "Current margin:",
+  "الحالة: متوقف": "Status: paused",
+  "الحالة: يعمل": "Status: running",
+  "⚠ يحتاج إعداد سعر الكهرباء في «إعدادات الأرباح»، ويشتغل والبرنامج مفتوح.":
+    "⚠ Requires your electricity price in «Profit Settings», and runs while the app is open.",
   "يحلّل اتجاهات الحرارة والهاش لكل جهاز ويحذّرك قبل العطل. يحتاج البرنامج يشتغل فترة لجمع البيانات.":
     "Analyzes each device's temperature and hashrate trends and warns you before a failure. The app needs to run for a while to gather data.",
   "كل الأجهزة بصحة جيدة — لا توجد مؤشرات أعطال.": "All devices are healthy — no failure indicators.",

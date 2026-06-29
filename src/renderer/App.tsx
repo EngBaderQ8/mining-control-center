@@ -14,6 +14,7 @@ import {
 } from "./state/store";
 import { SummaryBar } from "./components/SummaryBar";
 import { ProfitBar } from "./components/ProfitBar";
+import { ProfitGuard } from "./components/ProfitGuard";
 import { Heatmap } from "./components/Heatmap";
 import { SiteBreakdown } from "./components/SiteBreakdown";
 import { HistoryCharts } from "./components/HistoryChart";
@@ -442,8 +443,25 @@ export function App(): React.ReactElement {
   return (
     <div className="app">
       <UpdateBanner status={updateStatus} />
-      <LanguageSwitcher />
+      <header className="appheader">
+        <div className="brand">
+          <div className="logo">⛏️</div>
+          <div>
+            <div className="title">{t("مركز التحكم بالتعدين")}</div>
+            <div className="subtitle">{t("إدارة مزارع التعدين الاحترافية")}</div>
+          </div>
+        </div>
+        <span className="spacer" />
+        <LanguageSwitcher />
+      </header>
       <ProfitBar hashrateTHs={summary.totalTHs} />
+      <div style={{ marginBottom: 14 }}>
+        <ProfitGuard
+          hashrateTHs={summary.totalTHs}
+          deviceIds={devices.map((d) => d.id)}
+          showToast={showToast}
+        />
+      </div>
       <SummaryBar summary={summary} />
       <Toolbar
         filter={filter}
