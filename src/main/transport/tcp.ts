@@ -1,15 +1,11 @@
 import { createConnection } from "node:net";
 
-/** True once the buffer holds a complete cgminer JSON response. */
+/** True once the buffer looks like a complete cgminer reply (a JSON object/array
+ *  end). We don't require strictly-valid JSON — bmminer sometimes emits slightly
+ *  malformed JSON, and we still want to capture and use it. */
 function looksComplete(raw: string): boolean {
   const trimmed = raw.replace(/\0/g, "").trim();
-  if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) return false;
-  try {
-    JSON.parse(trimmed.replace(/,(\s*[}\]])/g, "$1"));
-    return true;
-  } catch {
-    return false;
-  }
+  return trimmed.length > 1 && (trimmed.endsWith("}") || trimmed.endsWith("]"));
 }
 
 /**

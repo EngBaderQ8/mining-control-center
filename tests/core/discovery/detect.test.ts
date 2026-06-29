@@ -21,4 +21,14 @@ describe("detectFromVersion", () => {
     expect(detectFromVersion("not json")).toBeNull();
     expect(detectFromVersion('{"foo":1}')).toBeNull();
   });
+
+  it("still detects a miner from MALFORMED JSON (bmminer quirk)", () => {
+    // Missing closing brace / trailing junk but clear miner markers.
+    const malformed =
+      '{"STATUS":[{"STATUS":"S"}],"VERSION":[{"Type":"Antminer S19 XP+ Hyd","BMMiner":"2.0",}],';
+    const d = detectFromVersion(malformed);
+    expect(d).not.toBeNull();
+    expect(d?.firmware).toBe("stock");
+    expect(d?.model).toContain("S19 XP+ Hyd");
+  });
 });
