@@ -222,7 +222,13 @@ export function App(): React.ReactElement {
         onScan={() => setScanOpen(true)}
         onCheckUpdate={() => {
           showToast("جاري التحقق من التحديثات…");
-          void api.checkUpdate();
+          void api.checkUpdate().then((r) => {
+            console.log("[update-check]", JSON.stringify(r));
+            if (r.dev) showToast("وضع التطوير — لا يوجد تحديث");
+            else if (r.error) showToast(`⚠ تعذّر التحقق: ${r.error}`);
+            else if (r.available) showToast(`نسختك ${r.current} · يتوفّر ${r.latest ?? "?"} — جاري التنزيل…`);
+            else showToast(`✅ أنت على آخر نسخة (${r.current})`);
+          });
         }}
       />
       <BulkActionBar

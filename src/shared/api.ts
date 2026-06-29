@@ -25,6 +25,14 @@ export interface UpdateStatus {
   error?: string;
 }
 
+export interface UpdateCheckResult {
+  current: string;
+  latest?: string;
+  available: boolean;
+  error?: string;
+  dev?: boolean;
+}
+
 /** IPC channel names shared between main, preload, and renderer. */
 export const CH = {
   // auth / server
@@ -90,7 +98,7 @@ export interface Api {
     error?: string;
   }>;
   // updates
-  checkUpdate(): Promise<void>;
+  checkUpdate(): Promise<UpdateCheckResult>;
   // subscriptions (return an unsubscribe function)
   onSnapshot(cb: (snap: Snapshot) => void): () => void;
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;

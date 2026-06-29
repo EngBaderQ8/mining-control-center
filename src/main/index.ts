@@ -96,13 +96,17 @@ function setupAutoUpdate(win: BrowserWindow): void {
     if (!win.isDestroyed()) win.webContents.send(CH.updateStatus, s);
   };
 
-  // Manual check is always available (so the UI button works, even in dev).
+  // Manual check returns a clear, diagnosable result (current vs latest, or error).
   ipcMain.handle(CH.updateCheck, async () => {
-    if (!app.isPackaged) {
-      send({ state: "none" });
-      return;
+    const current = app.getVersion();
+    if (!app.isPackaged) return { current, available: false, dev: true };
+    try {
+      const r = await updater.checkForUpdates();
+      const latest = r?.updateInfo?.version;
+      return { current, latest, available: !!latest && latest !== current };
+    } catch (e) {
+      return { current, error: (e as Error).message };
     }
-    await updater.checkForUpdates();
   });
 
   if (!app.isPackaged) return;
