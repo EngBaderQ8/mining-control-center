@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
+import { appendFileSync } from "node:fs";
 import electronUpdater from "electron-updater";
 import { DeviceRepo } from "./db/repo";
 import { registerIpc } from "./ipc";
@@ -89,17 +90,41 @@ function buildBridge(): ServerBridge {
  */
 function setupAutoUpdate(): void {
   const updater = electronUpdater.autoUpdater;
+  const current = app.getVersion();
   const send = (s: {
     state: string;
     percent?: number;
     version?: string;
+    current?: string;
     error?: string;
-  }): void => sendToWindow(CH.updateStatus, s);
+  }): void => sendToWindow(CH.updateStatus, { current, ...s });
 
-  // Manual check returns a clear, diagnosable result (current vs latest, or error).
+  // Write every update event to a file so a failure can be diagnosed precisely.
+  const logPath = join(app.getPath("userData"), "update.log");
+  const ulog = (level: string, msg: unknown): void => {
+    try {
+      appendFileSync(logPath, `${new Date().toISOString()} [${level}] ${String(msg)}\n`);
+    } catch {
+      /* ignore */
+    }
+  };
+  updater.logger = {
+    info: (m: unknown) => ulog("info", m),
+    warn: (m: unknown) => ulog("warn", m),
+    error: (m: unknown) => ulog("error", m),
+    debug: (m: unknown) => ulog("debug", m),
+  };
+  ulog("info", `app started v${current}, packaged=${app.isPackaged}`);
+
+  // Manual check returns a clear, diagnosable result AND drives the persistent
+  // banner (checking -> uptodate/available/error) so the user always sees it.
   ipcMain.handle(CH.updateCheck, async () => {
-    const current = app.getVersion();
-    if (!app.isPackaged) return { current, available: false, dev: true };
+    if (!app.isPackaged) {
+      send({ state: "uptodate", current });
+      return { current, available: false, dev: true };
+    }
+    send({ state: "checking" });
+    ulog("info", "manual check requested");
     try {
       const r = await Promise.race([
         updater.checkForUpdates(),
@@ -108,9 +133,16 @@ function setupAutoUpdate(): void {
         ),
       ]);
       const latest = r?.updateInfo?.version;
-      return { current, latest, available: !!latest && latest !== current };
+      const available = !!latest && latest !== current;
+      ulog("info", `check result: current=${current} latest=${latest} available=${available}`);
+      if (!available) send({ state: "uptodate", current, version: latest });
+      // when available, the update-available/download events drive the banner
+      return { current, latest, available };
     } catch (e) {
-      return { current, error: (e as Error).message };
+      const error = (e as Error).message;
+      ulog("error", `check failed: ${error}`);
+      send({ state: "error", error });
+      return { current, error };
     }
   });
 
@@ -119,7 +151,7 @@ function setupAutoUpdate(): void {
   updater.autoDownload = true;
   updater.on("checking-for-update", () => send({ state: "checking" }));
   updater.on("update-available", (i) => send({ state: "available", version: i.version }));
-  updater.on("update-not-available", () => send({ state: "none" }));
+  updater.on("update-not-available", () => send({ state: "uptodate", version: current }));
   updater.on("download-progress", (p) =>
     send({ state: "downloading", percent: Math.round(p.percent) }),
   );

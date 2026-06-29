@@ -120,8 +120,21 @@ export function App(): React.ReactElement {
   }, []);
 
   // Update banner — subscribe regardless of auth so updates are always visible.
+  // "up to date" auto-hides after a few seconds; download/error states persist.
   useEffect(() => {
-    return api.onUpdateStatus((s) => setUpdateStatus(s));
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const off = api.onUpdateStatus((s) => {
+      setUpdateStatus(s);
+      if (t) {
+        clearTimeout(t);
+        t = null;
+      }
+      if (s.state === "uptodate") t = setTimeout(() => setUpdateStatus({ state: "none" }), 8000);
+    });
+    return () => {
+      off();
+      if (t) clearTimeout(t);
+    };
   }, []);
 
   // Data feed (server-driven) — only while authenticated.
@@ -298,14 +311,9 @@ export function App(): React.ReactElement {
         onAddDevice={() => setDialogOpen(true)}
         onScan={() => setScanOpen(true)}
         onCheckUpdate={() => {
-          showToast("جاري التحقق من التحديثات…");
-          void api.checkUpdate().then((r) => {
-            console.log("[update-check]", JSON.stringify(r));
-            if (r.dev) showToast("وضع التطوير — لا يوجد تحديث");
-            else if (r.error) showToast(`⚠ تعذّر التحقق: ${r.error}`);
-            else if (r.available) showToast(`نسختك ${r.current} · يتوفّر ${r.latest ?? "?"} — جاري التنزيل…`);
-            else showToast(`✅ أنت على آخر نسخة (${r.current})`);
-          });
+          // The persistent banner (driven by main-process events) shows the full
+          // result: checking -> up-to-date / downloading / error. No transient toast.
+          void api.checkUpdate();
         }}
       />
       <BulkActionBar

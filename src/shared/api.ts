@@ -19,9 +19,10 @@ export interface AuthStatusResponse {
 }
 
 export interface UpdateStatus {
-  state: "checking" | "available" | "downloading" | "ready" | "none" | "error";
+  state: "checking" | "available" | "downloading" | "ready" | "none" | "error" | "uptodate";
   percent?: number;
-  version?: string;
+  version?: string; // the available/target version
+  current?: string; // the running version
   error?: string;
 }
 
