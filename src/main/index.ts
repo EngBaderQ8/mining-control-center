@@ -174,6 +174,7 @@ function setupAutoUpdate(): void {
   };
 
   ipcMain.handle(CH.updateCheck, () => runCheck("manual"));
+  ipcMain.handle(CH.appVersion, () => current);
 
   if (!app.isPackaged) return;
   void runCheck("startup");

@@ -54,6 +54,7 @@ export const CH = {
   siteDelete: "site:delete",
   // updates
   updateCheck: "update:check",
+  appVersion: "app:version",
   // push (main -> renderer)
   snapshotUpdate: "snapshot:update",
   statusesUpdate: "statuses:update",
@@ -104,6 +105,7 @@ export interface Api {
   }>;
   // updates
   checkUpdate(): Promise<UpdateCheckResult>;
+  getVersion(): Promise<string>;
   // subscriptions (return an unsubscribe function)
   onSnapshot(cb: (snap: Snapshot) => void): () => void;
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;

@@ -41,6 +41,7 @@ const api: Api = {
   },
 
   checkUpdate: () => ipcRenderer.invoke(CH.updateCheck),
+  getVersion: () => ipcRenderer.invoke(CH.appVersion),
   onUpdateStatus: (cb: (s: UpdateStatus) => void) => {
     const handler = (_e: unknown, s: UpdateStatus): void => cb(s);
     ipcRenderer.on(CH.updateStatus, handler);

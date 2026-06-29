@@ -92,6 +92,13 @@ a { color: var(--blue); text-decoration: none; }
 }
 .sitehead .chev.open { transform: rotate(90deg); }
 
+/* always-visible version + update status badge (bottom corner) */
+.versionbadge {
+  position: fixed; bottom: 8px; inset-inline-start: 10px; z-index: 50;
+  font-size: 11.5px; font-weight: 600; background: var(--surface2);
+  padding: 4px 10px; border-radius: 9px; border: 1px solid var(--border); opacity: 0.95;
+}
+
 /* collapse-all bar (shown when there are several sites) */
 .collapsebar { display: flex; gap: 8px; align-items: center; margin: 2px 0 14px; flex-wrap: wrap; }
 .collapsebar .hint { font-size: 12px; color: var(--muted); margin-inline-end: auto; }

@@ -39,6 +39,48 @@ const CMD_LABEL: Record<ControlCommand, string> = {
   setPool: "تغيير البول",
 };
 
+function VersionBadge({
+  version,
+  status,
+}: {
+  version: string;
+  status: UpdateStatus | null;
+}): React.ReactElement {
+  let suffix = "";
+  let color = "var(--muted)";
+  switch (status?.state) {
+    case "checking":
+      suffix = " · يفحص التحديث…";
+      break;
+    case "uptodate":
+      suffix = " · ✅ آخر نسخة";
+      color = "var(--green)";
+      break;
+    case "available":
+      suffix = " · ⬇ يتوفّر تحديث";
+      color = "var(--blue)";
+      break;
+    case "downloading":
+      suffix = ` · ⬇ تنزيل ${status?.percent ?? 0}%`;
+      color = "var(--blue)";
+      break;
+    case "ready":
+      suffix = " · ✅ جاهز — إعادة تشغيل";
+      color = "var(--green)";
+      break;
+    case "error":
+      suffix = " · ⚠ تعذّر التحديث";
+      color = "var(--red)";
+      break;
+  }
+  return (
+    <div className="versionbadge" style={{ color }} title={status?.error ?? ""}>
+      الإصدار {version || "؟"}
+      {suffix}
+    </div>
+  );
+}
+
 export function App(): React.ReactElement {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
@@ -117,6 +159,12 @@ export function App(): React.ReactElement {
   // Auth gate: decide whether to show login or the dashboard.
   useEffect(() => {
     void api.authStatus().then((s) => setAuthed(s.loggedIn));
+  }, []);
+
+  // App version — shown always in a corner badge so the running build is obvious.
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    void api.getVersion().then(setAppVersion);
   }, []);
 
   // Update banner — subscribe regardless of auth so updates are always visible.
@@ -298,6 +346,7 @@ export function App(): React.ReactElement {
       <>
         <UpdateBanner status={updateStatus} />
         <LoginScreen onAuthed={() => setAuthed(true)} />
+        <VersionBadge version={appVersion} status={updateStatus} />
       </>
     );
 
@@ -386,6 +435,7 @@ export function App(): React.ReactElement {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+      <VersionBadge version={appVersion} status={updateStatus} />
     </div>
   );
 }
