@@ -14,6 +14,10 @@ import { ConnectionConfig } from "./agent/config";
 import { ServerBridge } from "./agent/serverBridge";
 
 let mainWindow: BrowserWindow | null = null;
+// Set by setupAutoUpdate so the startup check can be deferred until the renderer
+// has loaded and subscribed (otherwise its events are emitted into the void).
+let triggerUpdateCheck: ((trigger: string) => void) | null = null;
+let updateSetupError = "";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -174,24 +178,55 @@ function setupAutoUpdate(): void {
   };
 
   ipcMain.handle(CH.updateCheck, () => runCheck("manual"));
-  ipcMain.handle(CH.appVersion, () => current);
 
   if (!app.isPackaged) return;
-  void runCheck("startup");
+  // Defer the startup check until the renderer is ready (see whenReady).
+  triggerUpdateCheck = (t: string) => void runCheck(t);
   setInterval(() => void runCheck("interval"), 60 * 60 * 1000); // hourly
 }
 
 app.whenReady().then(() => {
   mainWindow = createWindow();
+  // Register the version handler FIRST and independently — it must never depend
+  // on the bridge or the updater succeeding, so the running build is always known.
+  ipcMain.handle(CH.appVersion, () => app.getVersion());
+
   try {
     const bridge = buildBridge();
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
-    setupAutoUpdate();
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);
   }
+  // Isolate updater setup so a failure here can NEVER break the rest of the app;
+  // capture the reason so it can be shown to the user.
+  try {
+    setupAutoUpdate();
+  } catch (e) {
+    updateSetupError = (e as Error).message;
+    try {
+      appendFileSync(
+        join(app.getPath("userData"), "update.log"),
+        `${new Date().toISOString()} [fatal] setupAutoUpdate threw: ${updateSetupError}\n`,
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+  // Run the startup check only AFTER the renderer has loaded and subscribed, so
+  // its checking/up-to-date/error events actually reach the banner.
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (updateSetupError) {
+      sendToWindow(CH.updateStatus, {
+        state: "error",
+        error: "إعداد التحديث فشل: " + updateSetupError,
+        current: app.getVersion(),
+      });
+    } else if (triggerUpdateCheck) {
+      setTimeout(() => triggerUpdateCheck?.("startup"), 1500);
+    }
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
