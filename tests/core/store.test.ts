@@ -3,7 +3,9 @@ import {
   computeSummary,
   matchesFilter,
   groupBySite,
+  sortViews,
   EMPTY_FILTER,
+  type DeviceView,
 } from "../../src/renderer/state/store";
 import type { Device, DeviceStatus, Site } from "../../src/core/model/device";
 
@@ -67,6 +69,26 @@ describe("store helpers", () => {
       text: "الرياض",
     });
     expect(groups).toHaveLength(1);
+  });
+
+  it("sorts views by hashrate (desc/asc) and device name numerically", () => {
+    const mkV = (id: string, ths: number): DeviceView => ({ device: mk(id), status: st(id, "online", ths) });
+    const views = [mkV("S19-105", 300), mkV("S19-101", 250), mkV("S19-2", 310)];
+    const byHashDesc = sortViews(views, { key: "hashrate", dir: "desc" }).map((v) => v.status?.hashrateTHs);
+    expect(byHashDesc).toEqual([310, 300, 250]);
+    const byHashAsc = sortViews(views, { key: "hashrate", dir: "asc" }).map((v) => v.status?.hashrateTHs);
+    expect(byHashAsc).toEqual([250, 300, 310]);
+    // Numeric name sort: "S19-2" before "S19-101" before "S19-105".
+    const byName = sortViews(views, { key: "name", dir: "asc" }).map((v) => v.device.name);
+    expect(byName).toEqual(["S19-2", "S19-101", "S19-105"]);
+  });
+
+  it("sortViews does not mutate the input array", () => {
+    const mkV = (id: string, ths: number): DeviceView => ({ device: mk(id), status: st(id, "online", ths) });
+    const views = [mkV("a", 1), mkV("b", 2)];
+    const copy = [...views];
+    sortViews(views, { key: "hashrate", dir: "desc" });
+    expect(views).toEqual(copy);
   });
 
   it("groups by site and drops empty sites after filtering", () => {

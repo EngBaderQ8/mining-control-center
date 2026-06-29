@@ -112,6 +112,9 @@ a { color: var(--blue); text-decoration: none; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tbl th, .tbl td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #23262d; white-space: nowrap; }
 .tbl th { font-size: 11px; color: var(--muted); font-weight: 600; }
+.tbl th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.tbl th.sortable:hover { color: var(--text); }
+.tbl th .sortarrow { color: var(--blue); font-size: 10px; }
 .tbl tr:hover td { background: var(--surface2); }
 .fw { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: #2a2e36; color: var(--muted); }
 .rowact { display: inline-flex; gap: 4px; }

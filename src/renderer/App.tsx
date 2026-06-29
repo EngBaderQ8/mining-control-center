@@ -6,7 +6,11 @@ import {
   computeSummary,
   groupBySite,
   EMPTY_FILTER,
+  DEFAULT_SORT,
+  isNumericSort,
   type Filter,
+  type SortKey,
+  type SortState,
 } from "./state/store";
 import { SummaryBar } from "./components/SummaryBar";
 import { Toolbar } from "./components/Toolbar";
@@ -88,6 +92,14 @@ export function App(): React.ReactElement {
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const onSort = useCallback((key: SortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: isNumericSort(key) ? "desc" : "asc" },
+    );
+  }, []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
@@ -401,6 +413,8 @@ export function App(): React.ReactElement {
             group={g}
             selectedIds={selectedIds}
             collapsed={collapsed.has(g.site.id)}
+            sort={sort}
+            onSort={onSort}
             onToggleCollapse={toggleCollapse}
             onToggle={toggle}
             onSelectSite={selectSite}

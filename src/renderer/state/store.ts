@@ -60,6 +60,73 @@ export function matchesFilter(
   return true;
 }
 
+export type SortKey =
+  | "name"
+  | "status"
+  | "firmware"
+  | "hashrate"
+  | "temp"
+  | "fan"
+  | "worker"
+  | "uptime";
+
+export interface SortState {
+  key: SortKey;
+  dir: "asc" | "desc";
+}
+
+export const DEFAULT_SORT: SortState = { key: "name", dir: "asc" };
+
+/** Numeric columns default to descending (highest first) on first click. */
+export function isNumericSort(key: SortKey): boolean {
+  return key === "hashrate" || key === "temp" || key === "fan" || key === "uptime" || key === "status";
+}
+
+const stateRank = (s: DeviceState | undefined): number =>
+  s === "online" ? 2 : s === "warning" ? 1 : 0;
+
+function sortValue(v: DeviceView, key: SortKey): number | string {
+  const st = v.status;
+  switch (key) {
+    case "name":
+      return v.device.name;
+    case "firmware":
+      return v.device.firmware;
+    case "worker":
+      return st?.worker ?? "";
+    case "status":
+      return stateRank(st?.state);
+    case "hashrate":
+      return st?.hashrateTHs ?? -1;
+    case "temp":
+      return st?.maxTempC ?? -1;
+    case "fan":
+      return st?.fanRpm ?? -1;
+    case "uptime":
+      return st?.uptimeSec ?? -1;
+  }
+}
+
+/** Return a new, sorted copy of the views (device names sort numerically so
+ *  '…-101' comes before '…-105'). Stable for equal keys (preserves input order). */
+export function sortViews(views: DeviceView[], sort: SortState): DeviceView[] {
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return views
+    .map((v, i) => ({ v, i }))
+    .sort((a, b) => {
+      const av = sortValue(a.v, sort.key);
+      const bv = sortValue(b.v, sort.key);
+      let cmp: number;
+      if (typeof av === "string" || typeof bv === "string") {
+        cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
+      } else {
+        cmp = av - bv;
+      }
+      return cmp !== 0 ? cmp * dir : a.i - b.i; // stable tiebreak
+    })
+    .map((x) => x.v);
+}
+
 export interface SiteGroup {
   site: Site;
   views: DeviceView[];

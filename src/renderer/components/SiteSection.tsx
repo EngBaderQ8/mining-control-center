@@ -1,5 +1,5 @@
 import React from "react";
-import type { SiteGroup } from "../state/store";
+import type { SiteGroup, SortKey, SortState } from "../state/store";
 import type { ControlCommand } from "../../core/drivers/types";
 import { DeviceTable } from "./DeviceTable";
 
@@ -7,6 +7,8 @@ interface Props {
   group: SiteGroup;
   selectedIds: Set<string>;
   collapsed: boolean;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
   onToggleCollapse: (siteId: string) => void;
   onToggle: (id: string) => void;
   onSelectSite: (ids: string[]) => void;
@@ -19,6 +21,8 @@ export function SiteSection({
   group,
   selectedIds,
   collapsed,
+  sort,
+  onSort,
   onToggleCollapse,
   onToggle,
   onSelectSite,
@@ -67,6 +71,8 @@ export function SiteSection({
         <DeviceTable
           views={views}
           selectedIds={selectedIds}
+          sort={sort}
+          onSort={onSort}
           onToggle={onToggle}
           onCommand={onCommand}
           onDeleteDevice={onDeleteDevice}
