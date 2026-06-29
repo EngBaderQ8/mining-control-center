@@ -9,6 +9,7 @@ import { verifyToken } from "./auth/jwt";
 import { CommandRouter } from "./router/commandRouter";
 import { ConnectionHub } from "./ws/hub";
 import { handleAuth } from "./http/authRoutes";
+import { handleDownload } from "./http/downloadRoute";
 import { loadOrCreateTls } from "./tls";
 import { isClientMessage, type ServerMessage } from "./protocol/messages";
 
@@ -39,6 +40,7 @@ async function main(): Promise<void> {
 
   const server = createServer({ key, cert }, (req, res) => {
     void (async () => {
+      if (handleDownload(req, res, DATA_DIR)) return;
       if (await handleAuth(req, res, auth)) return;
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "not found" }));
