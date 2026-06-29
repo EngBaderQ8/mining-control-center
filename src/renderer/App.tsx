@@ -22,6 +22,7 @@ import { BulkActionBar } from "./components/BulkActionBar";
 import { SiteSection } from "./components/SiteSection";
 import { AddDeviceDialog, type NewDevicePayload } from "./components/AddDeviceDialog";
 import { SetPoolDialog, type PoolInput } from "./components/SetPoolDialog";
+import { CredentialsDialog } from "./components/CredentialsDialog";
 import { ScanDialog } from "./components/ScanDialog";
 import { TelegramDialog } from "./components/TelegramDialog";
 import { LoginScreen } from "./components/LoginScreen";
@@ -109,6 +110,7 @@ export function App(): React.ReactElement {
   }, []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);
+  const [credOpen, setCredOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [tgOpen, setTgOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -414,6 +416,7 @@ export function App(): React.ReactElement {
         totalVisible={visibleIds.length}
         onBulk={onBulk}
         onSetPool={() => setPoolOpen(true)}
+        onSetCredentials={() => setCredOpen(true)}
         onSelectAll={() => setSelectedIds(new Set(visibleIds))}
         onClear={() => setSelectedIds(new Set())}
       />
@@ -504,6 +507,21 @@ export function App(): React.ReactElement {
       )}
 
       {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
+
+      {credOpen && (
+        <CredentialsDialog
+          count={selectedIds.size}
+          onClose={() => setCredOpen(false)}
+          onSubmit={(user, pass) => {
+            const ids = [...selectedIds];
+            setCredOpen(false);
+            if (ids.length === 0) return;
+            void api.setCredentials(ids, `${user}:${pass}`).then(() =>
+              showToast(`🔑 حُفظت بيانات الدخول لـ ${ids.length} جهاز — جرّب أمر تحكم الحين`),
+            );
+          }}
+        />
+      )}
 
       {poolOpen && (
         <SetPoolDialog count={selectedIds.size} onClose={() => setPoolOpen(false)} onSubmit={onSetPool} />

@@ -56,6 +56,7 @@ export const CH = {
   deviceScan: "device:scan",
   deviceTest: "device:test",
   localIps: "device:localips",
+  deviceSetSecret: "device:setsecret",
   deviceDelete: "device:delete",
   siteAdd: "site:add",
   siteDelete: "site:delete",
@@ -96,6 +97,7 @@ export interface Api {
   addSite(site: Site): Promise<void>;
   deleteDevice(deviceId: string): Promise<void>;
   deleteSite(siteId: string): Promise<void>;
+  setCredentials(deviceIds: string[], secret: string): Promise<void>;
   scanNetwork(
     siteName: string,
     base?: string,

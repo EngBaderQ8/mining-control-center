@@ -6,6 +6,7 @@ interface Props {
   totalVisible: number;
   onBulk: (cmd: ControlCommand) => void;
   onSetPool: () => void;
+  onSetCredentials: () => void;
   onSelectAll: () => void;
   onClear: () => void;
 }
@@ -15,6 +16,7 @@ export function BulkActionBar({
   totalVisible,
   onBulk,
   onSetPool,
+  onSetCredentials,
   onSelectAll,
   onClear,
 }: Props): React.ReactElement {
@@ -36,6 +38,9 @@ export function BulkActionBar({
       </button>
       <button className="btn" disabled={none} onClick={onSetPool}>
         ⛏ تغيير البول
+      </button>
+      <button className="btn" disabled={none} onClick={onSetCredentials}>
+        🔑 بيانات الدخول
       </button>
       <span className="spacer" style={{ marginInlineStart: "auto", fontSize: 13 }}>
         محدّد: <b>{selectedCount}</b> / {totalVisible} ·{" "}

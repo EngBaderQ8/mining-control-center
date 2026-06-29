@@ -186,6 +186,14 @@ export class ServerBridge {
     };
   }
 
+  /** Set the web/control password for the given local devices (encrypted at rest,
+   *  never sent to the server). Needed for control on miners whose password isn't
+   *  the default root:root. */
+  setSecrets(deviceIds: string[], secret: string): void {
+    if (!secret) return;
+    for (const id of deviceIds) this.deps.repo.setSecret(id, this.deps.encrypt(secret));
+  }
+
   /** Delete a device locally (so this agent won't re-register it) and on the server. */
   deleteDevice(deviceId: string): void {
     this.deps.repo.deleteDevice(deviceId);

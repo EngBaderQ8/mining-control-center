@@ -29,6 +29,8 @@ const api: Api = {
   detectChatId: (token: string) => ipcRenderer.invoke(CH.telegramDetect, token),
   deleteDevice: (deviceId: string) => ipcRenderer.invoke(CH.deviceDelete, deviceId),
   deleteSite: (siteId: string) => ipcRenderer.invoke(CH.siteDelete, siteId),
+  setCredentials: (deviceIds: string[], secret: string) =>
+    ipcRenderer.invoke(CH.deviceSetSecret, deviceIds, secret),
 
   onSnapshot: (cb: (snap: Snapshot) => void) => {
     const handler = (_e: unknown, snap: Snapshot): void => cb(snap);

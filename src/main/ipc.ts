@@ -40,6 +40,9 @@ export function registerIpc(bridge: ServerBridge): void {
   );
   ipcMain.handle(CH.deviceTest, (_e, ip: string) => bridge.testHost(ip));
   ipcMain.handle(CH.localIps, () => bridge.getLocalIps());
+  ipcMain.handle(CH.deviceSetSecret, (_e, deviceIds: string[], secret: string) => {
+    bridge.setSecrets(deviceIds, secret);
+  });
   ipcMain.handle(CH.deviceDelete, (_e, deviceId: string) => {
     bridge.deleteDevice(deviceId);
   });
