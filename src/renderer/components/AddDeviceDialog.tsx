@@ -89,10 +89,10 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
         </div>
 
         <div className="field">
-          <label>العنوان (Tailscale IP / Host)</label>
+          <label>العنوان (اسم DDNS أو IP الموقع)</label>
           <input
             className="input"
-            placeholder="100.x.y.z أو عنوان 4via6"
+            placeholder="مثال: site1.duckdns.org"
             value={p.host}
             onChange={(e) => set("host", e.target.value)}
           />
@@ -100,7 +100,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
 
         <div style={{ display: "flex", gap: 8 }}>
           <div className="field" style={{ flex: 1 }}>
-            <label>منفذ API</label>
+            <label>منفذ API (الخارجي)</label>
             <input
               className="input"
               type="number"
@@ -109,7 +109,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
             />
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label>منفذ التحكم</label>
+            <label>منفذ التحكم (الخارجي)</label>
             <input
               className="input"
               type="number"
