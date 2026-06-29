@@ -116,54 +116,68 @@ function setupAutoUpdate(): void {
   };
   ulog("info", `app started v${current}, packaged=${app.isPackaged}`);
 
-  // Manual check returns a clear, diagnosable result AND drives the persistent
-  // banner (checking -> uptodate/available/error) so the user always sees it.
-  ipcMain.handle(CH.updateCheck, async () => {
-    if (!app.isPackaged) {
-      send({ state: "uptodate", current });
-      return { current, available: false, dev: true };
-    }
-    send({ state: "checking" });
-    ulog("info", "manual check requested");
-    try {
-      const r = await Promise.race([
-        updater.checkForUpdates(),
-        new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error("انتهت المهلة — ما قدر يوصل GitHub")), 20000),
-        ),
-      ]);
-      const latest = r?.updateInfo?.version;
-      const available = !!latest && latest !== current;
-      ulog("info", `check result: current=${current} latest=${latest} available=${available}`);
-      if (!available) send({ state: "uptodate", current, version: latest });
-      // when available, the update-available/download events drive the banner
-      return { current, latest, available };
-    } catch (e) {
-      const error = (e as Error).message;
-      ulog("error", `check failed: ${error}`);
-      send({ state: "error", error });
-      return { current, error };
-    }
-  });
-
-  if (!app.isPackaged) return;
-
   updater.autoDownload = true;
+  // Event listeners drive the persistent banner during an actual download.
   updater.on("checking-for-update", () => send({ state: "checking" }));
-  updater.on("update-available", (i) => send({ state: "available", version: i.version }));
+  updater.on("update-available", (i) => {
+    ulog("info", `update-available ${i.version}`);
+    send({ state: "available", version: i.version });
+  });
   updater.on("update-not-available", () => send({ state: "uptodate", version: current }));
   updater.on("download-progress", (p) =>
     send({ state: "downloading", percent: Math.round(p.percent) }),
   );
-  updater.on("error", (e) => send({ state: "error", error: e.message }));
+  updater.on("error", (e) => {
+    ulog("error", `updater error: ${e.message}`);
+    send({ state: "error", error: e.message });
+  });
   updater.on("update-downloaded", (i) => {
+    ulog("info", `update-downloaded ${i.version}`);
     send({ state: "ready", version: i.version });
     // Apply automatically so the whole fleet stays current (brief restart).
     setTimeout(() => updater.quitAndInstall(true, true), 8000);
   });
 
-  void updater.checkForUpdates();
-  setInterval(() => void updater.checkForUpdates(), 60 * 60 * 1000); // hourly
+  // One check path for both startup and the manual button — ALWAYS bounded by a
+  // timeout so a silently-hung network request becomes a visible error (red
+  // banner + log) instead of "nothing happens".
+  const runCheck = async (
+    trigger: string,
+  ): Promise<{ current: string; latest?: string; available: boolean; error?: string; dev?: boolean }> => {
+    if (!app.isPackaged) {
+      send({ state: "uptodate", current });
+      return { current, available: false, dev: true };
+    }
+    ulog("info", `check start (${trigger})`);
+    send({ state: "checking" });
+    try {
+      const r = await Promise.race([
+        updater.checkForUpdates(),
+        new Promise<never>((_, rej) =>
+          setTimeout(
+            () => rej(new Error("انتهت المهلة (25ث) — البرنامج ما قدر يوصل GitHub")),
+            25000,
+          ),
+        ),
+      ]);
+      const latest = r?.updateInfo?.version;
+      const available = !!latest && latest !== current;
+      ulog("info", `check result (${trigger}): current=${current} latest=${latest} available=${available}`);
+      if (!available) send({ state: "uptodate", version: latest });
+      return { current, latest, available };
+    } catch (e) {
+      const error = (e as Error).message;
+      ulog("error", `check failed (${trigger}): ${error}`);
+      send({ state: "error", error });
+      return { current, available: false, error };
+    }
+  };
+
+  ipcMain.handle(CH.updateCheck, () => runCheck("manual"));
+
+  if (!app.isPackaged) return;
+  void runCheck("startup");
+  setInterval(() => void runCheck("interval"), 60 * 60 * 1000); // hourly
 }
 
 app.whenReady().then(() => {
