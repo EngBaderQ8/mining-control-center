@@ -271,9 +271,10 @@ export class ServerBridge {
         apiPort: 4028,
         controlPort,
       };
-      // Use the password the user typed once (applies to the whole fleet);
-      // fall back to the Antminer default if they left it empty.
-      this.service.addDevice(device, secret && secret.trim() ? secret.trim() : "root:root");
+      // Store the password the user typed once (applies to the whole fleet). If
+      // empty, store nothing — control falls back to the firmware's built-in
+      // default automatically (firmwareDefaultSecret).
+      this.service.addDevice(device, secret && secret.trim() ? secret.trim() : undefined);
       this.agent?.registerDevice(device);
     }
     this.requestSnapshot(); // one refresh after registering everything

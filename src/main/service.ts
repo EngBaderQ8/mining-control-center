@@ -2,6 +2,7 @@ import type { Device, DeviceStatus, Site } from "../core/model/device";
 import type { CommandOutcome } from "../core/model/result";
 import type { Transport, ControlCommand, CommandParams } from "../core/drivers/types";
 import { getDriver } from "../core/drivers/registry";
+import { resolveSecret } from "../core/drivers/defaults";
 import { pollDevice } from "../core/monitor/poller";
 import { pollAll } from "../core/monitor/scheduler";
 import { runBulk } from "../core/bulk/engine";
@@ -88,7 +89,7 @@ export class MiningService {
       device,
       command,
       this.deps.transport,
-      this.secretFor(deviceId),
+      resolveSecret(device.firmware, this.secretFor(deviceId)),
       params,
     );
   }
@@ -101,7 +102,13 @@ export class MiningService {
     const all = this.deps.repo.listDevices();
     const targets = all.filter((d) => deviceIds.includes(d.id));
     return runBulk(targets, command, { maxConcurrency: this.config.maxConcurrency }, (d) =>
-      getDriver(d.firmware).execute(d, command, this.deps.transport, this.secretFor(d.id), params),
+      getDriver(d.firmware).execute(
+        d,
+        command,
+        this.deps.transport,
+        resolveSecret(d.firmware, this.secretFor(d.id)),
+        params,
+      ),
     );
   }
 
