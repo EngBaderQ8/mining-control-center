@@ -41,6 +41,19 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
     onClose();
   };
 
+  const report = async (): Promise<void> => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      // Save first so the report uses the latest settings.
+      await api.setTelegram({ ...s, token: s.token.trim(), chatId: s.chatId.trim() });
+      const r = await api.sendDailyReport();
+      setMsg(r.ok ? "✅ أُرسل التقرير اليومي على تيليجرام — شوف جوالك." : `⚠ ${r.error ?? ""}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="overlay" onClick={busy ? undefined : onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
@@ -94,7 +107,13 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
           <button className="btn" disabled={busy || !s.token.trim() || !s.chatId.trim()} onClick={() => void test()}>
             📨 اختبار
           </button>
+          <button className="btn" disabled={busy || !s.token.trim() || !s.chatId.trim()} onClick={() => void report()}>
+            📊 أرسل تقرير الآن
+          </button>
         </div>
+        <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+          📊 لما تفعّل تيليجرام، يوصلك <b>تقرير يومي تلقائي</b> بملخص الإنتاج والمشاكل.
+        </p>
         <div className="actions" style={{ marginTop: 6 }}>
           <button className="btn primary" disabled={busy} onClick={() => void save()}>
             حفظ

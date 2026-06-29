@@ -1,43 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
 import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
+import {
+  loadProfitSettings,
+  saveProfitSettings,
+  money,
+  FALLBACK_DIFFICULTY,
+  type ProfitSettings,
+} from "../state/profitSettings";
 
-export interface ProfitSettings {
-  currency: string; // label e.g. "ريال", "$"
-  usdRate: number; // user-currency units per 1 USD (1 => USD)
-  electricityPerKwh: number; // in the user's currency
-  jPerTh: number; // efficiency (J/TH)
-  manualPriceUsd: number; // 0 => use the live price
-}
-
-const KEY = "mcc.profitSettings";
-// Approximate recent BTC network difficulty — only used as a fallback when the
-// live value can't be fetched, so a manual price still yields an estimate.
-const FALLBACK_DIFFICULTY = 9e13;
-const DEFAULTS: ProfitSettings = {
-  currency: "$",
-  usdRate: 1,
-  electricityPerKwh: 0.05,
-  jPerTh: 18.5,
-  manualPriceUsd: 0,
-};
-
-function loadSettings(): ProfitSettings {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<ProfitSettings>) };
-  } catch {
-    /* ignore */
-  }
-  return DEFAULTS;
-}
-
-const money = (n: number, cur: string): string =>
-  `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${cur}`;
+export type { ProfitSettings };
 
 export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.ReactElement {
   const [net, setNet] = useState<NetworkStats | null>(null);
-  const [settings, setSettings] = useState<ProfitSettings>(loadSettings);
+  const [settings, setSettings] = useState<ProfitSettings>(loadProfitSettings);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -51,11 +27,7 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
 
   const save = (s: ProfitSettings): void => {
     setSettings(s);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(s));
-    } catch {
-      /* ignore */
-    }
+    saveProfitSettings(s);
   };
 
   const priceUsd = settings.manualPriceUsd > 0 ? settings.manualPriceUsd : (net?.priceUsd ?? 0);

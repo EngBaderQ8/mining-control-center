@@ -27,6 +27,7 @@ const api: Api = {
   setTelegram: (s) => ipcRenderer.invoke(CH.telegramSet, s),
   testTelegram: (s) => ipcRenderer.invoke(CH.telegramTest, s),
   detectChatId: (token: string) => ipcRenderer.invoke(CH.telegramDetect, token),
+  sendDailyReport: () => ipcRenderer.invoke(CH.telegramReport),
   getRecovery: () => ipcRenderer.invoke(CH.recoveryGet),
   setRecovery: (s) => ipcRenderer.invoke(CH.recoverySet, s),
   deleteDevice: (deviceId: string) => ipcRenderer.invoke(CH.deviceDelete, deviceId),

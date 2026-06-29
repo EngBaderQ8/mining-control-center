@@ -74,6 +74,7 @@ export const CH = {
   telegramSet: "tg:set",
   telegramTest: "tg:test",
   telegramDetect: "tg:detect",
+  telegramReport: "tg:report",
   // self-healing
   recoveryGet: "recovery:get",
   recoverySet: "recovery:set",
@@ -137,6 +138,7 @@ export interface Api {
   setTelegram(s: TelegramSettings): Promise<void>;
   testTelegram(s: TelegramSettings): Promise<{ ok: boolean; error?: string }>;
   detectChatId(token: string): Promise<{ chatId?: string; error?: string }>;
+  sendDailyReport(): Promise<{ ok: boolean; error?: string }>;
   // self-healing
   getRecovery(): Promise<RecoverySettings>;
   setRecovery(s: RecoverySettings): Promise<void>;

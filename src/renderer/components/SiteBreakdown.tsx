@@ -1,0 +1,108 @@
+import React, { useEffect, useState } from "react";
+import { api } from "../ipc";
+import type { SiteGroup } from "../state/store";
+import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
+import { loadProfitSettings, money, FALLBACK_DIFFICULTY } from "../state/profitSettings";
+
+export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactElement {
+  const [net, setNet] = useState<NetworkStats | null>(null);
+  const settings = loadProfitSettings();
+
+  useEffect(() => {
+    void api.getNetworkStats().then(setNet);
+  }, []);
+
+  const cur = settings.currency;
+  const priceUsd = settings.manualPriceUsd > 0 ? settings.manualPriceUsd : (net?.priceUsd ?? 0);
+  const effNet: NetworkStats = {
+    priceUsd,
+    difficulty: net?.difficulty || FALLBACK_DIFFICULTY,
+    blockRewardBtc: net?.blockRewardBtc ?? 3.125,
+  };
+
+  const rows = groups
+    .map((g) => {
+      const online = g.views.filter((v) => v.status?.state === "online").length;
+      const ths = g.views.reduce((s, v) => s + (v.status?.hashrateTHs ?? 0), 0);
+      const powerKw = powerKwFromHashrate(ths, settings.jPerTh);
+      const r = computeProfit(effNet, {
+        hashrateTHs: ths,
+        powerKw,
+        electricityPerKwh: settings.electricityPerKwh,
+        usdRate: settings.usdRate,
+      });
+      return { site: g.site, devices: g.views.length, online, ths, powerKw, r };
+    })
+    .sort((a, b) => b.r.profitPerDay - a.r.profitPerDay); // most profitable first
+
+  const tot = rows.reduce(
+    (a, x) => ({
+      ths: a.ths + x.ths,
+      powerKw: a.powerKw + x.powerKw,
+      profit: a.profit + x.r.profitPerDay,
+      cost: a.cost + x.r.costPerDay,
+      devices: a.devices + x.devices,
+      online: a.online + x.online,
+    }),
+    { ths: 0, powerKw: 0, profit: 0, cost: 0, devices: 0, online: 0 },
+  );
+
+  return (
+    <div className="site" style={{ padding: "4px 0" }}>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>الموقع</th>
+            <th>الأجهزة</th>
+            <th>شغّال</th>
+            <th>الهاش</th>
+            <th>الطاقة</th>
+            <th>الكفاءة</th>
+            <th>الكهرباء/يوم</th>
+            <th>صافي/يوم</th>
+            <th>صافي/شهر</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((x) => (
+            <tr key={x.site.id}>
+              <td>
+                <b>{x.site.name}</b>
+              </td>
+              <td>{x.devices}</td>
+              <td className="green">{x.online}</td>
+              <td className="green">{x.ths.toLocaleString(undefined, { maximumFractionDigits: 0 })} TH/s</td>
+              <td>{x.powerKw.toFixed(0)} kW</td>
+              <td>{settings.jPerTh} J/TH</td>
+              <td className="amber">{money(x.r.costPerDay, cur)}</td>
+              <td style={{ color: x.r.profitPerDay >= 0 ? "var(--green)" : "var(--red)", fontWeight: 700 }}>
+                {money(x.r.profitPerDay, cur)}
+              </td>
+              <td style={{ color: x.r.profitPerMonth >= 0 ? "var(--green)" : "var(--red)" }}>
+                {money(x.r.profitPerMonth, cur)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ fontWeight: 700, borderTop: "2px solid var(--border)" }}>
+            <td>الإجمالي</td>
+            <td>{tot.devices}</td>
+            <td className="green">{tot.online}</td>
+            <td className="green">{tot.ths.toLocaleString(undefined, { maximumFractionDigits: 0 })} TH/s</td>
+            <td>{tot.powerKw.toFixed(0)} kW</td>
+            <td>—</td>
+            <td className="amber">{money(tot.cost, cur)}</td>
+            <td style={{ color: tot.profit >= 0 ? "var(--green)" : "var(--red)" }}>{money(tot.profit, cur)}</td>
+            <td style={{ color: tot.profit >= 0 ? "var(--green)" : "var(--red)" }}>{money(tot.profit * 30, cur)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      {priceUsd <= 0 && (
+        <div style={{ color: "var(--muted)", fontSize: 12, padding: "8px 12px" }}>
+          …جاري جلب سعر BTC — أو افتح «⚙ إعدادات الأرباح» وأدخل السعر يدوياً.
+        </div>
+      )}
+    </div>
+  );
+}

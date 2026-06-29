@@ -20,6 +20,7 @@ import { getNetworkStats } from "./profit/networkStats";
 import { AlertConfig } from "./alerts/config";
 import { sendTelegram, detectChatId } from "./alerts/telegram";
 import { RecoveryConfig } from "./recovery/config";
+import { buildDailyReport } from "../core/report/daily";
 import type { TelegramSettings, RecoverySettings } from "../shared/api";
 
 let mainWindow: BrowserWindow | null = null;
@@ -243,6 +244,18 @@ app.whenReady().then(() => {
       recoveryConfig?.set(s); // clamps bad values
       if (recoveryConfig) bridge.setRecovery(recoveryConfig.get()); // apply the clamped values
     });
+    // Daily Telegram fleet summary (when Telegram is configured), plus an
+    // on-demand "send now" so the user can preview it.
+    const sendDailyReport = async (): Promise<{ ok: boolean; error?: string }> => {
+      const tg = alertConfig?.get();
+      if (!tg?.enabled || !tg.token || !tg.chatId) return { ok: false, error: "فعّل تيليجرام واحفظ أولاً" };
+      const snap = bridge.getSnapshot();
+      if (snap.devices.length === 0) return { ok: false, error: "لا توجد أجهزة بعد" };
+      const net = await getNetworkStats();
+      return sendTelegram(tg.token, tg.chatId, buildDailyReport(snap.devices, snap.statuses, net, Date.now()));
+    };
+    ipcMain.handle(CH.telegramReport, () => sendDailyReport());
+    setInterval(() => void sendDailyReport(), 24 * 60 * 60 * 1000);
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);

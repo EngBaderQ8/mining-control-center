@@ -15,6 +15,7 @@ import {
 import { SummaryBar } from "./components/SummaryBar";
 import { ProfitBar } from "./components/ProfitBar";
 import { Heatmap } from "./components/Heatmap";
+import { SiteBreakdown } from "./components/SiteBreakdown";
 import { HistoryCharts } from "./components/HistoryChart";
 import { appendPoint, loadHistory, saveHistory, type HistoryPoint } from "./state/history";
 import { Toolbar } from "./components/Toolbar";
@@ -99,7 +100,7 @@ export function App(): React.ReactElement {
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
-  const [view, setView] = useState<"table" | "heatmap" | "charts">("table");
+  const [view, setView] = useState<"table" | "heatmap" | "charts" | "sites">("table");
   const [history, setHistory] = useState<HistoryPoint[]>(loadHistory);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const onSort = useCallback((key: SortKey) => {
@@ -448,9 +449,23 @@ export function App(): React.ReactElement {
         >
           📊 الرسوم
         </button>
+        <button
+          className={`btn ${view === "sites" ? "primary" : ""}`}
+          onClick={() => setView("sites")}
+        >
+          💵 لكل موقع
+        </button>
       </div>
 
-      {view === "charts" ? (
+      {view === "sites" ? (
+        groups.length === 0 ? (
+          <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+            لا توجد مواقع.
+          </div>
+        ) : (
+          <SiteBreakdown groups={groups} />
+        )
+      ) : view === "charts" ? (
         <HistoryCharts history={history} />
       ) : view === "heatmap" ? (
         groups.length === 0 ? (
