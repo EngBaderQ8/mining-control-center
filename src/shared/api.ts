@@ -49,6 +49,7 @@ export const CH = {
   deviceAdd: "device:add",
   deviceScan: "device:scan",
   deviceTest: "device:test",
+  localIps: "device:localips",
   deviceDelete: "device:delete",
   siteAdd: "site:add",
   siteDelete: "site:delete",
@@ -103,6 +104,7 @@ export interface Api {
     summarySample: string;
     error?: string;
   }>;
+  getLocalIps(): Promise<string[]>;
   // updates
   checkUpdate(): Promise<UpdateCheckResult>;
   getVersion(): Promise<string>;

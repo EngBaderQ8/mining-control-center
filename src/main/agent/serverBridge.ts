@@ -11,7 +11,7 @@ import { AgentRuntime } from "./runtime";
 import { subnetHosts, type DiscoveredDevice } from "../../core/discovery/scan";
 import { detectFromVersion } from "../../core/discovery/detect";
 import { pollDevice } from "../../core/monitor/poller";
-import { localPrivateBases } from "../discovery/localSubnet";
+import { localPrivateBases, localIpv4s } from "../discovery/localSubnet";
 import { diagnoseHost } from "../transport/tcp";
 
 export interface BridgeDeps {
@@ -139,6 +139,11 @@ export class ServerBridge {
     this.service.addDevice(device, secret);
     this.agent?.registerDevice(device);
     this.requestSnapshot();
+  }
+
+  /** This machine's connected private IPv4 addresses (for auto-filling the scan range). */
+  getLocalIps(): string[] {
+    return localIpv4s();
   }
 
   /** Diagnose a single ASIC IP end-to-end: connectivity, the raw summary reply,

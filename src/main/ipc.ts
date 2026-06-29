@@ -39,6 +39,7 @@ export function registerIpc(bridge: ServerBridge): void {
     bridge.scanNetwork(siteName, base),
   );
   ipcMain.handle(CH.deviceTest, (_e, ip: string) => bridge.testHost(ip));
+  ipcMain.handle(CH.localIps, () => bridge.getLocalIps());
   ipcMain.handle(CH.deviceDelete, (_e, deviceId: string) => {
     bridge.deleteDevice(deviceId);
   });

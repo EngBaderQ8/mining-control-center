@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
 
 interface Props {
@@ -18,12 +18,22 @@ interface Props {
 export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
   const [siteName, setSiteName] = useState("");
   const [base, setBase] = useState("");
+  const [detectedIps, setDetectedIps] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
   const [testIp, setTestIp] = useState("");
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+
+  // Auto-detect this machine's network and pre-fill the range — no typing needed.
+  useEffect(() => {
+    void api.getLocalIps().then((ips) => {
+      setDetectedIps(ips);
+      const first = ips[0];
+      if (first) setBase(first.split(".").slice(0, 3).join("."));
+    });
+  }, []);
 
   async function go(): Promise<void> {
     if (!siteName.trim()) return;
@@ -36,7 +46,7 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
       if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
       else if (r.found === 0)
         setResult(`ما لقيت أجهزة تعدين. ${diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.`);
-      else setResult(`✓ تم العثور على ${r.found} جهاز ${diag} وإضافتها للموقع.`);
+      else setResult(`✓ تمت إضافة الموقع «${siteName.trim()}» مع ${r.found} جهاز ${diag}.`);
     } catch (err) {
       setResult("⚠ تعذّر الفحص: " + String(err));
     } finally {
@@ -66,10 +76,11 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     }
   }
 
+  const detected = detectedIps[0];
   return (
     <div className="overlay" onClick={busy || testBusy ? undefined : onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
-        <h3>فحص الشبكة عن أجهزة التعدين</h3>
+        <h3>إضافة موقع وفحص أجهزته</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
           شغّل هذا على لابتوب الموقع (الموصول بشبكة الأسيكات). بيضيف كل جهاز يلقاه تلقائياً.
         </p>
@@ -86,22 +97,27 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         </div>
 
         <div className="field">
-          <label>نطاق الشبكة (اختياري — اتركه فاضي للكشف التلقائي)</label>
+          <label>نطاق الشبكة (تلقائي)</label>
           <input
             className="input"
-            placeholder="مثال: 192.168.0"
+            placeholder="يُكتشف تلقائياً…"
             value={base}
             disabled={busy}
             onChange={(e) => setBase(e.target.value)}
           />
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+            {detected
+              ? `📡 اكتُشف جهازك تلقائياً: ${detected} — سيُفحص النطاق ${base || "؟"}.x`
+              : "…جاري كشف شبكتك تلقائياً"}
+          </div>
         </div>
 
-        {busy && <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>⏳ جاري الفحص…</div>}
+        {busy && <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>⏳ جاري الفحص والإضافة…</div>}
         {result && <div style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.7 }}>{result}</div>}
 
         <div className="actions">
           <button className="btn primary" disabled={busy || !siteName.trim()} onClick={() => void go()}>
-            {busy ? "جاري الفحص…" : "🔍 ابدأ الفحص"}
+            {busy ? "جاري الإضافة…" : "➕ إضافة الموقع"}
           </button>
           {!busy && !testBusy && (
             <button className="btn" onClick={onClose}>

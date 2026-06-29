@@ -272,7 +272,12 @@ export function App(): React.ReactElement {
         return;
       const results = await api.sendBulk(ids, cmd);
       const ok = results.filter((r) => r.ok).length;
-      showToast(`${CMD_LABEL[cmd]}: نجح ${ok} / ${results.length}`);
+      const firstErr = results.find((r) => !r.ok)?.error;
+      showToast(
+        ok === results.length
+          ? `✓ ${CMD_LABEL[cmd]}: نجح ${ok}/${results.length}`
+          : `${CMD_LABEL[cmd]}: نجح ${ok}/${results.length}${firstErr ? ` · مثال خطأ: ${firstErr}` : ""}`,
+      );
     },
     [selectedIds, showToast],
   );
