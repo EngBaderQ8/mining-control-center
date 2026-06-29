@@ -1,7 +1,11 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
 import { appendFileSync } from "node:fs";
-import electronUpdater from "electron-updater";
+// electron-updater is CommonJS and exposes `autoUpdater` as a NAMED export. A
+// default import (`electronUpdater.autoUpdater`) resolves to undefined in the
+// packaged app — hence "Cannot read properties of undefined (reading
+// 'autoUpdater')". Import the named export directly.
+import { autoUpdater as electronAutoUpdater } from "electron-updater";
 import { DeviceRepo } from "./db/repo";
 import { registerIpc } from "./ipc";
 import { notifyMessage } from "./notify";
@@ -93,7 +97,8 @@ function buildBridge(): ServerBridge {
  * site laptops stays current without manual re-installs.
  */
 function setupAutoUpdate(): void {
-  const updater = electronUpdater.autoUpdater;
+  const updater = electronAutoUpdater;
+  if (!updater) throw new Error("electron-updater autoUpdater unavailable");
   const current = app.getVersion();
   const send = (s: {
     state: string;
