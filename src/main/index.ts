@@ -26,6 +26,11 @@ function createWindow(): BrowserWindow {
     },
   });
 
+  win.webContents.on("did-finish-load", () => console.log("[mcc] renderer loaded"));
+  win.webContents.on("did-fail-load", (_e, code, desc) =>
+    console.error(`[mcc] renderer failed to load: ${code} ${desc}`),
+  );
+
   const devUrl = process.env["VITE_DEV_SERVER_URL"];
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(join(__dirname, "../renderer/index.html"));
@@ -57,8 +62,13 @@ function buildService(win: BrowserWindow): MiningService {
 
 app.whenReady().then(() => {
   mainWindow = createWindow();
-  const service = buildService(mainWindow);
-  registerIpc(service);
+  try {
+    const service = buildService(mainWindow);
+    registerIpc(service);
+    console.log("[mcc] service ready");
+  } catch (e) {
+    console.error("[mcc] startup failed:", (e as Error).message);
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
