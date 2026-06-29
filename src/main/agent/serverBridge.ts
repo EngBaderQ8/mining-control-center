@@ -8,7 +8,7 @@ import type { DeviceRepo } from "../db/repo";
 import { ConnectionConfig } from "./config";
 import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
-import { scanHosts, subnetHosts } from "../../core/discovery/scan";
+import { subnetHosts, type DiscoveredDevice } from "../../core/discovery/scan";
 import { detectFromVersion } from "../../core/discovery/detect";
 import { localPrivateBases } from "../discovery/localSubnet";
 import { diagnoseHost } from "../transport/tcp";
@@ -164,15 +164,46 @@ export class ServerBridge {
    * many were found. Discovered devices get default stock creds (root:root) —
    * monitoring works immediately; control may need real creds for modded firmware.
    */
+  /** Detailed concurrent probe over hosts: device list + connectivity counters. */
+  private async scanDetailed(
+    hosts: string[],
+  ): Promise<{ found: DiscoveredDevice[]; connected: number; responded: number }> {
+    const found: DiscoveredDevice[] = [];
+    let connected = 0;
+    let responded = 0;
+    let i = 0;
+    const worker = async (): Promise<void> => {
+      while (i < hosts.length) {
+        const host = hosts[i++]!;
+        const d = await diagnoseHost(host, 4028, 1500);
+        if (d.connected) connected++;
+        if (d.gotData) {
+          responded++;
+          const det = detectFromVersion(d.raw);
+          if (det) found.push({ host, firmware: det.firmware, model: det.model });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(64, hosts.length) }, worker));
+    return { found, connected, responded };
+  }
+
   async scanNetwork(
     siteName: string,
     base?: string,
-  ): Promise<{ found: number; reachable: boolean; bases: string[] }> {
+  ): Promise<{
+    found: number;
+    reachable: boolean;
+    bases: string[];
+    connected: number;
+    responded: number;
+  }> {
     const bases = base && base.trim() ? [base.trim()] : localPrivateBases();
-    if (bases.length === 0) return { found: 0, reachable: false, bases: [] };
+    if (bases.length === 0)
+      return { found: 0, reachable: false, bases: [], connected: 0, responded: 0 };
     const hosts = bases.flatMap((b) => subnetHosts(b));
-    const found = await scanHosts(hosts, 4028, this.deps.scanTransport, 64);
-    if (found.length === 0) return { found: 0, reachable: true, bases };
+    const { found, connected, responded } = await this.scanDetailed(hosts);
+    if (found.length === 0) return { found: 0, reachable: true, bases, connected, responded };
 
     const siteId = randomUUID();
     this.addSite({ id: siteId, name: siteName });
@@ -193,7 +224,7 @@ export class ServerBridge {
         "root:root",
       );
     }
-    return { found: found.length, reachable: true, bases };
+    return { found: found.length, reachable: true, bases, connected, responded };
   }
 
   async sendCommand(

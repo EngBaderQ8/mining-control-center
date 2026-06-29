@@ -3,7 +3,16 @@ import { api } from "../ipc";
 
 interface Props {
   onClose: () => void;
-  onScan: (siteName: string, base: string) => Promise<{ found: number; reachable: boolean; bases: string[] }>;
+  onScan: (
+    siteName: string,
+    base: string,
+  ) => Promise<{
+    found: number;
+    reachable: boolean;
+    bases: string[];
+    connected: number;
+    responded: number;
+  }>;
 }
 
 export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
@@ -23,10 +32,11 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     const r = await onScan(siteName.trim(), base.trim());
     setBusy(false);
     const scanned = r.bases.length ? r.bases.join("، ") : "—";
+    const diag = `(النطاق ${scanned} · اتصل بـ ${r.connected} جهاز على 4028 · ردّ ${r.responded})`;
     if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
     else if (r.found === 0)
-      setResult(`ما لقيت أجهزة. النطاق المفحوص: ${scanned}. جرّب «اختبار جهاز» بالأسفل لمعرفة السبب.`);
-    else setResult(`✓ تم العثور على ${r.found} جهاز (النطاق: ${scanned}) وإضافتها للموقع.`);
+      setResult(`ما لقيت أجهزة تعدين. ${diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.`);
+    else setResult(`✓ تم العثور على ${r.found} جهاز ${diag} وإضافتها للموقع.`);
   }
 
   async function test(): Promise<void> {

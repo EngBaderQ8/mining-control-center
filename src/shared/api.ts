@@ -65,7 +65,13 @@ export interface Api {
   scanNetwork(
     siteName: string,
     base?: string,
-  ): Promise<{ found: number; reachable: boolean; bases: string[] }>;
+  ): Promise<{
+    found: number;
+    reachable: boolean;
+    bases: string[];
+    connected: number;
+    responded: number;
+  }>;
   testHost(ip: string): Promise<{
     connected: boolean;
     gotData: boolean;
