@@ -3,6 +3,7 @@ import type { DeviceView, SortKey, SortState } from "../state/store";
 import { sortViews } from "../state/store";
 import type { ControlCommand } from "../../core/drivers/types";
 import { DeviceRow } from "./DeviceRow";
+import { t } from "../i18n";
 
 interface Props {
   views: DeviceView[];
@@ -47,13 +48,13 @@ export function DeviceTable({
                 key={c.key}
                 className="sortable"
                 onClick={() => onSort(c.key as SortKey)}
-                title="اضغط للترتيب"
+                title={t("اضغط للترتيب")}
               >
-                {c.label}
+                {t(c.label)}
                 <span className="sortarrow">{sort.key === c.key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}</span>
               </th>
             ) : (
-              <th key={c.label}>{c.label}</th>
+              <th key={c.label}>{t(c.label)}</th>
             ),
           )}
         </tr>

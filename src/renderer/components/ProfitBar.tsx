@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { t } from "../i18n";
 import { api } from "../ipc";
 import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
 import {
@@ -53,9 +54,9 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
     <div className="profitbar">
       {!ready ? (
         <div className="profit-main">
-          <div className="profit-label">الأرباح</div>
+          <div className="profit-label">{t("الأرباح")}</div>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
-            …جاري جلب سعر BTC — أو اضغط ⚙ وأدخل السعر يدوياً
+            {t("…جاري جلب سعر BTC — أو اضغط ⚙ وأدخل السعر يدوياً")}
           </div>
         </div>
       ) : (
@@ -64,32 +65,32 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
             <div className="profit-value" style={{ color: profitColor }}>
               {money(r.profitPerDay, cur)}
             </div>
-            <div className="profit-label">صافي الربح / اليوم</div>
+            <div className="profit-label">{t("صافي الربح / اليوم")}</div>
           </div>
           <div className="profit-stat">
             <b>{money(r.revenuePerDay, cur)}</b>
-            <span>الإيراد/اليوم</span>
+            <span>{t("الإيراد/اليوم")}</span>
           </div>
           <div className="profit-stat">
             <b style={{ color: "var(--amber)" }}>{money(r.costPerDay, cur)}</b>
-            <span>الكهرباء/اليوم</span>
+            <span>{t("الكهرباء/اليوم")}</span>
           </div>
           <div className="profit-stat">
             <b style={{ color: profitColor }}>{money(r.profitPerMonth, cur)}</b>
-            <span>صافي / الشهر</span>
+            <span>{t("صافي / الشهر")}</span>
           </div>
           <div className="profit-stat">
             <b>{r.marginPct.toFixed(0)}%</b>
-            <span>هامش الربح</span>
+            <span>{t("هامش الربح")}</span>
           </div>
           <div className="profit-stat">
             <b>₿ {r.btcPerDay.toFixed(5)}</b>
-            <span>BTC/يوم · ${priceUsd.toLocaleString()}</span>
+            <span>{t("BTC/يوم · ${price}", { price: priceUsd.toLocaleString() })}</span>
           </div>
         </>
       )}
       <button className="btn" style={{ marginInlineStart: "auto" }} onClick={() => setOpen(true)}>
-        ⚙ إعدادات الأرباح
+        {t("⚙ إعدادات الأرباح")}
       </button>
 
       {open && <ProfitSettingsDialog settings={settings} onSave={save} onClose={() => setOpen(false)} />}
@@ -114,17 +115,17 @@ function ProfitSettingsDialog({
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
-        <h3>إعدادات حساب الأرباح</h3>
+        <h3>{t("إعدادات حساب الأرباح")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          عشان نحسب أرباحك بدقة، عبّي بيانات الكهرباء والعملة.
+          {t("عشان نحسب أرباحك بدقة، عبّي بيانات الكهرباء والعملة.")}
         </p>
 
         <div className="field">
-          <label>رمز العملة (مثل: ريال، $، د.ك)</label>
+          <label>{t("رمز العملة (مثل: ريال، $، د.ك)")}</label>
           <input className="input" value={s.currency} onChange={(e) => setS({ ...s, currency: e.target.value })} />
         </div>
         <div className="field">
-          <label>سعر صرف الدولار (كم من عملتك = 1 دولار؟ اكتب 1 لو بالدولار)</label>
+          <label>{t("سعر صرف الدولار (كم من عملتك = 1 دولار؟ اكتب 1 لو بالدولار)")}</label>
           <input
             className="input"
             type="number"
@@ -133,7 +134,7 @@ function ProfitSettingsDialog({
           />
         </div>
         <div className="field">
-          <label>سعر الكهرباء لكل كيلوواط/ساعة (بعملتك)</label>
+          <label>{t("سعر الكهرباء لكل كيلوواط/ساعة (بعملتك)")}</label>
           <input
             className="input"
             type="number"
@@ -143,7 +144,7 @@ function ProfitSettingsDialog({
           />
         </div>
         <div className="field">
-          <label>كفاءة الأجهزة J/TH (افتراضي 18.5 لـ S19 XP+ Hyd)</label>
+          <label>{t("كفاءة الأجهزة J/TH (افتراضي 18.5 لـ S19 XP+ Hyd)")}</label>
           <input
             className="input"
             type="number"
@@ -153,7 +154,7 @@ function ProfitSettingsDialog({
           />
         </div>
         <div className="field">
-          <label>سعر BTC يدوياً بالدولار (اتركه 0 للسعر التلقائي المباشر)</label>
+          <label>{t("سعر BTC يدوياً بالدولار (اتركه 0 للسعر التلقائي المباشر)")}</label>
           <input
             className="input"
             type="number"
@@ -170,10 +171,10 @@ function ProfitSettingsDialog({
               onClose();
             }}
           >
-            حفظ
+            {t("حفظ")}
           </button>
           <button className="btn" onClick={onClose}>
-            إلغاء
+            {t("إلغاء")}
           </button>
         </div>
       </div>

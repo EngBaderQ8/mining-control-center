@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { t } from "../i18n";
 import { api } from "../ipc";
 import type { SiteGroup } from "../state/store";
 import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
@@ -52,15 +53,15 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
       <table className="tbl">
         <thead>
           <tr>
-            <th>الموقع</th>
-            <th>الأجهزة</th>
-            <th>شغّال</th>
-            <th>الهاش</th>
-            <th>الطاقة</th>
-            <th>الكفاءة</th>
-            <th>الكهرباء/يوم</th>
-            <th>صافي/يوم</th>
-            <th>صافي/شهر</th>
+            <th>{t("الموقع")}</th>
+            <th>{t("الأجهزة")}</th>
+            <th>{t("شغّال")}</th>
+            <th>{t("الهاش")}</th>
+            <th>{t("الطاقة")}</th>
+            <th>{t("الكفاءة")}</th>
+            <th>{t("الكهرباء/يوم")}</th>
+            <th>{t("صافي/يوم")}</th>
+            <th>{t("صافي/شهر")}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,7 +87,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
         </tbody>
         <tfoot>
           <tr style={{ fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-            <td>الإجمالي</td>
+            <td>{t("الإجمالي")}</td>
             <td>{tot.devices}</td>
             <td className="green">{tot.online}</td>
             <td className="green">{tot.ths.toLocaleString(undefined, { maximumFractionDigits: 0 })} TH/s</td>
@@ -100,7 +101,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
       </table>
       {priceUsd <= 0 && (
         <div style={{ color: "var(--muted)", fontSize: 12, padding: "8px 12px" }}>
-          …جاري جلب سعر BTC — أو افتح «⚙ إعدادات الأرباح» وأدخل السعر يدوياً.
+          {t("…جاري جلب سعر BTC — أو افتح «⚙ إعدادات الأرباح» وأدخل السعر يدوياً.")}
         </div>
       )}
     </div>

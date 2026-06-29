@@ -1,11 +1,12 @@
 import React from "react";
+import { t } from "../i18n";
 import type { HistoryPoint } from "../state/history";
 
 function rangeLabel(spanMs: number): string {
   const min = Math.round(spanMs / 60000);
-  if (min < 60) return `آخر ${min} دقيقة`;
+  if (min < 60) return t("آخر {min} دقيقة", { min });
   const h = Math.round(min / 60);
-  return `آخر ${h} ساعة`;
+  return t("آخر {h} ساعة", { h });
 }
 
 function LineChart({
@@ -31,7 +32,7 @@ function LineChart({
           <span>{label}</span>
         </div>
         <div style={{ color: "var(--muted)", fontSize: 13, padding: "26px 0", textAlign: "center" }}>
-          يحتاج بيانات أكثر — تُسجَّل تلقائياً كل دقيقة، خلّ البرنامج شغّال شوي.
+          {t("يحتاج بيانات أكثر — تُسجَّل تلقائياً كل دقيقة، خلّ البرنامج شغّال شوي.")}
         </div>
       </div>
     );
@@ -61,9 +62,9 @@ function LineChart({
         <path d={line} fill="none" stroke={color} strokeWidth={1.8} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="chartft">
-        <span>الأدنى {fmt(min)}</span>
+        <span>{t("الأدنى {v}", { v: fmt(min) })}</span>
         <span>{rangeLabel(span)}</span>
-        <span>الأعلى {fmt(max)}</span>
+        <span>{t("الأعلى {v}", { v: fmt(max) })}</span>
       </div>
     </div>
   );
@@ -76,21 +77,21 @@ export function HistoryCharts({ history }: { history: HistoryPoint[] }): React.R
         points={history}
         getValue={(p) => p.ths}
         color="#2f9e54"
-        label="إجمالي الهاشريت"
+        label={t("إجمالي الهاشريت")}
         fmt={(n) => `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} TH/s`}
       />
       <LineChart
         points={history}
         getValue={(p) => p.temp}
         color="#e6731c"
-        label="متوسط الحرارة"
+        label={t("متوسط الحرارة")}
         fmt={(n) => `${n.toFixed(1)}°C`}
       />
       <LineChart
         points={history}
         getValue={(p) => p.online}
         color="#378add"
-        label="الأجهزة المتصلة"
+        label={t("الأجهزة المتصلة")}
         fmt={(n) => `${Math.round(n)}`}
       />
     </div>

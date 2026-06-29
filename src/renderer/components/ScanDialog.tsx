@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
+import { t } from "../i18n";
 
 interface Props {
   onClose: () => void;
@@ -44,13 +45,24 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     try {
       const r = await onScan(siteName.trim(), base.trim(), secret);
       const scanned = r.bases.length ? r.bases.join("، ") : "—";
-      const diag = `(النطاق ${scanned} · اتصل بـ ${r.connected} جهاز على 4028 · ردّ ${r.responded})`;
-      if (!r.reachable) setResult("⚠ ما لقيت أي شبكة محلية على هذا الجهاز.");
+      const diag = t("(النطاق {scanned} · اتصل بـ {connected} جهاز على 4028 · ردّ {responded})", {
+        scanned,
+        connected: r.connected,
+        responded: r.responded,
+      });
+      if (!r.reachable) setResult(t("⚠ ما لقيت أي شبكة محلية على هذا الجهاز."));
       else if (r.found === 0)
-        setResult(`ما لقيت أجهزة تعدين. ${diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.`);
-      else setResult(`✓ تمت إضافة الموقع «${siteName.trim()}» مع ${r.found} جهاز ${diag}.`);
+        setResult(t("ما لقيت أجهزة تعدين. {diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.", { diag }));
+      else
+        setResult(
+          t("✓ تمت إضافة الموقع «{name}» مع {found} جهاز {diag}.", {
+            name: siteName.trim(),
+            found: r.found,
+            diag,
+          }),
+        );
     } catch (err) {
-      setResult("⚠ تعذّر الفحص: " + String(err));
+      setResult(t("⚠ تعذّر الفحص: ") + String(err));
     } finally {
       setBusy(false);
     }
@@ -63,16 +75,25 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     try {
       const r = await api.testHost(testIp.trim());
       if (!r.connected) {
-        setTestResult(`❌ ما قدر يتصل بـ ${testIp} على المنفذ 4028. (${r.error ?? ""})`);
+        setTestResult(
+          t("❌ ما قدر يتصل بـ {ip} على المنفذ 4028. ({error})", {
+            ip: testIp,
+            error: r.error ?? "",
+          }),
+        );
         return;
       }
       setTestResult(
-        `✓ اتصل وردّ · الفرمور: ${r.firmware ?? "؟"} · المراقبة: ${r.state} · هاش: ${r.hashrateTHs.toFixed(
-          1,
-        )} TH · حرارة: ${r.maxTempC}\nعيّنة summary: ${r.summarySample || "(فاضي)"}`,
+        t("✓ اتصل وردّ · الفرمور: {firmware} · المراقبة: {state} · هاش: {hash} TH · حرارة: {temp}\nعيّنة summary: {sample}", {
+          firmware: r.firmware ?? t("؟"),
+          state: r.state,
+          hash: r.hashrateTHs.toFixed(1),
+          temp: r.maxTempC,
+          sample: r.summarySample || t("(فاضي)"),
+        }),
       );
     } catch (err) {
-      setTestResult("⚠ تعذّر الاختبار: " + String(err));
+      setTestResult(t("⚠ تعذّر الاختبار: ") + String(err));
     } finally {
       setTestBusy(false);
     }
@@ -81,16 +102,16 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
   return (
     <div className="overlay" onClick={busy || testBusy ? undefined : onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
-        <h3>إضافة موقع وفحص أجهزته</h3>
+        <h3>{t("إضافة موقع وفحص أجهزته")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          شغّل هذا على لابتوب الموقع (الموصول بشبكة الأسيكات). بيضيف كل جهاز يلقاه تلقائياً.
+          {t("شغّل هذا على لابتوب الموقع (الموصول بشبكة الأسيكات). بيضيف كل جهاز يلقاه تلقائياً.")}
         </p>
 
         <div className="field">
-          <label>اسم الموقع</label>
+          <label>{t("اسم الموقع")}</label>
           <input
             className="input"
-            placeholder="مثال: الرياض — المستودع"
+            placeholder={t("مثال: الرياض — المستودع")}
             value={siteName}
             disabled={busy}
             onChange={(e) => setSiteName(e.target.value)}
@@ -98,7 +119,7 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         </div>
 
         <div className="field">
-          <label>الشبكة (تلقائي بالكامل — ما تحتاج تكتب شي)</label>
+          <label>{t("الشبكة (تلقائي بالكامل — ما تحتاج تكتب شي)")}</label>
           <div
             style={{
               fontSize: 13,
@@ -111,23 +132,23 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
           >
             {detectedIps.length > 0 ? (
               <>
-                📡 جهازك على: <b>{detectedIps.join("، ")}</b>
+                {t("📡 جهازك على:")} <b>{detectedIps.join("، ")}</b>
                 <br />
-                ✅ بيفحص تلقائياً: <b>{base.trim() ? `${base.trim()}.x` : bases.map((b) => `${b}.x`).join("، ")}</b>
+                {t("✅ بيفحص تلقائياً:")} <b>{base.trim() ? `${base.trim()}.x` : bases.map((b) => `${b}.x`).join("، ")}</b>
               </>
             ) : (
-              "…جاري كشف شبكتك تلقائياً"
+              t("…جاري كشف شبكتك تلقائياً")
             )}
           </div>
         </div>
 
         <details style={{ marginBottom: 10 }}>
           <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>
-            نطاق محدد يدوياً (اختياري — لو أجهزتك على شبكة غير شبكة جهازك)
+            {t("نطاق محدد يدوياً (اختياري — لو أجهزتك على شبكة غير شبكة جهازك)")}
           </summary>
           <input
             className="input"
-            placeholder="مثال: 192.168.8"
+            placeholder={t("مثال: 192.168.8")}
             value={base}
             disabled={busy}
             onChange={(e) => setBase(e.target.value)}
@@ -136,30 +157,30 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         </details>
 
         <div className="field">
-          <label>باسورد واجهة الأسيك (اختياري — لتفعيل التحكم)</label>
+          <label>{t("باسورد واجهة الأسيك (اختياري — لتفعيل التحكم)")}</label>
           <input
             className="input"
             type="password"
-            placeholder="اتركه فاضي لو على الافتراضي root:root"
+            placeholder={t("اتركه فاضي لو على الافتراضي root:root")}
             value={secret}
             disabled={busy}
             onChange={(e) => setSecret(e.target.value)}
           />
           <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-            🔑 نفس الباسورد اللي تدخل فيه صفحة الجهاز. يُحفظ مشفّراً ويتطبّق على كل الأجهزة — عشان أوامر التشغيل/الإيقاف تشتغل.
+            {t("🔑 نفس الباسورد اللي تدخل فيه صفحة الجهاز. يُحفظ مشفّراً ويتطبّق على كل الأجهزة — عشان أوامر التشغيل/الإيقاف تشتغل.")}
           </div>
         </div>
 
-        {busy && <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>⏳ جاري الفحص والإضافة…</div>}
+        {busy && <div style={{ color: "var(--blue)", fontSize: 13, margin: "8px 0" }}>{t("⏳ جاري الفحص والإضافة…")}</div>}
         {result && <div style={{ fontSize: 13, margin: "8px 0", lineHeight: 1.7 }}>{result}</div>}
 
         <div className="actions">
           <button className="btn primary" disabled={busy || !siteName.trim()} onClick={() => void go()}>
-            {busy ? "جاري الإضافة…" : "➕ إضافة الموقع"}
+            {busy ? t("جاري الإضافة…") : t("➕ إضافة الموقع")}
           </button>
           {!busy && !testBusy && (
             <button className="btn" onClick={onClose}>
-              إغلاق
+              {t("إغلاق")}
             </button>
           )}
         </div>
@@ -167,10 +188,10 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "16px 0" }} />
 
         <div className="field">
-          <label>🧪 اختبار جهاز واحد (لمعرفة سبب فشل الفحص)</label>
+          <label>{t("🧪 اختبار جهاز واحد (لمعرفة سبب فشل الفحص)")}</label>
           <input
             className="input"
-            placeholder="عنوان أسيك واحد، مثل 192.168.0.113"
+            placeholder={t("عنوان أسيك واحد، مثل 192.168.0.113")}
             value={testIp}
             disabled={testBusy}
             onChange={(e) => setTestIp(e.target.value)}
@@ -183,7 +204,7 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         )}
         <div className="actions">
           <button className="btn" disabled={testBusy || !testIp.trim()} onClick={() => void test()}>
-            {testBusy ? "جاري الاختبار…" : "اختبر هذا الجهاز"}
+            {testBusy ? t("جاري الاختبار…") : t("اختبر هذا الجهاز")}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
+import { t } from "../i18n";
 import type { TelegramSettings } from "../../shared/api";
 
 export function TelegramDialog({ onClose }: { onClose: () => void }): React.ReactElement {
@@ -18,8 +19,8 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
       const r = await api.detectChatId(s.token.trim());
       if (r.chatId) {
         setS((p) => ({ ...p, chatId: r.chatId! }));
-        setMsg(`✓ تم كشف رقم المحادثة: ${r.chatId}`);
-      } else setMsg(`⚠ ${r.error ?? "ما قدر يكشف"}`);
+        setMsg(`✓ ${t("تم كشف رقم المحادثة: {chatId}", { chatId: r.chatId })}`);
+      } else setMsg(`⚠ ${r.error ?? t("ما قدر يكشف")}`);
     } finally {
       setBusy(false);
     }
@@ -30,7 +31,7 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
     setMsg(null);
     try {
       const r = await api.testTelegram({ ...s, token: s.token.trim(), chatId: s.chatId.trim() });
-      setMsg(r.ok ? "✅ وصلتك رسالة الاختبار على تيليجرام؟ معناه التنبيهات تشتغل!" : `⚠ فشل: ${r.error ?? ""}`);
+      setMsg(r.ok ? t("✅ وصلتك رسالة الاختبار على تيليجرام؟ معناه التنبيهات تشتغل!") : `⚠ ${t("فشل")}: ${r.error ?? ""}`);
     } finally {
       setBusy(false);
     }
@@ -48,7 +49,7 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
       // Save first so the report uses the latest settings.
       await api.setTelegram({ ...s, token: s.token.trim(), chatId: s.chatId.trim() });
       const r = await api.sendDailyReport();
-      setMsg(r.ok ? "✅ أُرسل التقرير اليومي على تيليجرام — شوف جوالك." : `⚠ ${r.error ?? ""}`);
+      setMsg(r.ok ? t("✅ أُرسل التقرير اليومي على تيليجرام — شوف جوالك.") : `⚠ ${r.error ?? ""}`);
     } finally {
       setBusy(false);
     }
@@ -57,16 +58,16 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
   return (
     <div className="overlay" onClick={busy ? undefined : onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
-        <h3>🔔 تنبيهات الجوال عبر تيليجرام</h3>
+        <h3>🔔 {t("تنبيهات الجوال عبر تيليجرام")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          يوصلك إشعار على جوالك فوراً لما يتوقف جهاز أو يسخن أو ينزل الهاش.
+          {t("يوصلك إشعار على جوالك فوراً لما يتوقف جهاز أو يسخن أو ينزل الهاش.")}
         </p>
 
         <ol style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.9, paddingInlineStart: 18 }}>
-          <li>افتح تيليجرام، ابحث عن <b>@BotFather</b>، أرسل <b>/newbot</b> واتبع الخطوات.</li>
-          <li>بيعطيك <b>توكن</b> (نص طويل) — انسخه هنا تحت.</li>
-          <li>افتح بوتك بتيليجرام وأرسل له أي رسالة (مثلاً «مرحبا»).</li>
-          <li>اضغط «كشف رقم المحادثة تلقائياً» ثم «اختبار».</li>
+          <li>{t("افتح تيليجرام، ابحث عن")} <b>@BotFather</b>{t("، أرسل")} <b>/newbot</b> {t("واتبع الخطوات.")}</li>
+          <li>{t("بيعطيك")} <b>{t("توكن")}</b> {t("(نص طويل) — انسخه هنا تحت.")}</li>
+          <li>{t("افتح بوتك بتيليجرام وأرسل له أي رسالة (مثلاً «مرحبا»).")}</li>
+          <li>{t("اضغط «كشف رقم المحادثة تلقائياً» ثم «اختبار».")}</li>
         </ol>
 
         <div className="field">
@@ -76,11 +77,11 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
               checked={s.enabled}
               onChange={(e) => setS({ ...s, enabled: e.target.checked })}
             />{" "}
-            تفعيل تنبيهات تيليجرام
+            {t("تفعيل تنبيهات تيليجرام")}
           </label>
         </div>
         <div className="field">
-          <label>توكن البوت (Bot Token)</label>
+          <label>{t("توكن البوت (Bot Token)")}</label>
           <input
             className="input"
             placeholder="123456789:ABCdef..."
@@ -89,10 +90,10 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
           />
         </div>
         <div className="field">
-          <label>رقم المحادثة (Chat ID)</label>
+          <label>{t("رقم المحادثة (Chat ID)")}</label>
           <input
             className="input"
-            placeholder="اضغط الكشف التلقائي تحت"
+            placeholder={t("اضغط الكشف التلقائي تحت")}
             value={s.chatId}
             onChange={(e) => setS({ ...s, chatId: e.target.value })}
           />
@@ -102,28 +103,28 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
 
         <div className="actions">
           <button className="btn" disabled={busy || !s.token.trim()} onClick={() => void detect()}>
-            🔎 كشف رقم المحادثة تلقائياً
+            🔎 {t("كشف رقم المحادثة تلقائياً")}
           </button>
           <button className="btn" disabled={busy || !s.token.trim() || !s.chatId.trim()} onClick={() => void test()}>
-            📨 اختبار
+            📨 {t("اختبار")}
           </button>
           <button className="btn" disabled={busy || !s.token.trim() || !s.chatId.trim()} onClick={() => void report()}>
-            📊 أرسل تقرير الآن
+            📊 {t("أرسل تقرير الآن")}
           </button>
         </div>
         <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
-          📊 لما تفعّل تيليجرام، يوصلك <b>تقرير يومي تلقائي</b> بملخص الإنتاج والمشاكل.
+          📊 {t("لما تفعّل تيليجرام، يوصلك")} <b>{t("تقرير يومي تلقائي")}</b> {t("بملخص الإنتاج والمشاكل.")}
         </p>
         <p style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7, background: "var(--surface2)", padding: "8px 10px", borderRadius: 8 }}>
-          🤖 <b>الأقوى — تتحكم من جوالك:</b> أرسل للبوت أوامر مثل «<b>الوضع</b>» · «<b>أوقف 105</b>» ·
-          «<b>شغّل الرياض</b>» · «<b>ريبوت الكل</b>» · «<b>مساعدة</b>» — وينفّذ ويردّ عليك. تتحكم بمزرعتك من أي مكان!
+          🤖 <b>{t("الأقوى — تتحكم من جوالك:")}</b> {t("أرسل للبوت أوامر مثل")} «<b>{t("الوضع")}</b>» · «<b>{t("أوقف 105")}</b>» ·
+          «<b>{t("شغّل الرياض")}</b>» · «<b>{t("ريبوت الكل")}</b>» · «<b>{t("مساعدة")}</b>» — {t("وينفّذ ويردّ عليك. تتحكم بمزرعتك من أي مكان!")}
         </p>
         <div className="actions" style={{ marginTop: 6 }}>
           <button className="btn primary" disabled={busy} onClick={() => void save()}>
-            حفظ
+            {t("حفظ")}
           </button>
           <button className="btn" disabled={busy} onClick={onClose}>
-            إغلاق
+            {t("إغلاق")}
           </button>
         </div>
       </div>

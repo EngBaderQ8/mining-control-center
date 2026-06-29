@@ -92,6 +92,10 @@ a { color: var(--blue); text-decoration: none; }
 }
 .sitehead .chev.open { transform: rotate(90deg); }
 
+/* language switcher (top of the app) */
+.langswitch { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 10px; }
+.langswitch .btn { padding: 4px 12px; font-size: 12px; }
+
 /* view toggle (table / heatmap / charts) */
 .viewtoggle { display: flex; gap: 8px; margin-bottom: 14px; }
 

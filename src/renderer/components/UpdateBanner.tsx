@@ -1,5 +1,6 @@
 import React from "react";
 import type { UpdateStatus } from "../../shared/api";
+import { t } from "../i18n";
 
 export function UpdateBanner({ status }: { status: UpdateStatus | null }): React.ReactElement | null {
   if (!status || status.state === "none") return null;
@@ -7,24 +8,24 @@ export function UpdateBanner({ status }: { status: UpdateStatus | null }): React
   let color = "#1d4ed8";
   switch (status.state) {
     case "checking":
-      text = "🔄 جاري التحقق من التحديثات…";
+      text = t("🔄 جاري التحقق من التحديثات…");
       break;
     case "uptodate":
-      text = `✅ أنت على آخر نسخة (${status.current ?? status.version ?? ""})`;
+      text = t("✅ أنت على آخر نسخة ({version})", { version: status.current ?? status.version ?? "" });
       color = "#15803d";
       break;
     case "available":
-      text = `⬇ يتوفّر تحديث ${status.version ?? ""} — جاري التنزيل…`;
+      text = t("⬇ يتوفّر تحديث {version} — جاري التنزيل…", { version: status.version ?? "" });
       break;
     case "downloading":
-      text = `⬇ جاري تنزيل التحديث… ${status.percent ?? 0}%`;
+      text = t("⬇ جاري تنزيل التحديث… {percent}%", { percent: status.percent ?? 0 });
       break;
     case "ready":
-      text = `✅ التحديث ${status.version ?? ""} جاهز — يعاد التشغيل تلقائياً خلال ثوانٍ…`;
+      text = t("✅ التحديث {version} جاهز — يعاد التشغيل تلقائياً خلال ثوانٍ…", { version: status.version ?? "" });
       color = "#15803d";
       break;
     case "error":
-      text = `⚠ تعذّر التحديث: ${status.error ?? ""}`;
+      text = t("⚠ تعذّر التحديث: {error}", { error: status.error ?? "" });
       color = "#7a2330";
       break;
   }

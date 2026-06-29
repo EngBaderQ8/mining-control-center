@@ -31,6 +31,8 @@ import { TelegramDialog } from "./components/TelegramDialog";
 import { RecoveryDialog } from "./components/RecoveryDialog";
 import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
+import { t } from "./i18n";
 import type { UpdateStatus } from "../shared/api";
 
 const COLLAPSE_KEY = "mcc.collapsedSites";
@@ -65,32 +67,32 @@ function VersionBadge({
   let color = "var(--muted)";
   switch (status?.state) {
     case "checking":
-      suffix = " · يفحص التحديث…";
+      suffix = t(" · يفحص التحديث…");
       break;
     case "uptodate":
-      suffix = " · ✅ آخر نسخة";
+      suffix = t(" · ✅ آخر نسخة");
       color = "var(--green)";
       break;
     case "available":
-      suffix = " · ⬇ يتوفّر تحديث";
+      suffix = t(" · ⬇ يتوفّر تحديث");
       color = "var(--blue)";
       break;
     case "downloading":
-      suffix = ` · ⬇ تنزيل ${status?.percent ?? 0}%`;
+      suffix = t(" · ⬇ تنزيل {percent}%", { percent: status?.percent ?? 0 });
       color = "var(--blue)";
       break;
     case "ready":
-      suffix = " · ✅ جاهز — إعادة تشغيل";
+      suffix = t(" · ✅ جاهز — إعادة تشغيل");
       color = "var(--green)";
       break;
     case "error":
-      suffix = " · ⚠ تعذّر التحديث";
+      suffix = t(" · ⚠ تعذّر التحديث");
       color = "var(--red)";
       break;
   }
   return (
     <div className="versionbadge" style={{ color }} title={status?.error ?? ""}>
-      الإصدار {version || "؟"}
+      {t("الإصدار {version}", { version: version || "؟" })}
       {suffix}
     </div>
   );
@@ -236,7 +238,8 @@ export function App(): React.ReactElement {
       });
     });
     const offAlerts = api.onAlerts((alerts) => {
-      if (alerts.length) showToast(`⚠ ${alerts.length} تنبيه: ${alerts[0]?.message ?? ""}`);
+      if (alerts.length)
+        showToast(t("⚠ {count} تنبيه: {message}", { count: alerts.length, message: alerts[0]?.message ?? "" }));
     });
     return () => {
       offSnapshot();
@@ -296,9 +299,11 @@ export function App(): React.ReactElement {
 
   const onCommand = useCallback(
     async (id: string, cmd: ControlCommand) => {
-      if (DESTRUCTIVE.has(cmd) && !window.confirm(`${CMD_LABEL[cmd]} لهذا الجهاز؟`)) return;
+      if (DESTRUCTIVE.has(cmd) && !window.confirm(t("{cmd} لهذا الجهاز؟", { cmd: t(CMD_LABEL[cmd]) }))) return;
       const r = await api.sendCommand(id, cmd);
-      showToast(r.ok ? `✓ تم: ${CMD_LABEL[cmd]}` : `✕ فشل: ${r.error ?? ""}`);
+      showToast(
+        r.ok ? t("✓ تم: {cmd}", { cmd: t(CMD_LABEL[cmd]) }) : t("✕ فشل: {error}", { error: r.error ?? "" }),
+      );
     },
     [showToast],
   );
@@ -307,15 +312,19 @@ export function App(): React.ReactElement {
     async (cmd: ControlCommand) => {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
-      if (DESTRUCTIVE.has(cmd) && !window.confirm(`${CMD_LABEL[cmd]} على ${ids.length} جهاز؟`))
+      if (
+        DESTRUCTIVE.has(cmd) &&
+        !window.confirm(t("{cmd} على {count} جهاز؟", { cmd: t(CMD_LABEL[cmd]), count: ids.length }))
+      )
         return;
       const results = await api.sendBulk(ids, cmd);
       const ok = results.filter((r) => r.ok).length;
       const firstErr = results.find((r) => !r.ok)?.error;
       showToast(
         ok === results.length
-          ? `✓ ${CMD_LABEL[cmd]}: نجح ${ok}/${results.length}`
-          : `${CMD_LABEL[cmd]}: نجح ${ok}/${results.length}${firstErr ? ` · مثال خطأ: ${firstErr}` : ""}`,
+          ? t("✓ {cmd}: نجح {ok}/{total}", { cmd: t(CMD_LABEL[cmd]), ok, total: results.length })
+          : t("{cmd}: نجح {ok}/{total}", { cmd: t(CMD_LABEL[cmd]), ok, total: results.length }) +
+              (firstErr ? t(" · مثال خطأ: {error}", { error: firstErr }) : ""),
       );
     },
     [selectedIds, showToast],
@@ -330,28 +339,28 @@ export function App(): React.ReactElement {
         ids.map((id) => api.sendCommand(id, "setPool", { ...pool })),
       );
       const ok = results.filter((r) => r.ok).length;
-      showToast(`تغيير البول: نجح ${ok} / ${results.length}`);
+      showToast(t("تغيير البول: نجح {ok} / {total}", { ok, total: results.length }));
     },
     [selectedIds, showToast],
   );
 
   const onDeleteDevice = useCallback(
     async (deviceId: string) => {
-      if (!window.confirm("حذف هذا الجهاز؟")) return;
+      if (!window.confirm(t("حذف هذا الجهاز؟"))) return;
       await api.deleteDevice(deviceId);
       await reload();
-      showToast("تم حذف الجهاز");
+      showToast(t("تم حذف الجهاز"));
     },
     [reload, showToast],
   );
 
   const onDeleteSite = useCallback(
     async (siteId: string, siteName: string) => {
-      if (!window.confirm(`حذف الموقع «${siteName}» وكل أجهزته؟`)) return;
+      if (!window.confirm(t("حذف الموقع «{name}» وكل أجهزته؟", { name: siteName }))) return;
       await api.deleteSite(siteId);
       setSelectedIds(new Set());
       await reload();
-      showToast("تم حذف الموقع");
+      showToast(t("تم حذف الموقع"));
     },
     [reload, showToast],
   );
@@ -379,7 +388,7 @@ export function App(): React.ReactElement {
         await api.addDevice(device, p.secret || undefined);
         setDialogOpen(false);
         await reload();
-        showToast(`✓ أُضيف الجهاز ${device.name}`);
+        showToast(t("✓ أُضيف الجهاز {name}", { name: device.name }));
       } catch (e) {
         // Roll back a freshly-created (now-empty) site so it isn't orphaned.
         if (createdSiteId) {
@@ -389,18 +398,21 @@ export function App(): React.ReactElement {
             /* best-effort */
           }
         }
-        showToast(`⚠ تعذّر إضافة الجهاز: ${(e as Error)?.message ?? e}`);
+        showToast(t("⚠ تعذّر إضافة الجهاز: {error}", { error: (e as Error)?.message ?? String(e) }));
       }
     },
     [reload, showToast],
   );
 
   if (authed === null)
-    return <div className="app" style={{ color: "var(--muted)" }}>…تحميل</div>;
+    return <div className="app" style={{ color: "var(--muted)" }}>{t("…تحميل")}</div>;
   if (!authed)
     return (
       <>
         <UpdateBanner status={updateStatus} />
+        <div className="app" style={{ paddingBottom: 0 }}>
+          <LanguageSwitcher />
+        </div>
         <LoginScreen onAuthed={() => setAuthed(true)} />
         <VersionBadge version={appVersion} status={updateStatus} />
       </>
@@ -409,6 +421,7 @@ export function App(): React.ReactElement {
   return (
     <div className="app">
       <UpdateBanner status={updateStatus} />
+      <LanguageSwitcher />
       <ProfitBar hashrateTHs={summary.totalTHs} />
       <SummaryBar summary={summary} />
       <Toolbar
@@ -440,32 +453,32 @@ export function App(): React.ReactElement {
           className={`btn ${view === "table" ? "primary" : ""}`}
           onClick={() => setView("table")}
         >
-          📋 جدول
+          📋 {t("جدول")}
         </button>
         <button
           className={`btn ${view === "heatmap" ? "primary" : ""}`}
           onClick={() => setView("heatmap")}
         >
-          🔥 خريطة حرارية
+          🔥 {t("خريطة حرارية")}
         </button>
         <button
           className={`btn ${view === "charts" ? "primary" : ""}`}
           onClick={() => setView("charts")}
         >
-          📊 الرسوم
+          📊 {t("الرسوم")}
         </button>
         <button
           className={`btn ${view === "sites" ? "primary" : ""}`}
           onClick={() => setView("sites")}
         >
-          💵 لكل موقع
+          💵 {t("لكل موقع")}
         </button>
       </div>
 
       {view === "sites" ? (
         groups.length === 0 ? (
           <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
-            لا توجد مواقع.
+            {t("لا توجد مواقع.")}
           </div>
         ) : (
           <SiteBreakdown groups={groups} />
@@ -475,7 +488,7 @@ export function App(): React.ReactElement {
       ) : view === "heatmap" ? (
         groups.length === 0 ? (
           <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
-            لا توجد أجهزة مطابقة.
+            {t("لا توجد أجهزة مطابقة.")}
           </div>
         ) : (
           <Heatmap groups={groups} />
@@ -486,21 +499,24 @@ export function App(): React.ReactElement {
             <div className="collapsebar">
               <span className="hint">
                 {collapsedVisibleCount > 0
-                  ? `${collapsedVisibleCount} / ${groups.length} موقع مطوي`
-                  : `${groups.length} مواقع`}
+                  ? t("{collapsed} / {total} موقع مطوي", {
+                      collapsed: collapsedVisibleCount,
+                      total: groups.length,
+                    })
+                  : t("{total} مواقع", { total: groups.length })}
               </span>
               <button className="btn" onClick={() => persistCollapsed(new Set(groups.map((g) => g.site.id)))}>
-                ◀ طيّ الكل
+                ◀ {t("طيّ الكل")}
               </button>
               <button className="btn" onClick={() => persistCollapsed(new Set())}>
-                ▼ فتح الكل
+                ▼ {t("فتح الكل")}
               </button>
             </div>
           )}
 
           {groups.length === 0 ? (
             <div className="site" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
-              لا توجد أجهزة مطابقة. اضغط «إضافة جهاز» للبدء.
+              {t("لا توجد أجهزة مطابقة. اضغط «إضافة جهاز» للبدء.")}
             </div>
           ) : (
             groups.map((g) => (
@@ -550,8 +566,9 @@ export function App(): React.ReactElement {
               const firstErr = results.find((r) => !r.ok)?.error;
               showToast(
                 ok === results.length
-                  ? `⚡ وضع الطاقة: نجح ${ok}/${results.length}`
-                  : `⚡ وضع الطاقة: نجح ${ok}/${results.length}${firstErr ? ` · مثال: ${firstErr}` : ""}`,
+                  ? t("⚡ وضع الطاقة: نجح {ok}/{total}", { ok, total: results.length })
+                  : t("⚡ وضع الطاقة: نجح {ok}/{total}", { ok, total: results.length }) +
+                      (firstErr ? t(" · مثال: {error}", { error: firstErr }) : ""),
               );
             });
           }}
@@ -567,7 +584,9 @@ export function App(): React.ReactElement {
             setCredOpen(false);
             if (ids.length === 0) return;
             void api.setCredentials(ids, `${user}:${pass}`).then(() =>
-              showToast(`🔑 حُفظت بيانات الدخول لـ ${ids.length} جهاز — جرّب أمر تحكم الحين`),
+              showToast(
+                t("🔑 حُفظت بيانات الدخول لـ {count} جهاز — جرّب أمر تحكم الحين", { count: ids.length }),
+              ),
             );
           }}
         />

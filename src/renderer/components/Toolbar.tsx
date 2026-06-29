@@ -1,5 +1,6 @@
 import React from "react";
 import type { Filter } from "../state/store";
+import { t } from "../i18n";
 
 interface Props {
   filter: Filter;
@@ -24,7 +25,7 @@ export function Toolbar({
     <div className="bar">
       <input
         className="input"
-        placeholder="بحث باسم الجهاز / الموديل / الوركر…"
+        placeholder={t("بحث باسم الجهاز / الموديل / الوركر…")}
         value={filter.text}
         onChange={(e) => onChange({ ...filter, text: e.target.value })}
         style={{ minWidth: 240 }}
@@ -34,17 +35,17 @@ export function Toolbar({
         value={filter.state}
         onChange={(e) => onChange({ ...filter, state: e.target.value as Filter["state"] })}
       >
-        <option value="all">كل الحالات</option>
-        <option value="online">شغّال</option>
-        <option value="warning">تحذير</option>
-        <option value="offline">غير متصل</option>
+        <option value="all">{t("كل الحالات")}</option>
+        <option value="online">{t("شغّال")}</option>
+        <option value="warning">{t("تحذير")}</option>
+        <option value="offline">{t("غير متصل")}</option>
       </select>
       <select
         className="select"
         value={filter.firmware}
         onChange={(e) => onChange({ ...filter, firmware: e.target.value as Filter["firmware"] })}
       >
-        <option value="all">كل الفرمور</option>
+        <option value="all">{t("كل الفرمور")}</option>
         <option value="stock">Stock</option>
         <option value="braiins">Braiins</option>
         <option value="vnish">Vnish</option>
@@ -52,19 +53,19 @@ export function Toolbar({
       </select>
       <span className="spacer" style={{ marginInlineStart: "auto" }} />
       <button className="btn primary" onClick={onScan}>
-        🔍 فحص الشبكة
+        🔍 {t("فحص الشبكة")}
       </button>
       <button className="btn" onClick={onAddDevice}>
-        + إضافة يدوي
+        + {t("إضافة يدوي")}
       </button>
-      <button className="btn" onClick={onTelegram} title="تنبيهات على جوالك عبر تيليجرام">
-        🔔 تنبيهات الجوال
+      <button className="btn" onClick={onTelegram} title={t("تنبيهات على جوالك عبر تيليجرام")}>
+        🔔 {t("تنبيهات الجوال")}
       </button>
-      <button className="btn" onClick={onRecovery} title="إصلاح ذاتي تلقائي للأجهزة">
-        🤖 الإصلاح الذاتي
+      <button className="btn" onClick={onRecovery} title={t("إصلاح ذاتي تلقائي للأجهزة")}>
+        🤖 {t("الإصلاح الذاتي")}
       </button>
-      <button className="btn" onClick={onCheckUpdate} title="تحقق من وجود تحديث">
-        🔄 تحديث
+      <button className="btn" onClick={onCheckUpdate} title={t("تحقق من وجود تحديث")}>
+        🔄 {t("تحديث")}
       </button>
     </div>
   );

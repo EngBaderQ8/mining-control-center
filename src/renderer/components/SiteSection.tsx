@@ -2,6 +2,7 @@ import React from "react";
 import type { SiteGroup, SortKey, SortState } from "../state/store";
 import type { ControlCommand } from "../../core/drivers/types";
 import { DeviceTable } from "./DeviceTable";
+import { t } from "../i18n";
 
 interface Props {
   group: SiteGroup;
@@ -47,24 +48,24 @@ export function SiteSection({
           type="button"
           className="sitetoggle"
           aria-expanded={!collapsed}
-          title={collapsed ? "اضغط لعرض الأجهزة" : "اضغط لطيّ الموقع"}
+          title={collapsed ? t("اضغط لعرض الأجهزة") : t("اضغط لطيّ الموقع")}
           onClick={() => onToggleCollapse(site.id)}
         >
           <span className={`chev ${collapsed ? "" : "open"}`}>◀</span>
           <span className={`dot ${siteState}`}></span>
-          <span className="name">موقع: {site.name}</span>
+          <span className="name">{t("موقع: {name}", { name: site.name })}</span>
           <span className="meta">
-            · {views.length} جهاز · {online} شغّال
-            {warning > 0 && <span className="warn"> · {warning} تحذير</span>}
-            {offline > 0 && <span className="off"> · {offline} غير متصل</span>} · {siteTHs.toFixed(0)} TH/s
+            {t("· {count} جهاز · {online} شغّال", { count: views.length, online })}
+            {warning > 0 && <span className="warn">{t(" · {warning} تحذير", { warning })}</span>}
+            {offline > 0 && <span className="off">{t(" · {offline} غير متصل", { offline })}</span>} · {siteTHs.toFixed(0)} TH/s
           </span>
         </button>
         <span className="spacer" style={{ marginInlineStart: "auto" }} />
         <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
-          تحديد كل الموقع
+          {t("تحديد كل الموقع")}
         </button>
         <button className="btn stop" onClick={() => onDeleteSite(site.id, site.name)}>
-          🗑 حذف الموقع
+          {t("🗑 حذف الموقع")}
         </button>
       </div>
       {!collapsed && (

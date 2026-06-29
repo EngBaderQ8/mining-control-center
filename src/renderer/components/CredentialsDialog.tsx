@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { t } from "../i18n";
 
 interface Props {
   count: number;
@@ -15,22 +16,23 @@ export function CredentialsDialog({ count, onClose, onSubmit }: Props): React.Re
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
-        <h3>🔑 بيانات دخول الأجهزة ({count})</h3>
+        <h3>🔑 {t("بيانات دخول الأجهزة")} ({count})</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          نفس اسم المستخدم وكلمة المرور اللي تدخل فيها واجهة الأسيك (المتصفح). لازمة عشان أوامر
-          التشغيل/الإيقاف/إعادة التشغيل تشتغل. تُحفظ مشفّرة على جهازك فقط.
+          {t(
+            "نفس اسم المستخدم وكلمة المرور اللي تدخل فيها واجهة الأسيك (المتصفح). لازمة عشان أوامر التشغيل/الإيقاف/إعادة التشغيل تشتغل. تُحفظ مشفّرة على جهازك فقط.",
+          )}
         </p>
 
         <div className="field">
-          <label>اسم المستخدم</label>
+          <label>{t("اسم المستخدم")}</label>
           <input className="input" value={user} onChange={(e) => setUser(e.target.value)} />
         </div>
         <div className="field">
-          <label>كلمة المرور</label>
+          <label>{t("كلمة المرور")}</label>
           <input
             className="input"
             type="password"
-            placeholder="كلمة مرور واجهة الأسيك"
+            placeholder={t("كلمة مرور واجهة الأسيك")}
             value={pass}
             onChange={(e) => setPass(e.target.value)}
           />
@@ -42,10 +44,10 @@ export function CredentialsDialog({ count, onClose, onSubmit }: Props): React.Re
             disabled={!user.trim()}
             onClick={() => onSubmit(user.trim(), pass)}
           >
-            حفظ لكل المحدد ({count})
+            {t("حفظ لكل المحدد")} ({count})
           </button>
           <button className="btn" onClick={onClose}>
-            إلغاء
+            {t("إلغاء")}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import type { SiteGroup, DeviceView } from "../state/store";
+import { t } from "../i18n";
 
 /** Tile colour by temperature (or grey when offline) — a farm-floor heat view. */
 function tileColor(v: DeviceView): string {
@@ -23,21 +24,21 @@ export function Heatmap({ groups }: { groups: SiteGroup[] }): React.ReactElement
   return (
     <div>
       <div className="heatlegend">
-        <span>بارد</span>
+        <span>{t("بارد")}</span>
         <i style={{ background: "#2f9e54" }} />
         <i style={{ background: "#7fb01e" }} />
         <i style={{ background: "#d4a017" }} />
         <i style={{ background: "#e6731c" }} />
         <i style={{ background: "#d23b3b" }} />
-        <span>ساخن</span>
+        <span>{t("ساخن")}</span>
         <i style={{ background: "#3a3d44" }} />
-        <span>غير متصل</span>
+        <span>{t("غير متصل")}</span>
       </div>
       {groups.map((g) => (
         <div className="site" key={g.site.id} style={{ padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>
-            موقع: {g.site.name} <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>
-              · {g.views.length} جهاز
+            {t("موقع: {name}", { name: g.site.name })} <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>
+              {t("· {count} جهاز", { count: g.views.length })}
             </span>
           </div>
           <div className="heatgrid">
@@ -48,9 +49,13 @@ export function Heatmap({ groups }: { groups: SiteGroup[] }): React.ReactElement
                   key={v.device.id}
                   className="heattile"
                   style={{ background: tileColor(v) }}
-                  title={`${v.device.name}\nالحالة: ${s?.state ?? "غير متصل"}\nالحرارة: ${
-                    s?.maxTempC ?? "—"
-                  }°C\nالهاش: ${s ? s.hashrateTHs.toFixed(1) + " TH" : "—"}\nالوركر: ${s?.worker ?? "—"}`}
+                  title={t("{name}\nالحالة: {state}\nالحرارة: {temp}°C\nالهاش: {hash}\nالوركر: {worker}", {
+                    name: v.device.name,
+                    state: s?.state ?? t("غير متصل"),
+                    temp: s?.maxTempC ?? "—",
+                    hash: s ? s.hashrateTHs.toFixed(1) + " TH" : "—",
+                    worker: s?.worker ?? "—",
+                  })}
                 >
                   <span className="hn">{shortName(v.device.name)}</span>
                   <span className="ht">{s && s.maxTempC > 0 ? `${s.maxTempC}°` : "—"}</span>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { t } from "../i18n";
 
 export interface PoolInput {
   url: string;
@@ -22,10 +23,10 @@ export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactE
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>تغيير البول لـ {count} جهاز</h3>
+        <h3>{t("تغيير البول لـ {count} جهاز", { count })}</h3>
 
         <div className="field">
-          <label>عنوان البول (URL)</label>
+          <label>{t("عنوان البول (URL)")}</label>
           <input
             className="input"
             placeholder="stratum+tcp://pool.example.com:3333"
@@ -34,7 +35,7 @@ export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactE
           />
         </div>
         <div className="field">
-          <label>الوركر / الحساب (User)</label>
+          <label>{t("الوركر / الحساب (User)")}</label>
           <input
             className="input"
             placeholder="account.worker"
@@ -43,7 +44,7 @@ export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactE
           />
         </div>
         <div className="field">
-          <label>كلمة المرور (Pass)</label>
+          <label>{t("كلمة المرور (Pass)")}</label>
           <input className="input" value={pass} onChange={(e) => setPass(e.target.value)} />
         </div>
 
@@ -53,10 +54,10 @@ export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactE
             disabled={!valid}
             onClick={() => onSubmit({ url: url.trim(), user: user.trim(), pass })}
           >
-            تطبيق
+            {t("تطبيق")}
           </button>
           <button className="btn" onClick={onClose}>
-            إلغاء
+            {t("إلغاء")}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { t } from "../i18n";
 import type { PowerProfile } from "../../core/drivers/types";
 
 interface Props {
@@ -18,9 +19,9 @@ export function ProfileDialog({ count, onClose, onSubmit }: Props): React.ReactE
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
-        <h3>⚡ وضع الطاقة ({count} جهاز)</h3>
+        <h3>⚡ {t("وضع الطاقة ({count} جهاز)", { count })}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          ⚠ تجريبي — يعتمد على فرمور الجهاز. جرّبه على <b>جهاز واحد أول</b> وتأكد إنه طبّق، قبل ما تطبّقه على الكل.
+          ⚠ {t("تجريبي — يعتمد على فرمور الجهاز. جرّبه على")} <b>{t("جهاز واحد أول")}</b> {t("وتأكد إنه طبّق، قبل ما تطبّقه على الكل.")}
         </p>
 
         {MODES.map((m) => (
@@ -45,18 +46,18 @@ export function ProfileDialog({ count, onClose, onSubmit }: Props): React.ReactE
               style={{ marginTop: 3 }}
             />
             <span>
-              <b>{m.label}</b>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.desc}</div>
+              <b>{t(m.label)}</b>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>{t(m.desc)}</div>
             </span>
           </label>
         ))}
 
         <div className="actions">
           <button className="btn primary" onClick={() => onSubmit(mode)}>
-            تطبيق على {count}
+            {t("تطبيق على")} {count}
           </button>
           <button className="btn" onClick={onClose}>
-            إلغاء
+            {t("إلغاء")}
           </button>
         </div>
       </div>

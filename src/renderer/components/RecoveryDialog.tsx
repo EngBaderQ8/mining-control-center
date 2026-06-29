@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
+import { t } from "../i18n";
 import type { RecoverySettings } from "../../shared/api";
 
 const DEFAULTS: RecoverySettings = {
@@ -28,10 +29,11 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
-        <h3>🤖 الإصلاح الذاتي التلقائي</h3>
+        <h3>🤖 {t("الإصلاح الذاتي التلقائي")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          يصلّح المزرعة بنفسه: يعيد تشغيل الجهاز اللي يطول أوفلاين، ويوقف الجهاز اللي يسخن زيادة —
-          بدون تدخّل منك، ويرسل لك تنبيه بكل إجراء.
+          {t(
+            "يصلّح المزرعة بنفسه: يعيد تشغيل الجهاز اللي يطول أوفلاين، ويوقف الجهاز اللي يسخن زيادة — بدون تدخّل منك، ويرسل لك تنبيه بكل إجراء.",
+          )}
         </p>
 
         <div className="field">
@@ -41,11 +43,11 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
               checked={s.enabled}
               onChange={(e) => setS({ ...s, enabled: e.target.checked })}
             />{" "}
-            تفعيل الإصلاح الذاتي
+            {t("تفعيل الإصلاح الذاتي")}
           </label>
         </div>
         <div className="field">
-          <label>أعد تشغيل الجهاز إذا بقي غير متصل (دقائق)</label>
+          <label>{t("أعد تشغيل الجهاز إذا بقي غير متصل (دقائق)")}</label>
           <input
             className="input"
             type="number"
@@ -56,7 +58,7 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
           />
         </div>
         <div className="field">
-          <label>أوقف الجهاز إذا تجاوزت حرارته (°C)</label>
+          <label>{t("أوقف الجهاز إذا تجاوزت حرارته (°C)")}</label>
           <input
             className="input"
             type="number"
@@ -67,7 +69,7 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
           />
         </div>
         <div className="field">
-          <label>فترة تهدئة بين الإجراءات لنفس الجهاز (دقائق)</label>
+          <label>{t("فترة تهدئة بين الإجراءات لنفس الجهاز (دقائق)")}</label>
           <input
             className="input"
             type="number"
@@ -77,16 +79,15 @@ export function RecoveryDialog({ onClose }: { onClose: () => void }): React.Reac
         </div>
 
         <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.7 }}>
-          ⚠ يحتاج أن يكون التحكم شغّالاً (باسورد الأجهزة صحيح). يعمل على لابتوب الموقع الموصول
-          بالأجهزة.
+          ⚠ {t("يحتاج أن يكون التحكم شغّالاً (باسورد الأجهزة صحيح). يعمل على لابتوب الموقع الموصول بالأجهزة.")}
         </p>
 
         <div className="actions">
           <button className="btn primary" onClick={() => void save()}>
-            حفظ
+            {t("حفظ")}
           </button>
           <button className="btn" onClick={onClose}>
-            إلغاء
+            {t("إلغاء")}
           </button>
         </div>
       </div>

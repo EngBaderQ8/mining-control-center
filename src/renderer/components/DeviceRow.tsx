@@ -1,12 +1,13 @@
 import React from "react";
 import type { DeviceView } from "../state/store";
 import type { ControlCommand } from "../../core/drivers/types";
+import { t } from "../i18n";
 
 function fmtUptime(sec: number): string {
   if (sec <= 0) return "—";
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
-  return d > 0 ? `${d}ي ${h}س` : `${h}س`;
+  return d > 0 ? t("{d}ي {h}س", { d, h }) : t("{h}س", { h });
 }
 
 interface Props {
@@ -29,7 +30,7 @@ export function DeviceRow({ view, selected, onToggle, onCommand, onDelete }: Pro
       <td>{device.name}</td>
       <td>
         <span className={`dot ${state}`}></span>{" "}
-        {state === "online" ? "شغّال" : state === "warning" ? "تحذير" : "غير متصل"}
+        {state === "online" ? t("شغّال") : state === "warning" ? t("تحذير") : t("غير متصل")}
       </td>
       <td>
         <span className="fw">{device.firmware}</span>
@@ -47,14 +48,14 @@ export function DeviceRow({ view, selected, onToggle, onCommand, onDelete }: Pro
         <span className="rowact">
           <button
             className="iconbtn"
-            title="إعادة تشغيل التعدين"
+            title={t("إعادة تشغيل التعدين")}
             onClick={() => onCommand(device.id, "restartMining")}
           >
             ↻
           </button>
           <button
             className="iconbtn"
-            title="إيقاف التعدين"
+            title={t("إيقاف التعدين")}
             onClick={() => onCommand(device.id, "stopMining")}
           >
             ⏸
@@ -66,7 +67,7 @@ export function DeviceRow({ view, selected, onToggle, onCommand, onDelete }: Pro
           >
             ⟳
           </button>
-          <button className="iconbtn" title="حذف الجهاز" onClick={() => onDelete(device.id)}>
+          <button className="iconbtn" title={t("حذف الجهاز")} onClick={() => onDelete(device.id)}>
             🗑
           </button>
         </span>

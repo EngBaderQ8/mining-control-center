@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { Site, Firmware } from "../../core/model/device";
+import { t } from "../i18n";
 
 export interface NewDevicePayload {
   siteId: string;
@@ -52,39 +53,39 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>إضافة جهاز ASIC</h3>
+        <h3>{t("إضافة جهاز ASIC")}</h3>
 
         <div className="field">
-          <label>الموقع</label>
+          <label>{t("الموقع")}</label>
           <select className="select" value={p.siteId} onChange={(e) => set("siteId", e.target.value)}>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-            <option value="__new__">+ موقع جديد…</option>
+            <option value="__new__">{t("+ موقع جديد…")}</option>
           </select>
         </div>
 
         {p.siteId === "__new__" && (
           <div className="field">
-            <label>اسم الموقع الجديد</label>
+            <label>{t("اسم الموقع الجديد")}</label>
             <input className="input" value={p.siteName} onChange={(e) => set("siteName", e.target.value)} />
           </div>
         )}
 
         <div className="field">
-          <label>اسم الجهاز</label>
+          <label>{t("اسم الجهاز")}</label>
           <input className="input" value={p.name} onChange={(e) => set("name", e.target.value)} />
         </div>
 
         <div className="field">
-          <label>الموديل</label>
+          <label>{t("الموديل")}</label>
           <input className="input" value={p.model} onChange={(e) => set("model", e.target.value)} />
         </div>
 
         <div className="field">
-          <label>الفرمور</label>
+          <label>{t("الفرمور")}</label>
           <select
             className="select"
             value={p.firmware}
@@ -98,10 +99,10 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
         </div>
 
         <div className="field">
-          <label>عنوان الجهاز المحلي (IP على الشبكة)</label>
+          <label>{t("عنوان الجهاز المحلي (IP على الشبكة)")}</label>
           <input
             className="input"
-            placeholder="مثال: 192.168.1.50"
+            placeholder={t("مثال: 192.168.1.50")}
             value={p.host}
             onChange={(e) => set("host", e.target.value)}
           />
@@ -109,7 +110,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
 
         <div style={{ display: "flex", gap: 8 }}>
           <div className="field" style={{ flex: 1 }}>
-            <label>منفذ API (افتراضي 4028)</label>
+            <label>{t("منفذ API (افتراضي 4028)")}</label>
             <input
               className="input"
               type="number"
@@ -118,7 +119,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
             />
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label>منفذ التحكم (80 ستوك / 4028 معدّل)</label>
+            <label>{t("منفذ التحكم (80 ستوك / 4028 معدّل)")}</label>
             <input
               className="input"
               type="number"
@@ -129,7 +130,7 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
         </div>
 
         <div className="field">
-          <label>بيانات الدخول (اختياري — مثال root:root)</label>
+          <label>{t("بيانات الدخول (اختياري — مثال root:root)")}</label>
           <input
             className="input"
             type="password"
@@ -140,10 +141,10 @@ export function AddDeviceDialog({ sites, onClose, onSubmit }: Props): React.Reac
 
         <div className="actions">
           <button className="btn primary" disabled={!valid} onClick={() => onSubmit(p)}>
-            حفظ
+            {t("حفظ")}
           </button>
           <button className="btn" onClick={onClose}>
-            إلغاء
+            {t("إلغاء")}
           </button>
         </div>
       </div>

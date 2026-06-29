@@ -1,5 +1,6 @@
 import React from "react";
 import type { ControlCommand } from "../../core/drivers/types";
+import { t } from "../i18n";
 
 interface Props {
   selectedCount: number;
@@ -25,38 +26,38 @@ export function BulkActionBar({
   const none = selectedCount === 0;
   return (
     <div className="bar">
-      <span style={{ fontSize: 13, color: "var(--muted)" }}>أوامر جماعية على المحدد:</span>
+      <span style={{ fontSize: 13, color: "var(--muted)" }}>{t("أوامر جماعية على المحدد:")}</span>
       <button className="btn go" disabled={none} onClick={() => onBulk("startMining")}>
-        ▶ تشغيل التعدين
+        ▶ {t("تشغيل التعدين")}
       </button>
       <button className="btn warn" disabled={none} onClick={() => onBulk("restartMining")}>
-        ↻ إعادة تشغيل
+        ↻ {t("إعادة تشغيل")}
       </button>
       <button className="btn stop" disabled={none} onClick={() => onBulk("stopMining")}>
-        ⏸ إيقاف التعدين
+        ⏸ {t("إيقاف التعدين")}
       </button>
       <button className="btn" disabled={none} onClick={() => onBulk("reboot")}>
         ⟳ Reboot
       </button>
       <button className="btn" disabled={none} onClick={onSetPool}>
-        ⛏ تغيير البول
+        ⛏ {t("تغيير البول")}
       </button>
       <button className="btn" disabled={none} onClick={onSetProfile}>
-        ⚡ وضع الطاقة
+        ⚡ {t("وضع الطاقة")}
       </button>
       <button className="btn" disabled={none} onClick={onSetCredentials}>
-        🔑 بيانات الدخول
+        🔑 {t("بيانات الدخول")}
       </button>
       <span className="spacer" style={{ marginInlineStart: "auto", fontSize: 13 }}>
-        محدّد: <b>{selectedCount}</b> / {totalVisible} ·{" "}
+        {t("محدّد:")} <b>{selectedCount}</b> / {totalVisible} ·{" "}
         <a href="#" onClick={(e) => (e.preventDefault(), onSelectAll())}>
-          تحديد الكل
+          {t("تحديد الكل")}
         </a>
         {selectedCount > 0 && (
           <>
             {" · "}
             <a href="#" onClick={(e) => (e.preventDefault(), onClear())}>
-              إلغاء التحديد
+              {t("إلغاء التحديد")}
             </a>
           </>
         )}
