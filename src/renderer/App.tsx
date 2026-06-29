@@ -147,6 +147,27 @@ export function App(): React.ReactElement {
     [selectedIds, showToast],
   );
 
+  const onDeleteDevice = useCallback(
+    async (deviceId: string) => {
+      if (!window.confirm("حذف هذا الجهاز؟")) return;
+      await api.deleteDevice(deviceId);
+      await reload();
+      showToast("تم حذف الجهاز");
+    },
+    [reload, showToast],
+  );
+
+  const onDeleteSite = useCallback(
+    async (siteId: string, siteName: string) => {
+      if (!window.confirm(`حذف الموقع «${siteName}» وكل أجهزته؟`)) return;
+      await api.deleteSite(siteId);
+      setSelectedIds(new Set());
+      await reload();
+      showToast("تم حذف الموقع");
+    },
+    [reload, showToast],
+  );
+
   const onAddDevice = useCallback(
     async (p: NewDevicePayload) => {
       let siteId = p.siteId;
@@ -207,6 +228,8 @@ export function App(): React.ReactElement {
             onToggle={toggle}
             onSelectSite={selectSite}
             onCommand={onCommand}
+            onDeleteSite={onDeleteSite}
+            onDeleteDevice={onDeleteDevice}
           />
         ))
       )}

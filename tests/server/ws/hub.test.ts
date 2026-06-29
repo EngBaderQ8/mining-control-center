@@ -73,6 +73,23 @@ describe("ConnectionHub", () => {
     expect(sent[0]).toMatchObject({ type: "command.ack", outcome: { ok: false } });
   });
 
+  it("deletes a device and a site, broadcasting a fresh snapshot", async () => {
+    const { repo, router, uid, broadcast, broadcasts } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    repo.upsertSite({ id: "s1", userId: uid, name: "site" });
+    repo.upsertDevice({
+      id: "d1", userId: uid, siteId: "s1", agentId: "ag1", name: "n", model: "S19",
+      firmware: "stock", host: "h", apiPort: 4028, controlPort: 80,
+    });
+
+    await hub.handleMessage({ type: "device.delete", deviceId: "d1" });
+    expect(repo.listDevices(uid)).toHaveLength(0);
+    expect(broadcasts.some((m) => m.type === "snapshot")).toBe(true);
+
+    await hub.handleMessage({ type: "site.delete", siteId: "s1" });
+    expect(repo.listSites(uid)).toHaveLength(0);
+  });
+
   it("broadcasts status updates and answers snapshot requests", async () => {
     const { repo, router, uid, broadcast, broadcasts } = setup();
     const sent: ServerMessage[] = [];

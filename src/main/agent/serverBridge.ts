@@ -125,6 +125,18 @@ export class ServerBridge {
     this.agent?.registerDevice(device);
   }
 
+  /** Delete a device locally (so this agent won't re-register it) and on the server. */
+  deleteDevice(deviceId: string): void {
+    this.deps.repo.deleteDevice(deviceId);
+    if (this.connected) this.client.send({ type: "device.delete", deviceId });
+  }
+
+  /** Delete a whole site (and its devices) locally and on the server. */
+  deleteSite(siteId: string): void {
+    this.deps.repo.deleteSite(siteId);
+    if (this.connected) this.client.send({ type: "site.delete", siteId });
+  }
+
   /**
    * Scan the local network for ASICs and auto-register everything found under a
    * new site. Runs on the agent (the machine on the miners' LAN). Returns how

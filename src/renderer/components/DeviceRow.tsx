@@ -14,9 +14,10 @@ interface Props {
   selected: boolean;
   onToggle: (id: string) => void;
   onCommand: (id: string, cmd: ControlCommand) => void;
+  onDelete: (id: string) => void;
 }
 
-export function DeviceRow({ view, selected, onToggle, onCommand }: Props): React.ReactElement {
+export function DeviceRow({ view, selected, onToggle, onCommand, onDelete }: Props): React.ReactElement {
   const { device, status } = view;
   const state = status?.state ?? "offline";
   const warnTemp = status && status.maxTempC >= 80;
@@ -64,6 +65,9 @@ export function DeviceRow({ view, selected, onToggle, onCommand }: Props): React
             onClick={() => onCommand(device.id, "reboot")}
           >
             ⟳
+          </button>
+          <button className="iconbtn" title="حذف الجهاز" onClick={() => onDelete(device.id)}>
+            🗑
           </button>
         </span>
       </td>

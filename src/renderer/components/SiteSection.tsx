@@ -9,6 +9,8 @@ interface Props {
   onToggle: (id: string) => void;
   onSelectSite: (ids: string[]) => void;
   onCommand: (id: string, cmd: ControlCommand) => void;
+  onDeleteSite: (siteId: string, siteName: string) => void;
+  onDeleteDevice: (deviceId: string) => void;
 }
 
 export function SiteSection({
@@ -17,6 +19,8 @@ export function SiteSection({
   onToggle,
   onSelectSite,
   onCommand,
+  onDeleteSite,
+  onDeleteDevice,
 }: Props): React.ReactElement {
   const { site, views } = group;
   const online = views.filter((v) => v.status && v.status.state !== "offline").length;
@@ -36,12 +40,16 @@ export function SiteSection({
         <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
           تحديد كل الموقع
         </button>
+        <button className="btn stop" onClick={() => onDeleteSite(site.id, site.name)}>
+          🗑 حذف الموقع
+        </button>
       </div>
       <DeviceTable
         views={views}
         selectedIds={selectedIds}
         onToggle={onToggle}
         onCommand={onCommand}
+        onDeleteDevice={onDeleteDevice}
       />
     </div>
   );

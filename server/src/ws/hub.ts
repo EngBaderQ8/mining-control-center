@@ -53,6 +53,14 @@ export class ConnectionHub {
           statuses: this.repo.listStatuses(this.userId),
         });
         break;
+      case "device.delete":
+        this.repo.deleteDevice(this.userId, msg.deviceId);
+        this.broadcastSnapshot();
+        break;
+      case "site.delete":
+        this.repo.deleteSite(this.userId, msg.siteId);
+        this.broadcastSnapshot();
+        break;
       case "command.send": {
         const agentId = this.repo.deviceAgent(this.userId, msg.deviceId);
         if (!agentId) {
@@ -82,6 +90,16 @@ export class ConnectionHub {
         break;
       }
     }
+  }
+
+  /** Push a fresh full snapshot to every socket of this user (after a structural change). */
+  private broadcastSnapshot(): void {
+    this.broadcast(this.userId, {
+      type: "snapshot",
+      sites: this.repo.listSites(this.userId),
+      devices: this.repo.listDevices(this.userId),
+      statuses: this.repo.listStatuses(this.userId),
+    });
   }
 
   onClose(): void {

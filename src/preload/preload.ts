@@ -20,6 +20,8 @@ const api: Api = {
   addSite: (site: Site) => ipcRenderer.invoke(CH.siteAdd, site),
   scanNetwork: (siteName: string, base?: string) =>
     ipcRenderer.invoke(CH.deviceScan, siteName, base),
+  deleteDevice: (deviceId: string) => ipcRenderer.invoke(CH.deviceDelete, deviceId),
+  deleteSite: (siteId: string) => ipcRenderer.invoke(CH.siteDelete, siteId),
 
   onSnapshot: (cb: (snap: Snapshot) => void) => {
     const handler = (_e: unknown, snap: Snapshot): void => cb(snap);

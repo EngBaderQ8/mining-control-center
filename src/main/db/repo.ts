@@ -71,6 +71,14 @@ export class DeviceRepo {
     this.persist();
   }
 
+  deleteSite(siteId: string): void {
+    for (const d of this.data.devices.filter((x) => x.siteId === siteId))
+      delete this.data.secrets[d.id];
+    this.data.devices = this.data.devices.filter((d) => d.siteId !== siteId);
+    this.data.sites = this.data.sites.filter((s) => s.id !== siteId);
+    this.persist();
+  }
+
   setSecret(deviceId: string, enc: Buffer): void {
     this.data.secrets[deviceId] = enc.toString("base64");
     this.persist();

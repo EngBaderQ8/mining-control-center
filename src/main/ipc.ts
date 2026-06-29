@@ -38,4 +38,10 @@ export function registerIpc(bridge: ServerBridge): void {
   ipcMain.handle(CH.deviceScan, (_e, siteName: string, base?: string) =>
     bridge.scanNetwork(siteName, base),
   );
+  ipcMain.handle(CH.deviceDelete, (_e, deviceId: string) => {
+    bridge.deleteDevice(deviceId);
+  });
+  ipcMain.handle(CH.siteDelete, (_e, siteId: string) => {
+    bridge.deleteSite(siteId);
+  });
 }

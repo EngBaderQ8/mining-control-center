@@ -32,7 +32,9 @@ export const CH = {
   deviceBulk: "device:bulk",
   deviceAdd: "device:add",
   deviceScan: "device:scan",
+  deviceDelete: "device:delete",
   siteAdd: "site:add",
+  siteDelete: "site:delete",
   // push (main -> renderer)
   snapshotUpdate: "snapshot:update",
   statusesUpdate: "statuses:update",
@@ -57,6 +59,8 @@ export interface Api {
   sendBulk(deviceIds: string[], command: ControlCommand): Promise<CommandOutcome[]>;
   addDevice(device: Device, secret?: string): Promise<void>;
   addSite(site: Site): Promise<void>;
+  deleteDevice(deviceId: string): Promise<void>;
+  deleteSite(siteId: string): Promise<void>;
   scanNetwork(
     siteName: string,
     base?: string,

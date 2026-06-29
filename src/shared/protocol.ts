@@ -37,6 +37,14 @@ export interface CommandSend {
   command: ControlCommand;
   params?: Record<string, string>;
 }
+export interface DeviceDelete {
+  type: "device.delete";
+  deviceId: string;
+}
+export interface SiteDelete {
+  type: "site.delete";
+  siteId: string;
+}
 
 // Server -> Viewer
 export interface SnapshotMsg {
@@ -66,7 +74,7 @@ export type AgentMessage =
   | DeviceRegister
   | StatusUpdate
   | CommandResult;
-export type ViewerMessage = SnapshotRequest | CommandSend;
+export type ViewerMessage = SnapshotRequest | CommandSend | DeviceDelete | SiteDelete;
 export type ClientMessage = AgentMessage | ViewerMessage;
 export type ServerMessage = SnapshotMsg | CommandAck | CommandExec | StatusUpdate;
 
@@ -78,6 +86,8 @@ const CLIENT_TYPES = new Set<string>([
   "command.result",
   "snapshot.request",
   "command.send",
+  "device.delete",
+  "site.delete",
 ]);
 
 export function isClientMessage(v: unknown): v is ClientMessage {

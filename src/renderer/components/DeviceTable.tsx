@@ -8,9 +8,16 @@ interface Props {
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   onCommand: (id: string, cmd: ControlCommand) => void;
+  onDeleteDevice: (deviceId: string) => void;
 }
 
-export function DeviceTable({ views, selectedIds, onToggle, onCommand }: Props): React.ReactElement {
+export function DeviceTable({
+  views,
+  selectedIds,
+  onToggle,
+  onCommand,
+  onDeleteDevice,
+}: Props): React.ReactElement {
   return (
     <table className="tbl">
       <thead>
@@ -35,6 +42,7 @@ export function DeviceTable({ views, selectedIds, onToggle, onCommand }: Props):
             selected={selectedIds.has(v.device.id)}
             onToggle={onToggle}
             onCommand={onCommand}
+            onDelete={onDeleteDevice}
           />
         ))}
       </tbody>

@@ -65,6 +65,14 @@ export class ServerRepo {
     this.db.prepare(`DELETE FROM device_status WHERE userId=? AND deviceId=?`).run(userId, id);
   }
 
+  deleteSite(userId: string, siteId: string): void {
+    const ids = this.db
+      .prepare(`SELECT id FROM devices WHERE userId=? AND siteId=?`)
+      .all(userId, siteId) as Array<{ id: string }>;
+    for (const { id } of ids) this.deleteDevice(userId, id);
+    this.db.prepare(`DELETE FROM sites WHERE userId=? AND id=?`).run(userId, siteId);
+  }
+
   deviceAgent(userId: string, deviceId: string): string | null {
     const r = this.db.prepare(`SELECT agentId FROM devices WHERE userId=? AND id=?`).get(userId, deviceId) as
       | { agentId: string }
