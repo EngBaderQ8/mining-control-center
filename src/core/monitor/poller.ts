@@ -20,16 +20,17 @@ function offline(deviceId: string, now: number): DeviceStatus {
 }
 
 /**
- * Poll one device. Requests summary/stats/pools SEQUENTIALLY (one connection at
- * a time) because Antminer firmware often refuses concurrent 4028 connections,
- * and parses leniently from the raw text.
+ * Poll one device. Tries a single combined `summary+stats+pools` request first
+ * (one connection — Antminer firmware dislikes concurrent 4028 connections), and
+ * falls back to sequential single commands. Parsing is lenient/regex-based, so
+ * slightly-malformed JSON and varied formats still yield a hashrate.
  */
 export async function pollDevice(
   device: Device,
   t: Transport,
   now: number,
 ): Promise<DeviceStatus> {
-  const fetch = async (cmd: string): Promise<string> => {
+  const ask = async (cmd: string): Promise<string> => {
     try {
       return await t.tcp4028(device.host, device.apiPort, buildRequest(cmd));
     } catch {
@@ -37,9 +38,23 @@ export async function pollDevice(
     }
   };
 
-  const sumRaw = await fetch("summary");
-  if (!sumRaw) return offline(device.id, now); // unreachable / no API
-  const statRaw = await fetch("stats");
-  const poolRaw = await fetch("pools");
-  return extractStatusFromRaw(device.id, sumRaw, statRaw, poolRaw, now);
+  // One connection that returns everything (fields land in a single blob).
+  const combined = await ask("summary+stats+pools");
+  if (combined) {
+    const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
+    if (s.hashrateTHs > 0) return s;
+  }
+
+  // Fallback: separate sequential requests.
+  const sumRaw = await ask("summary");
+  const statRaw = await ask("stats");
+  const poolRaw = await ask("pools");
+  if (!sumRaw && !statRaw && !combined) return offline(device.id, now);
+  return extractStatusFromRaw(
+    device.id,
+    sumRaw || combined,
+    statRaw || combined,
+    poolRaw || combined,
+    now,
+  );
 }

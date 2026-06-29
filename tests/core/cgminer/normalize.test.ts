@@ -39,4 +39,35 @@ describe("extractStatusFromRaw (robust, regex-based)", () => {
   it("is offline when there's no hashrate in the response", () => {
     expect(extractStatusFromRaw("d", "", "", "", 1).state).toBe("offline");
   });
+
+  it("handles a single combined summary+stats+pools blob", () => {
+    const blob =
+      '{"summary":[{"SUMMARY":[{"GHS 5s":300000,"GHS av":301000,"Elapsed":1000}]}],"stats":[{"STATS":[{"temp2_1":61,"temp2_2":68,"fan1":4100,"fan2":3900}]}],"pools":[{"POOLS":[{"URL":"stratum+tcp://p:3333","User":"acct.w9"}]}]}';
+    const s = extractStatusFromRaw("d", blob, blob, blob, 1);
+    expect(s.state).toBe("online");
+    expect(s.hashrateTHs).toBeCloseTo(300, 0);
+    expect(s.maxTempC).toBe(68);
+    expect(s.fanRpm).toBe(4100);
+    expect(s.worker).toBe("w9");
+  });
+
+  it("supports MHS and THS hashrate units", () => {
+    const mhs = extractStatusFromRaw("d", '{"SUMMARY":[{"MHS 5s":300000000}]}', "", "", 1);
+    expect(mhs.hashrateTHs).toBeCloseTo(300, 0);
+    const ths = extractStatusFromRaw("d", '{"SUMMARY":[{"THS 5s":110.5}]}', "", "", 1);
+    expect(ths.hashrateTHs).toBeCloseTo(110.5, 1);
+  });
+
+  it("supports modded-firmware rate_ keys and fan_num naming", () => {
+    const s = extractStatusFromRaw(
+      "d",
+      '{"rate_5s": 95000, "rate_avg": 94000}',
+      '{"temp_chip2_1": 70, "fan_1": 3800}',
+      '{"URL":"x://p:1","User":"a.b"}',
+      1,
+    );
+    expect(s.hashrateTHs).toBeCloseTo(95, 0);
+    expect(s.maxTempC).toBe(70);
+    expect(s.fanRpm).toBe(3800);
+  });
 });

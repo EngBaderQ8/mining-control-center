@@ -16,6 +16,9 @@ const dev: Device = {
 
 const ok: Transport = {
   async tcp4028(_h, _p, cmd) {
+    // The combined command returns every section in one blob (real behaviour).
+    if (cmd.includes("summary+stats+pools"))
+      return '{"summary":[{"SUMMARY":[{"GHS 5s":95000,"GHS av":94000,"Device Hardware%":0.1,"Elapsed":3600}]}],"stats":[{"STATS":[{"temp2_1":60,"temp2_2":75,"fan1":4000}]}],"pools":[{"POOLS":[{"URL":"stratum+tcp://p:3333","User":"a.w1"}]}]}';
     if (cmd.includes("summary"))
       return '{"SUMMARY":[{"GHS 5s":95000,"GHS av":94000,"Device Hardware%":0.1,"Elapsed":3600}]}';
     if (cmd.includes("stats")) return '{"STATS":[{"temp2_1":60,"temp2_2":75,"fan1":4000}]}';
