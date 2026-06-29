@@ -186,6 +186,11 @@ export class ServerBridge {
     };
   }
 
+  /** Apply self-healing settings to the local monitoring service. */
+  setRecovery(s: import("../../core/recovery/rules").RecoverySettings): void {
+    this.service.setRecovery(s);
+  }
+
   /** Set the web/control password for the given local devices (encrypted at rest,
    *  never sent to the server). Needed for control on miners whose password isn't
    *  the default root:root. */

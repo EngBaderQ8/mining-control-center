@@ -24,6 +24,13 @@ export interface TelegramSettings {
   chatId: string;
 }
 
+export interface RecoverySettings {
+  enabled: boolean;
+  rebootOfflineMin: number;
+  overheatStopC: number;
+  cooldownMin: number;
+}
+
 export interface UpdateStatus {
   state: "checking" | "available" | "downloading" | "ready" | "none" | "error" | "uptodate";
   percent?: number;
@@ -67,6 +74,9 @@ export const CH = {
   telegramSet: "tg:set",
   telegramTest: "tg:test",
   telegramDetect: "tg:detect",
+  // self-healing
+  recoveryGet: "recovery:get",
+  recoverySet: "recovery:set",
   // updates
   updateCheck: "update:check",
   appVersion: "app:version",
@@ -127,6 +137,9 @@ export interface Api {
   setTelegram(s: TelegramSettings): Promise<void>;
   testTelegram(s: TelegramSettings): Promise<{ ok: boolean; error?: string }>;
   detectChatId(token: string): Promise<{ chatId?: string; error?: string }>;
+  // self-healing
+  getRecovery(): Promise<RecoverySettings>;
+  setRecovery(s: RecoverySettings): Promise<void>;
   // updates
   checkUpdate(): Promise<UpdateCheckResult>;
   getVersion(): Promise<string>;

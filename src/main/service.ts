@@ -7,6 +7,7 @@ import { pollDevice } from "../core/monitor/poller";
 import { pollAll } from "../core/monitor/scheduler";
 import { runBulk } from "../core/bulk/engine";
 import { evaluateAlerts, type Alert } from "../core/alerts/rules";
+import { evaluateRecovery, DEFAULT_RECOVERY, type RecoverySettings } from "../core/recovery/rules";
 import type { DeviceRepo } from "./db/repo";
 
 export interface ServiceDeps {
@@ -44,11 +45,19 @@ export interface Snapshot {
 export class MiningService {
   private latest = new Map<string, DeviceStatus>();
   private timer: ReturnType<typeof setInterval> | null = null;
+  private recovery: RecoverySettings = DEFAULT_RECOVERY;
+  private offlineSince = new Map<string, number>();
+  private lastRecoveryAt = new Map<string, number>();
 
   constructor(
     private deps: ServiceDeps,
     private config: ServiceConfig = DEFAULT_CONFIG,
   ) {}
+
+  /** Configure self-healing (auto reboot offline / stop overheating). */
+  setRecovery(s: RecoverySettings): void {
+    this.recovery = s;
+  }
 
   getSnapshot(): Snapshot {
     return {
@@ -134,7 +143,35 @@ export class MiningService {
     }
     this.deps.emitStatuses(statuses);
     if (alerts.length) this.deps.emitAlerts(alerts);
+    this.runRecovery(statuses, devices, now);
     return statuses;
+  }
+
+  /** Self-healing: auto-reboot devices offline too long, stop overheating ones. */
+  private runRecovery(statuses: DeviceStatus[], devices: Device[], now: number): void {
+    if (!this.recovery.enabled) return;
+    for (const s of statuses) {
+      if (s.state === "offline") {
+        if (!this.offlineSince.has(s.deviceId)) this.offlineSince.set(s.deviceId, now);
+      } else {
+        this.offlineSince.delete(s.deviceId);
+      }
+      const decision = evaluateRecovery(
+        s,
+        this.offlineSince.get(s.deviceId) ?? null,
+        this.lastRecoveryAt.get(s.deviceId) ?? null,
+        this.recovery,
+        now,
+      );
+      if (!decision.action) continue;
+      this.lastRecoveryAt.set(s.deviceId, now);
+      const name = devices.find((d) => d.id === s.deviceId)?.name ?? s.deviceId;
+      const label = decision.action === "reboot" ? "إعادة تشغيل" : "إيقاف وقائي";
+      this.deps.emitAlerts([
+        { deviceId: s.deviceId, kind: "recovery", message: `🤖 إصلاح ذاتي: ${label} لـ ${name} (${decision.reason})` },
+      ]);
+      void this.sendCommand(s.deviceId, decision.action);
+    }
   }
 
   startMonitoring(): void {

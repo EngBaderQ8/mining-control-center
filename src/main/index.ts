@@ -19,10 +19,12 @@ import { ServerBridge } from "./agent/serverBridge";
 import { getNetworkStats } from "./profit/networkStats";
 import { AlertConfig } from "./alerts/config";
 import { sendTelegram, detectChatId } from "./alerts/telegram";
-import type { TelegramSettings } from "../shared/api";
+import { RecoveryConfig } from "./recovery/config";
+import type { TelegramSettings, RecoverySettings } from "../shared/api";
 
 let mainWindow: BrowserWindow | null = null;
 let alertConfig: AlertConfig | null = null;
+let recoveryConfig: RecoveryConfig | null = null;
 // Set by setupAutoUpdate so the startup check can be deferred until the renderer
 // has loaded and subscribed (otherwise its events are emitted into the void).
 let triggerUpdateCheck: ((trigger: string) => void) | null = null;
@@ -75,6 +77,7 @@ function buildBridge(): ServerBridge {
   const repo = new DeviceRepo(join(userData, "mining.json"));
   const config = new ConnectionConfig(join(userData, "connection.json"));
   alertConfig = new AlertConfig(join(userData, "telegram.json"));
+  recoveryConfig = new RecoveryConfig(join(userData, "recovery.json"));
   const transport: Transport = { tcp4028, http: httpRequest };
   // Short-timeout transport for fast LAN scanning (don't wait 5s per dead host).
   const scanTransport: Transport = {
@@ -218,6 +221,13 @@ app.whenReady().then(() => {
     const bridge = buildBridge();
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
+    // Apply persisted self-healing settings + handlers (needs the live bridge).
+    if (recoveryConfig) bridge.setRecovery(recoveryConfig.get());
+    ipcMain.handle(CH.recoveryGet, () => recoveryConfig?.get());
+    ipcMain.handle(CH.recoverySet, (_e, s: RecoverySettings) => {
+      recoveryConfig?.set(s);
+      bridge.setRecovery(s);
+    });
     console.log("[mcc] bridge ready");
   } catch (e) {
     console.error("[mcc] startup failed:", (e as Error).message);

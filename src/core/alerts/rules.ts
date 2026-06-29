@@ -1,6 +1,6 @@
 import type { DeviceStatus } from "../model/device";
 
-export type AlertKind = "offline" | "overheat" | "hashdrop";
+export type AlertKind = "offline" | "overheat" | "hashdrop" | "recovery";
 export interface Alert {
   deviceId: string;
   kind: AlertKind;
