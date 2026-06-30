@@ -48,6 +48,12 @@ export const EN: Record<string, string> = {
   "أخطاء": "Errors",
   "المراوح (RPM):": "Fans (RPM):",
   "🔴 اللوحة {board} متوقفة (لا تنتج هاش)": "🔴 Board {board} is down (no hashrate)",
+  "🔴 اللوحة {board} متوقفة (فيها رقائق لكن ما تنتج هاش)":
+    "🔴 Board {board} is down (chips present but not hashing)",
+  "تبريد مائي 💧": "Water-cooled 💧",
+  "تبريد بالغمر 🛢️": "Immersion-cooled 🛢️",
+  "تبريد هوائي 🌀": "Air-cooled 🌀",
+  "تبريد مائي/غمر — بدون مراوح (طبيعي)": "Water/immersion-cooled — no fans (normal)",
   "🟡 اللوحة {board}: رقائق ناقصة ({chips} من {expected})":
     "🟡 Board {board}: missing chips ({chips} of {expected})",
   "🔴 المروحة {fan} متوقفة": "🔴 Fan {fan} stopped",

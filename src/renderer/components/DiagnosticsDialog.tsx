@@ -2,24 +2,28 @@ import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
 import type { Device } from "../../core/model/device";
 import type { DeviceHealth } from "../../core/diagnose/parse";
+import type { DeviceSpec } from "../../core/devices/catalog";
 import { t } from "../i18n";
+
+type Health = DeviceHealth & { spec?: DeviceSpec | null };
 
 function issueText(code: string, v: Record<string, number>): string {
   switch (code) {
     case "boardDown":
-      return t("🔴 اللوحة {board} متوقفة (لا تنتج هاش)", v);
+      return t("🔴 اللوحة {board} متوقفة (فيها رقائق لكن ما تنتج هاش)", v);
     case "chipsMissing":
       return t("🟡 اللوحة {board}: رقائق ناقصة ({chips} من {expected})", v);
     case "fanDead":
       return t("🔴 المروحة {fan} متوقفة", v);
-    case "highHwErrors":
-      return t("🟡 أخطاء عتاد عالية باللوحة {board} ({errors})", v);
     case "boardHot":
       return t("🔴 حرارة لوحة مرتفعة ({temp}°)", v);
     default:
       return code;
   }
 }
+
+const coolingLabel = (c: string): string =>
+  c === "hydro" ? t("تبريد مائي 💧") : c === "immersion" ? t("تبريد بالغمر 🛢️") : t("تبريد هوائي 🌀");
 
 export function DiagnosticsDialog({
   device,
@@ -30,10 +34,7 @@ export function DiagnosticsDialog({
   health: DeviceHealth | undefined;
   onClose: () => void;
 }): React.ReactElement {
-  // Start from whatever the live status already carries (instant), then refresh
-  // by asking the owning agent to read the miner directly — this is what makes
-  // diagnostics work from a remote viewer without touching the miner's network.
-  const [health, setHealth] = useState<DeviceHealth | undefined>(initial);
+  const [health, setHealth] = useState<Health | undefined>(initial);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -47,7 +48,7 @@ export function DiagnosticsDialog({
         if (!alive) return;
         if (o.ok && o.data) {
           try {
-            setHealth(JSON.parse(o.data) as DeviceHealth);
+            setHealth(JSON.parse(o.data) as Health);
           } catch {
             setErr(t("تعذّر قراءة بيانات التشخيص."));
           }
@@ -63,6 +64,7 @@ export function DiagnosticsDialog({
   }, [device.id]);
 
   const hasData = !!health && (health.boards.length > 0 || health.issues.length > 0);
+  const spec = health?.spec ?? null;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -70,6 +72,25 @@ export function DiagnosticsDialog({
         <h3>
           🔧 {t("تشخيص الجهاز")}: {device.name}
         </h3>
+
+        {spec && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              fontSize: 12.5,
+              color: "var(--muted)",
+              marginBottom: 4,
+            }}
+          >
+            <span>🏭 {spec.vendor}</span>
+            <span>· {spec.model}</span>
+            <span>· {coolingLabel(spec.cooling)}</span>
+            {spec.nominalTHs ? <span>· ≈{spec.nominalTHs} TH</span> : null}
+            <span>· {spec.algo}</span>
+          </div>
+        )}
 
         {busy && !hasData ? (
           <div style={{ color: "var(--muted)", padding: "20px 0", textAlign: "center" }}>
@@ -121,7 +142,6 @@ export function DiagnosticsDialog({
                     <th>{t("اللوحة")}</th>
                     <th>{t("الرقائق")}</th>
                     <th>{t("الهاش")}</th>
-                    <th>{t("أخطاء")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,26 +150,26 @@ export function DiagnosticsDialog({
                       <td>{b.board}</td>
                       <td className={b.chips === 0 ? "red" : ""}>{b.chips}</td>
                       <td className={b.rateGhs < 1 ? "red" : "green"}>{(b.rateGhs / 1000).toFixed(1)} TH</td>
-                      <td className={b.hwErrors > 50 ? "amber" : ""}>{b.hwErrors}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
 
-            {health!.fans.length > 0 && (
-              <div style={{ fontSize: 13, marginTop: 10, color: "var(--muted)" }}>
-                {t("المراوح (RPM):")}{" "}
-                {health!.fans.map((f, i) => (
-                  <span key={i} className={f === 0 ? "red" : ""} style={{ marginInlineEnd: 8, fontWeight: 600 }}>
-                    {f}
-                  </span>
-                ))}
-              </div>
-            )}
-            {busy && (
-              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>{t("…يحدّث")}</div>
-            )}
+            <div style={{ fontSize: 13, marginTop: 10, color: "var(--muted)" }}>
+              {health!.hasFans ? (
+                <>
+                  {t("المراوح (RPM):")}{" "}
+                  {health!.fans.map((f, i) => (
+                    <span key={i} className={f === 0 ? "red" : ""} style={{ marginInlineEnd: 8, fontWeight: 600 }}>
+                      {f}
+                    </span>
+                  ))}
+                </>
+              ) : (
+                <>💧 {t("تبريد مائي/غمر — بدون مراوح (طبيعي)")}</>
+              )}
+            </div>
           </>
         )}
 

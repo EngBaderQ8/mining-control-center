@@ -50,7 +50,7 @@ describe("MiningService", () => {
     const transport: Transport = {
       async tcp4028(_h, _p, cmd) {
         if (cmd.includes("stats"))
-          return '{"STATS":[{"chain_acn1":76,"chain_acn2":76,"chain_acn3":0,"chain_rate1":"100","chain_rate2":"100","chain_rate3":"0","fan1":4000,"fan2":0}]}';
+          return '{"STATS":[{"chain_acn1":76,"chain_acn2":76,"chain_acn3":76,"chain_rate1":"100","chain_rate2":"100","chain_rate3":"0","fan1":4000}]}';
         return "{}";
       },
       async http() {

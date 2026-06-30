@@ -154,7 +154,7 @@ export class ServerBridge {
   async diagnoseDevice(host: string): Promise<DeviceHealth & { reachable: boolean; error?: string }> {
     const d = await diagnoseHost(host, 4028, 4000, "stats");
     if (!d.connected) {
-      return { boards: [], fans: [], temps: [], issues: [], reachable: false, ...(d.error ? { error: d.error } : {}) };
+      return { boards: [], fans: [], temps: [], hasFans: false, issues: [], reachable: false, ...(d.error ? { error: d.error } : {}) };
     }
     return { ...parseDeviceHealth(d.raw), reachable: true };
   }

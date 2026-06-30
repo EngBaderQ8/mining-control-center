@@ -4,6 +4,7 @@ import type { Transport, ControlCommand, CommandParams } from "../core/drivers/t
 import { getDriver } from "../core/drivers/registry";
 import { resolveSecret } from "../core/drivers/defaults";
 import { parseDeviceHealth } from "../core/diagnose/parse";
+import { lookupSpec } from "../core/devices/catalog";
 import { buildRequest } from "../core/cgminer/protocol";
 import { pollDevice } from "../core/monitor/poller";
 import { pollAll } from "../core/monitor/scheduler";
@@ -134,7 +135,10 @@ export class MiningService {
     }
     if (!stats && health.boards.length === 0)
       return { deviceId: device.id, ok: false, error: "ما قدر يوصل الجهاز" };
-    return { deviceId: device.id, ok: true, data: JSON.stringify(health) };
+    // Attach what we know about this model (vendor, cooling, rated hashrate) so
+    // the viewer shows accurate, model-aware diagnostics.
+    const spec = lookupSpec(device.model) ?? lookupSpec(device.name);
+    return { deviceId: device.id, ok: true, data: JSON.stringify({ ...health, spec }) };
   }
 
   async sendBulk(
