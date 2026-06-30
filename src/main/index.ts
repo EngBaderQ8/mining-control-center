@@ -144,6 +144,43 @@ function createTray(): void {
   }
 }
 
+/** Top menu bar with a File ▸ Settings entry (and the standard Edit/View/Window
+ *  items). "Settings" tells the renderer to open the in-app settings page. */
+function buildAppMenu(): void {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "⚙️  الإعدادات / Settings",
+          accelerator: "CmdOrCtrl+,",
+          click: () => {
+            showWindow();
+            sendToWindow(CH.openSettings, null);
+          },
+        },
+        { type: "separator" },
+        {
+          label: "إظهار النافذة / Show window",
+          click: () => showWindow(),
+        },
+        { type: "separator" },
+        {
+          label: "خروج / Exit",
+          click: () => {
+            isQuitting = true;
+            app.quit();
+          },
+        },
+      ],
+    },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  ]);
+  Menu.setApplicationMenu(menu);
+}
+
 /** Register/unregister the app in Windows startup per the saved settings. Never
  *  registers an unpackaged dev build (its path is electron.exe, not the app). */
 function applyLoginItem(s: AppSettings): void {
@@ -324,6 +361,7 @@ function startApp(): void {
   const startHidden = process.argv.includes("--hidden");
   mainWindow = createWindow(!startHidden);
   createTray();
+  buildAppMenu();
   // If the tray couldn't be created, never leave a hidden window with no way to
   // open it — show it.
   if (startHidden && !tray && mainWindow) mainWindow.show();

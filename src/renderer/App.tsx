@@ -255,10 +255,12 @@ export function App(): React.ReactElement {
       if (alerts.length)
         showToast(t("⚠ {count} تنبيه: {message}", { count: alerts.length, message: alerts[0]?.message ?? "" }));
     });
+    const offOpenSettings = api.onOpenSettings(() => setSettingsOpen(true));
     return () => {
       offSnapshot();
       offStatuses();
       offAlerts();
+      offOpenSettings();
     };
   }, [authed, reload, showToast]);
 

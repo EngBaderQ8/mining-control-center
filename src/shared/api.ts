@@ -97,6 +97,7 @@ export const CH = {
   // desktop behavior (startup + tray)
   appSettingsGet: "appsettings:get",
   appSettingsSet: "appsettings:set",
+  openSettings: "settings:open", // main -> renderer: File ▸ Settings menu clicked
   // updates
   updateCheck: "update:check",
   appVersion: "app:version",
@@ -182,4 +183,5 @@ export interface Api {
   onStatuses(cb: (statuses: DeviceStatus[]) => void): () => void;
   onAlerts(cb: (alerts: Alert[]) => void): () => void;
   onUpdateStatus(cb: (s: UpdateStatus) => void): () => void;
+  onOpenSettings(cb: () => void): () => void;
 }

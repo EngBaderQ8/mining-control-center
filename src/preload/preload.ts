@@ -61,6 +61,11 @@ const api: Api = {
     ipcRenderer.on(CH.updateStatus, handler);
     return () => ipcRenderer.removeListener(CH.updateStatus, handler);
   },
+  onOpenSettings: (cb: () => void) => {
+    const handler = (): void => cb();
+    ipcRenderer.on(CH.openSettings, handler);
+    return () => ipcRenderer.removeListener(CH.openSettings, handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("api", api);
