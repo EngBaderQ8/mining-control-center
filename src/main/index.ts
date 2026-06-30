@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { appendFileSync } from "node:fs";
 import { appIcon } from "./icon";
 import { AppSettingsStore } from "./appSettings";
+import { checkServerUpdate } from "./serverUpdate";
 // electron-updater is CommonJS and exposes `autoUpdater` as a NAMED export. A
 // default import (`electronUpdater.autoUpdater`) resolves to undefined in the
 // packaged app — hence "Cannot read properties of undefined (reading
@@ -250,6 +251,21 @@ function buildBridge(): ServerBridge {
     appVersion: app.getVersion(),
     // The owner pressed "update all" in the admin dashboard — check + install now.
     onUpdateNow: () => triggerUpdateCheck?.("admin-push"),
+    // Owner's self-hosted update channel (signed; verified before install).
+    checkServerUpdate: (serverBase) =>
+      void checkServerUpdate(
+        serverBase,
+        (m) => {
+          try {
+            appendFileSync(join(app.getPath("userData"), "update.log"), `${new Date().toISOString()} [server-update] ${m}\n`);
+          } catch {
+            /* ignore */
+          }
+        },
+        () => {
+          isQuitting = true;
+        },
+      ),
   });
 }
 

@@ -1,4 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createWriteStream, mkdirSync, writeFileSync, renameSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { join, basename, resolve } from "node:path";
 import type { ServerRepo } from "../db/repo";
 import { verifyToken } from "../auth/jwt";
 import { hashPassword } from "../auth/password";
@@ -11,6 +14,8 @@ export interface AdminDeps {
   jwtSecret: string;
   adminEmails: Set<string>; // lowercased
   pushUpdate: (userId?: string) => number; // tell clients to update now
+  dataDir: string;
+  signManifest?: (payload: string) => string | null; // Ed25519 sign (needs UPDATE_PRIVATE_KEY)
 }
 
 function send(res: ServerResponse, status: number, payload: unknown): void {
@@ -273,6 +278,79 @@ export async function handleAdmin(
       }
       return true;
     }
+    if (path === "/admin/api/upload-update" && req.method === "POST") {
+      const q = new URL(req.url ?? "", "http://local");
+      const version = (q.searchParams.get("version") ?? "").trim();
+      const name = basename(q.searchParams.get("name") ?? "");
+      // Strict allowlist (no traversal/odd chars) — the filename is signed + served.
+      if (!/^\d+\.\d+\.\d+$/.test(version) || !/^[A-Za-z0-9._-]+\.exe$/.test(name)) {
+        send(res, 400, { error: "need ?version=x.y.z & name=safe-name.exe" });
+        return true;
+      }
+      if (!deps.signManifest) {
+        send(res, 400, { error: "الخادم بدون UPDATE_PRIVATE_KEY — التوقيع معطّل" });
+        return true;
+      }
+      const dir = join(deps.dataDir, "updates");
+      mkdirSync(dir, { recursive: true });
+      const dest = join(dir, name);
+      const part = `${dest}.part`;
+      // Defense-in-depth: never let a crafted name escape updates/.
+      if (resolve(dest) !== join(resolve(dir), name)) {
+        send(res, 400, { error: "bad name" });
+        return true;
+      }
+      const hash = createHash("sha256");
+      let size = 0;
+      let tooBig = false;
+      const file = createWriteStream(part);
+      try {
+        await new Promise<void>((res2, reject) => {
+          req.on("data", (c: Buffer) => {
+            size += c.length;
+            if (size > 600 * 1024 * 1024) {
+              tooBig = true;
+              req.destroy();
+              file.destroy();
+              reject(new Error("too large"));
+              return;
+            }
+            hash.update(c);
+          });
+          req.pipe(file);
+          file.on("finish", () => res2());
+          file.on("error", reject);
+          req.on("error", reject);
+        });
+      } catch {
+        try {
+          rmSync(part, { force: true });
+        } catch {
+          /* ignore */
+        }
+        send(res, tooBig ? 413 : 400, { error: tooBig ? "الملف كبير جداً (>600MB)" : "فشل الرفع" });
+        return true;
+      }
+      const sha256 = hash.digest("hex");
+      const uploadedAt = Date.now();
+      // Sign the WHOLE manifest (version + content hash + size + freshness +
+      // filename), so nothing can be swapped or an old manifest replayed.
+      const sig = deps.signManifest(`${version}:${sha256}:${size}:${uploadedAt}:${name}`);
+      if (!sig) {
+        rmSync(part, { force: true });
+        send(res, 500, { error: "signing failed" });
+        return true;
+      }
+      renameSync(part, dest); // publish only after hash + sign succeed
+      writeFileSync(
+        join(dir, "manifest.json"),
+        JSON.stringify({ version, file: name, sha256, size, sig, uploadedAt }),
+      );
+      audit(req, uid, "upload-update", `${version} sha=${sha256.slice(0, 12)}`);
+      const notified = deps.pushUpdate(); // ask all connected clients to update now
+      send(res, 200, { ok: true, version, sha256, size, notified });
+      return true;
+    }
     if (path === "/admin/api/push-update" && req.method === "POST") {
       const b = await readBody(req);
       const target = typeof b["userId"] === "string" && b["userId"] ? b["userId"] : undefined;
@@ -371,6 +449,16 @@ tr:last-child td{border-bottom:0}
       <input id="dvsearch" class="in" placeholder="اسم/آي بي/وركر/بريد…" oninput="renderDevices()" style="font-size:12.5px;min-width:240px"></div>
     <div class="scroll"><div id="devices"></div></div>
   </div>
+  <div class="panel"><h2>📤 رفع تحديث للبرنامج (يوزّع لكل الأجهزة)</h2>
+    <div id="updcur" class="muted" style="font-size:12.5px;margin-bottom:8px"></div>
+    <div class="row">
+      <input type="file" id="updfile" accept=".exe" class="in" style="font-size:12px">
+      <input id="updver" class="in" placeholder="النسخة (مثل 0.1.53)" style="font-size:12.5px;width:160px">
+      <button class="btn primary" onclick="uploadUpd()">رفع وتوزيع</button>
+    </div>
+    <div id="updstatus" style="font-size:12.5px;margin-top:8px"></div>
+    <div class="muted" style="font-size:11.5px;margin-top:6px">ارفع ملف التثبيت (.exe) اللي بناه المطوّر واكتب رقم نسخته. يُوقّع تلقائياً (Ed25519) ويُدفع لكل الأجهزة المتصلة لتحدّث نفسها — وكل جهاز يتحقق من التوقيع والبصمة قبل التثبيت.</div>
+  </div>
   <div class="panel"><h2>🖥️ صحة الوكلاء (لابتوبات المواقع)</h2><div class="scroll"><div id="agents"></div></div></div>
 </div>
 <script>
@@ -385,7 +473,15 @@ function doLogin(){var em=document.getElementById('em').value.trim(),pw=document
   fetch('/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:em,password:pw})}).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});}).then(function(x){if(!x.ok){document.getElementById('le').textContent=x.j.error||'فشل الدخول';return;}TOKEN=x.j.token;localStorage.setItem('mcc_admin_token',TOKEN);start();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
 function logout(){TOKEN='';localStorage.removeItem('mcc_admin_token');location.reload();}
 function start(){api('/admin/api/overview').then(function(r){if(r.status===403){document.getElementById('le').textContent='هذا الحساب ليس مديراً.';logout();return;}document.getElementById('login').classList.add('hide');document.getElementById('dash').classList.remove('hide');loadAll();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
-function loadAll(){ov();ops();chart();accounts();devices();agents();}
+function loadAll(){ov();ops();chart();accounts();devices();agents();loadManifest();}
+function loadManifest(){fetch('/update-manifest').then(function(r){return r.json();}).then(function(m){document.getElementById('updcur').innerHTML=(m&&m.version)?('النسخة المستضافة حالياً: <b style="color:var(--acc)">'+esc(m.version)+'</b> · '+esc(m.file||'')):'لا توجد نسخة مرفوعة بعد.';}).catch(function(){});}
+function uploadUpd(){var f=document.getElementById('updfile').files[0],v=document.getElementById('updver').value.trim(),st=document.getElementById('updstatus');
+  if(!f){st.innerHTML='<span class="amb">اختر ملف .exe أول</span>';return;}
+  if(!/^\\d+\\.\\d+\\.\\d+$/.test(v)){st.innerHTML='<span class="amb">اكتب النسخة بصيغة x.y.z</span>';return;}
+  var xhr=new XMLHttpRequest();xhr.open('POST','/admin/api/upload-update?version='+encodeURIComponent(v)+'&name='+encodeURIComponent(f.name));xhr.setRequestHeader('authorization','Bearer '+TOKEN);
+  xhr.upload.onprogress=function(e){if(e.lengthComputable)st.innerHTML='⬆ جاري الرفع… '+Math.round(e.loaded/e.total*100)+'%';};
+  xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);if(j.ok){st.innerHTML='<span class="grn">✅ تم الرفع والتوقيع (نسخة '+esc(j.version)+') ودُفع لـ '+(j.notified||0)+' جهاز متصل.</span>';loadManifest();}else{st.innerHTML='<span class="amb">'+esc(j.error||'فشل')+'</span>';}}catch(e){st.innerHTML='<span class="amb">فشل ('+xhr.status+')</span>';}};
+  xhr.onerror=function(){st.innerHTML='<span class="amb">تعذّر الاتصال</span>';};st.innerHTML='⬆ جاري الرفع…';xhr.send(f);}
 function ops(){api('/admin/api/ops').then(function(r){return r.json();}).then(function(o){var f=o.fleet||{};OPS_HEALTH=o.health||{};
   document.getElementById('cards2').innerHTML=
     card((f.efficiencyPct!=null?f.efficiencyPct+'%':'—'),'كفاءة الأسطول (الفعلي/الاسمي)',(f.efficiencyPct!=null&&f.efficiencyPct<85)?'var(--amb)':'var(--grn)')+

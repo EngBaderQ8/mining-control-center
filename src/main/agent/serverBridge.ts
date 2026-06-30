@@ -29,7 +29,8 @@ export interface BridgeDeps {
   emitAlerts: (alerts: Alert[]) => void;
   notify: (msg: string) => void;
   appVersion?: string; // reported to the server (admin version view)
-  onUpdateNow?: () => void; // server asked this client to update now
+  onUpdateNow?: () => void; // server asked this client to update now (GitHub channel)
+  checkServerUpdate?: (serverBase: string) => void; // owner's self-hosted update channel
 }
 
 export interface AuthStatus {
@@ -366,6 +367,15 @@ export class ServerBridge {
     }
     this.client.send({ type: "snapshot.request" });
     this.service.startMonitoring(); // poll local devices -> pushStatuses to server
+    // On (re)connect, pick up any update the owner uploaded to their server.
+    const base = this.serverBase();
+    if (base) this.deps.checkServerUpdate?.(base);
+  }
+
+  /** Base URL of the owner's server, for the self-hosted update channel. */
+  private serverBase(): string | null {
+    const a = this.deps.config.get().serverAddr;
+    return a ? `https://${a}` : null;
   }
 
   private onServerMessage(m: ServerMessage): void {
@@ -392,10 +402,14 @@ export class ServerBridge {
       case "command.exec":
         // handled by AgentRuntime's own subscriber
         break;
-      case "update.now":
-        // The owner triggered a fleet-wide update from the admin dashboard.
+      case "update.now": {
+        // The owner triggered a fleet-wide update from the admin dashboard —
+        // check both the GitHub channel and the owner's self-hosted channel.
         this.deps.onUpdateNow?.();
+        const base = this.serverBase();
+        if (base) this.deps.checkServerUpdate?.(base);
         break;
+      }
     }
   }
 }

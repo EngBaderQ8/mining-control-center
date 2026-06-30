@@ -8,8 +8,10 @@ import { AuthService } from "./auth/service";
 import { verifyToken } from "./auth/jwt";
 import { CommandRouter } from "./router/commandRouter";
 import { ConnectionHub } from "./ws/hub";
+import { createPrivateKey, sign as edSign, type KeyObject } from "node:crypto";
 import { handleAuth } from "./http/authRoutes";
 import { handleAdmin } from "./http/adminRoutes";
+import { handleUpdatePublic } from "./http/updateRoutes";
 import { handleDownload } from "./http/downloadRoute";
 import { loadOrCreateTls } from "./tls";
 import { isClientMessage, type ServerMessage } from "./protocol/messages";
@@ -32,6 +34,19 @@ if (!JWT_SECRET || JWT_SECRET.length < 16 || JWT_SECRET === "dev-insecure-secret
     "[server] FATAL: JWT_SECRET must be set to a strong random value (>=16 chars). Refusing to start.",
   );
   process.exit(1);
+}
+
+// Ed25519 private key for signing self-hosted update manifests (base64 of the PEM
+// in env UPDATE_PRIVATE_KEY). Without it, the upload feature is disabled.
+let updatePrivKey: KeyObject | null = null;
+try {
+  const b64 = process.env["UPDATE_PRIVATE_KEY"];
+  if (b64) updatePrivKey = createPrivateKey(Buffer.from(b64, "base64").toString("utf8"));
+} catch {
+  console.warn("[server] UPDATE_PRIVATE_KEY is set but invalid — update uploads disabled");
+}
+function signManifest(payload: string): string | null {
+  return updatePrivKey ? edSign(null, Buffer.from(payload), updatePrivKey).toString("base64") : null;
 }
 
 async function main(): Promise<void> {
@@ -78,7 +93,18 @@ async function main(): Promise<void> {
   const server = createServer({ key, cert }, (req, res) => {
     void (async () => {
       if (handleDownload(req, res, DATA_DIR)) return;
-      if (await handleAdmin(req, res, { repo, jwtSecret: JWT_SECRET, adminEmails: ADMIN_EMAILS, pushUpdate })) return;
+      if (handleUpdatePublic(req, res, DATA_DIR)) return;
+      if (
+        await handleAdmin(req, res, {
+          repo,
+          jwtSecret: JWT_SECRET,
+          adminEmails: ADMIN_EMAILS,
+          pushUpdate,
+          dataDir: DATA_DIR,
+          signManifest,
+        })
+      )
+        return;
       if (await handleAuth(req, res, auth)) return;
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "not found" }));
