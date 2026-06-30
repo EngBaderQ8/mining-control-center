@@ -43,7 +43,19 @@ export async function pollDevice(
   const combined = await ask("summary+stats+pools");
   if (combined) {
     const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
-    if (s.hashrateTHs > 0) return { ...s, health: parseDeviceHealth(combined) };
+    if (s.hashrateTHs > 0) {
+      let health = parseDeviceHealth(combined);
+      if (health.boards.length === 0) {
+        // Some firmware omits the per-chain breakdown from the combined reply —
+        // fetch `stats` alone (full per-board detail) so diagnostics still work.
+        const statsAlone = await ask("stats");
+        if (statsAlone) {
+          const h2 = parseDeviceHealth(statsAlone);
+          if (h2.boards.length > 0) health = h2;
+        }
+      }
+      return { ...s, health };
+    }
   }
 
   // Fallback: separate sequential requests.

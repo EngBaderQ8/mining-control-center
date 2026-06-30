@@ -37,8 +37,15 @@ export function DiagnosticsDialog({
         </h3>
 
         {!health || (health.boards.length === 0 && health.issues.length === 0) ? (
-          <div style={{ color: "var(--muted)", padding: "18px 0", textAlign: "center", lineHeight: 1.7 }}>
-            {t("…جاري جمع بيانات التشخيص — خلّ البرنامج يكمّل دورة فحص (لين دقيقة) ثم افتح التشخيص.")}
+          <div style={{ color: "var(--muted)", padding: "14px 2px", lineHeight: 1.8 }}>
+            <div style={{ marginBottom: 8 }}>
+              {t("…ما وصلت بيانات تشخيص هذا الجهاز بعد.")}
+            </div>
+            <div style={{ fontSize: 12.5 }}>
+              {t("• تأكد أن لابتوب الموقع (الموصول بشبكة الأسيكات) محدّث لآخر نسخة — هو اللي يقرأ تفاصيل اللوحات ويرسلها.")}
+              <br />
+              {t("• بعد التحديث، خلّ البرنامج مفتوح دقيقة وحدة وبتظهر تلقائياً.")}
+            </div>
           </div>
         ) : (
           <>

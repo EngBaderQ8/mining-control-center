@@ -9,6 +9,11 @@ export const EN: Record<string, string> = {
   "…جاري فحص الجهاز": "…Diagnosing device",
   "…جاري جمع بيانات التشخيص — خلّ البرنامج يكمّل دورة فحص (لين دقيقة) ثم افتح التشخيص.":
     "…Gathering diagnostic data — let the app complete a poll cycle (up to a minute), then open diagnostics.",
+  "…ما وصلت بيانات تشخيص هذا الجهاز بعد.": "…No diagnostic data for this device yet.",
+  "• تأكد أن لابتوب الموقع (الموصول بشبكة الأسيكات) محدّث لآخر نسخة — هو اللي يقرأ تفاصيل اللوحات ويرسلها.":
+    "• Make sure the site's laptop (connected to the miners' network) is updated to the latest version — it's the one that reads board details and sends them.",
+  "• بعد التحديث، خلّ البرنامج مفتوح دقيقة وحدة وبتظهر تلقائياً.":
+    "• After updating, keep the app open for a minute and it'll appear automatically.",
   "❌ ما قدر يوصل الجهاز للتشخيص.": "❌ Could not reach the device to diagnose.",
   "الجهاز سليم — ما فيه أعطال مكتشفة.": "Device is healthy — no faults detected.",
   "المشاكل المكتشفة ({n}):": "Detected problems ({n}):",

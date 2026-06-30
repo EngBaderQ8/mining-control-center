@@ -28,6 +28,19 @@ const ok: Transport = {
     throw new Error("no");
   },
 };
+// Combined reply lacks per-chain detail, but a standalone `stats` carries it.
+const boardsInStatsOnly: Transport = {
+  async tcp4028(_h, _p, cmd) {
+    if (cmd.includes("summary+stats+pools"))
+      return '{"summary":[{"SUMMARY":[{"GHS 5s":95000}]}],"stats":[{"STATS":[{"temp2_1":60}]}],"pools":[]}';
+    if (cmd.includes("stats"))
+      return '{"STATS":[{"chain_acn1":76,"chain_acn2":76,"chain_acn3":0,"chain_rate1":"100","chain_rate2":"100","chain_rate3":"0","fan1":4000,"fan2":0}]}';
+    return "{}";
+  },
+  async http() {
+    throw new Error("no");
+  },
+};
 const dead: Transport = {
   async tcp4028() {
     throw new Error("timeout");
@@ -43,6 +56,11 @@ describe("pollDevice", () => {
     expect(s.state).toBe("online");
     expect(s.hashrateTHs).toBeCloseTo(95, 0);
     expect(s.maxTempC).toBe(75);
+  });
+  it("fetches stats alone for board health when the combined reply lacks per-chain detail", async () => {
+    const s = await pollDevice(dev, boardsInStatsOnly, 1000);
+    expect(s.health?.boards.length).toBe(3);
+    expect(s.health?.issues.some((i) => i.code === "boardDown")).toBe(true);
   });
   it("returns offline on transport failure", async () => {
     const s = await pollDevice(dev, dead, 1000);
