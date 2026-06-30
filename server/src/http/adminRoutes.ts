@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ServerRepo } from "../db/repo";
 import { verifyToken } from "../auth/jwt";
 import { hashPassword } from "../auth/password";
-import { getNetworkStats } from "../../../src/main/profit/networkStats";
+import { getNetworkStats } from "../profit/networkStats";
 import { btcPerDay, powerKwFromHashrate } from "../../../src/core/profit/calc";
 import { lookupSpec } from "../../../src/core/devices/catalog";
 
