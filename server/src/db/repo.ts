@@ -12,6 +12,21 @@ export interface UserRow {
   suspended: number;
 }
 
+export interface FlashJobRow {
+  jobId: string;
+  batchId: string;
+  userId: string;
+  deviceId: string;
+  agentId: string;
+  firmwareId: string;
+  // queued|downloading|verifying|matching|flashing|rebooting|confirming|success|failed|refused|stopped
+  state: string;
+  error: string | null;
+  newVersion: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AccountSummary {
   id: string;
   email: string;
@@ -235,6 +250,61 @@ export class ServerRepo {
     return this.db
       .prepare(`SELECT id, agentId FROM devices WHERE userId=?`)
       .all(userId) as Array<{ id: string; agentId: string }>;
+  }
+
+  // —— Firmware flash jobs (admin firmware push; the server sequences one per device) ——
+  createFlashJobs(
+    rows: Array<{
+      jobId: string;
+      batchId: string;
+      userId: string;
+      deviceId: string;
+      agentId: string;
+      firmwareId: string;
+    }>,
+  ): void {
+    const now = Date.now();
+    const stmt = this.db.prepare(
+      `INSERT INTO flash_jobs(jobId,batchId,userId,deviceId,agentId,firmwareId,state,createdAt,updatedAt)
+       VALUES(@jobId,@batchId,@userId,@deviceId,@agentId,@firmwareId,'queued',@now,@now)`,
+    );
+    this.db.transaction((rs: typeof rows) => {
+      for (const r of rs) stmt.run({ ...r, now });
+    })(rows);
+  }
+
+  listFlashJobs(batchId: string): FlashJobRow[] {
+    return this.db
+      .prepare(`SELECT * FROM flash_jobs WHERE batchId=? ORDER BY createdAt ASC`)
+      .all(batchId) as FlashJobRow[];
+  }
+
+  getFlashJob(jobId: string): FlashJobRow | undefined {
+    return this.db.prepare(`SELECT * FROM flash_jobs WHERE jobId=?`).get(jobId) as
+      | FlashJobRow
+      | undefined;
+  }
+
+  /** The next still-queued job in a batch (the server flashes strictly one at a time). */
+  nextQueuedJob(batchId: string): FlashJobRow | undefined {
+    return this.db
+      .prepare(`SELECT * FROM flash_jobs WHERE batchId=? AND state='queued' ORDER BY createdAt ASC LIMIT 1`)
+      .get(batchId) as FlashJobRow | undefined;
+  }
+
+  setFlashState(jobId: string, state: string, fields?: { error?: string; newVersion?: string }): void {
+    this.db
+      .prepare(
+        `UPDATE flash_jobs SET state=?, error=COALESCE(?,error), newVersion=COALESCE(?,newVersion), updatedAt=? WHERE jobId=?`,
+      )
+      .run(state, fields?.error ?? null, fields?.newVersion ?? null, Date.now(), jobId);
+  }
+
+  /** STOP-on-failure: cancel every still-queued device in a batch (blast-radius cap). */
+  stopQueuedJobs(batchId: string): void {
+    this.db
+      .prepare(`UPDATE flash_jobs SET state='stopped', updatedAt=? WHERE batchId=? AND state='queued'`)
+      .run(Date.now(), batchId);
   }
 
   upsertStatus(userId: string, s: DeviceStatus): void {

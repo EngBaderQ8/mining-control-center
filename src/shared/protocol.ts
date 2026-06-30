@@ -1,4 +1,4 @@
-import type { Device, Site, DeviceStatus } from "../core/model/device";
+import type { Device, Site, DeviceStatus, Firmware } from "../core/model/device";
 import type { ControlCommand } from "../core/drivers/types";
 import type { CommandOutcome } from "../core/model/result";
 
@@ -83,12 +83,45 @@ export interface UpdateNow {
   type: "update.now";
 }
 
+// ——— Firmware flashing (Server -> Agent job; Agent -> Server progress/result) ———
+// A flash is a long-running JOB, NOT a 15s request/response command: the server
+// dispatches one device at a time and the agent reports progress + a terminal result
+// asynchronously. The agent downloads `url`, verifies `sha256`, checks the live device
+// matches `family`+`model`, flashes, then re-reads the version to confirm.
+export interface FlashExec {
+  type: "flash.exec";
+  jobId: string;
+  deviceId: string;
+  family: Firmware;
+  model: string; // expected target model — agent REFUSES on a mismatch
+  url: string; // server-hosted firmware file (empty for luxos: it pulls its own image)
+  sha256: string; // empty for luxos (no byte push)
+  keepSettings: boolean;
+}
+export interface FlashProgress {
+  type: "flash.progress";
+  jobId: string;
+  deviceId: string;
+  phase: "downloading" | "verifying" | "matching" | "flashing" | "rebooting" | "confirming";
+  pct?: number;
+}
+export interface FlashResult {
+  type: "flash.result";
+  jobId: string;
+  deviceId: string;
+  state: "success" | "failed" | "refused";
+  newVersion?: string; // version read-back proof
+  error?: string;
+}
+
 export type AgentMessage =
   | AgentHello
   | SiteRegister
   | DeviceRegister
   | StatusUpdate
-  | CommandResult;
+  | CommandResult
+  | FlashProgress
+  | FlashResult;
 export type ViewerMessage = SnapshotRequest | CommandSend | DeviceDelete | SiteDelete | SiteRename;
 export type ClientMessage = AgentMessage | ViewerMessage;
 export type ServerMessage =
@@ -97,7 +130,8 @@ export type ServerMessage =
   | CommandExec
   | StatusUpdate
   | UpdateNow
-  | SiteRename;
+  | SiteRename
+  | FlashExec;
 
 const CLIENT_TYPES = new Set<string>([
   "agent.hello",
@@ -110,6 +144,8 @@ const CLIENT_TYPES = new Set<string>([
   "device.delete",
   "site.delete",
   "site.rename",
+  "flash.progress",
+  "flash.result",
 ]);
 
 export function isClientMessage(v: unknown): v is ClientMessage {

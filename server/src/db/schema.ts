@@ -23,6 +23,13 @@ export function applySchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS metrics_history (
       at INTEGER PRIMARY KEY, hashrate REAL, devices INTEGER, online INTEGER, users INTEGER
     );
+    CREATE TABLE IF NOT EXISTS flash_jobs (
+      jobId TEXT PRIMARY KEY, batchId TEXT NOT NULL, userId TEXT NOT NULL,
+      deviceId TEXT NOT NULL, agentId TEXT NOT NULL, firmwareId TEXT NOT NULL,
+      state TEXT NOT NULL, error TEXT, newVersion TEXT,
+      createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_flash_batch ON flash_jobs(batchId);
   `);
   // Migration: add the admin `suspended` flag to existing user tables.
   const cols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
