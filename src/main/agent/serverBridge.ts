@@ -170,6 +170,8 @@ export class ServerBridge {
     hashrateTHs: number;
     maxTempC: number;
     summarySample: string;
+    boardsFound: number;
+    statsChainSample: string;
     error?: string;
   }> {
     const ver = await diagnoseHost(ip, 4028, 3000, "version");
@@ -186,6 +188,14 @@ export class ServerBridge {
       controlPort: 80,
     };
     const status = await pollDevice(device, this.deps.transport, Date.now());
+    // Evidence for diagnostics: fetch `stats` directly (generous timeout — the
+    // hydro models' per-chip reply is large) and show what the board parser sees.
+    const statsProbe = await diagnoseHost(ip, 4028, 9000, "stats");
+    const statsRaw = statsProbe.raw;
+    const health = parseDeviceHealth(statsRaw);
+    const clean = statsRaw.replace(/\0/g, "");
+    const ci = clean.search(/chain[_a-z]*\d/i);
+    const statsChainSample = ci >= 0 ? clean.slice(ci, ci + 220) : clean.slice(0, 220);
     return {
       connected: ver.connected,
       gotData: ver.gotData,
@@ -195,6 +205,8 @@ export class ServerBridge {
       hashrateTHs: status.hashrateTHs,
       maxTempC: status.maxTempC,
       summarySample: sum.raw.replace(/\0/g, "").slice(0, 160),
+      boardsFound: health.boards.length,
+      statsChainSample,
       ...(ver.error ? { error: ver.error } : {}),
     };
   }

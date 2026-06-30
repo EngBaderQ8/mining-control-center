@@ -130,6 +130,8 @@ export interface Api {
     hashrateTHs: number;
     maxTempC: number;
     summarySample: string;
+    boardsFound: number;
+    statsChainSample: string;
     error?: string;
   }>;
   getLocalIps(): Promise<string[]>;

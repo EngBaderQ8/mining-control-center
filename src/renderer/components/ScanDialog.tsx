@@ -84,11 +84,13 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
         return;
       }
       setTestResult(
-        t("✓ اتصل وردّ · الفرمور: {firmware} · المراقبة: {state} · هاش: {hash} TH · حرارة: {temp}\nعيّنة summary: {sample}", {
+        t("✓ اتصل وردّ · الفرمور: {firmware} · المراقبة: {state} · هاش: {hash} TH · حرارة: {temp}\nاللوحات المكتشفة للتشخيص: {boards}\nعيّنة stats: {stats}\nعيّنة summary: {sample}", {
           firmware: r.firmware ?? t("؟"),
           state: r.state,
           hash: r.hashrateTHs.toFixed(1),
           temp: r.maxTempC,
+          boards: r.boardsFound,
+          stats: r.statsChainSample || t("(فاضي)"),
           sample: r.summarySample || t("(فاضي)"),
         }),
       );

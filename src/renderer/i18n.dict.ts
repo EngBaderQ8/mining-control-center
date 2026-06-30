@@ -183,6 +183,8 @@ export const EN: Record<string, string> = {
   "⚠ تعذّر الفحص: ": "⚠ Scan failed: ",
   "❌ ما قدر يتصل بـ {ip} على المنفذ 4028. ({error})": "❌ Could not connect to {ip} on port 4028. ({error})",
   "✓ اتصل وردّ · الفرمور: {firmware} · المراقبة: {state} · هاش: {hash} TH · حرارة: {temp}\nعيّنة summary: {sample}": "✓ Connected and replied · Firmware: {firmware} · Monitoring: {state} · Hashrate: {hash} TH · Temp: {temp}\nsummary sample: {sample}",
+  "✓ اتصل وردّ · الفرمور: {firmware} · المراقبة: {state} · هاش: {hash} TH · حرارة: {temp}\nاللوحات المكتشفة للتشخيص: {boards}\nعيّنة stats: {stats}\nعيّنة summary: {sample}":
+    "✓ Connected and replied · Firmware: {firmware} · Monitoring: {state} · Hashrate: {hash} TH · Temp: {temp}\nBoards found for diagnostics: {boards}\nstats sample: {stats}\nsummary sample: {sample}",
   "؟": "?",
   "(فاضي)": "(empty)",
   "⚠ تعذّر الاختبار: ": "⚠ Test failed: ",
