@@ -45,10 +45,20 @@ export async function pollDevice(
   if (combined) {
     const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
     if (s.hashrateTHs > 0) {
+      if (/"MHS /.test(combined)) {
+        // Whatsminer: the combined (`summary+stats+pools`) reply is cgminer-format
+        // and carries a board "Temperature" (~72°). The owner wants the intake-air
+        // "Env Temp" (~34°), which ONLY the btminer `summary` reply contains — so
+        // fetch it and read the temperature from there.
+        const sumRaw = await ask("summary");
+        if (sumRaw) {
+          const sWM = extractStatusFromRaw(device.id, sumRaw, sumRaw, combined, now);
+          if (sWM.hashrateTHs > 0) return { ...sWM, health: parseDeviceHealth(combined) };
+        }
+        return { ...s, health: parseDeviceHealth(combined) };
+      }
       let health = parseDeviceHealth(combined);
-      // Per-board health is Antminer-only (Whatsminer has no chains and reports its
-      // temp — Env Temp — in summary, so don't waste a `stats` connection on it).
-      if (health.boards.length === 0 && !/"MHS /.test(combined)) {
+      if (health.boards.length === 0) {
         const statsAlone = await ask("stats");
         if (statsAlone) {
           const h2 = parseDeviceHealth(statsAlone);

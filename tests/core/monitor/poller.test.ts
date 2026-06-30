@@ -67,7 +67,29 @@ const flakyWhatsminer: Transport = {
   },
 };
 
+// Whatsminer's combined reply is cgminer-format (board Temperature, no Env Temp);
+// the standalone `summary` is btminer-format (has Env Temp — the owner's choice).
+const wmCombinedVsSummary: Transport = {
+  async tcp4028(_h, _p, cmd) {
+    if (cmd.includes("summary+stats+pools"))
+      return '{"SUMMARY":[{"MHS av":123000000,"Temperature":72.19}]}';
+    if (cmd.includes("summary"))
+      return '{"STATUS":"S","Msg":{"MHS av":123000000,"Env Temp":34.31,"Chip Temp Avg":76}}';
+    return "{}";
+  },
+  async http() {
+    throw new Error("no");
+  },
+};
+
 describe("pollDevice", () => {
+  it("shows a Whatsminer's Env Temp (from the standalone summary) even when the combined reply has a board Temperature", async () => {
+    const s = await pollDevice(dev, wmCombinedVsSummary, 1000);
+    expect(s.state).toBe("online");
+    expect(s.hashrateTHs).toBeCloseTo(123, 0);
+    expect(s.maxTempC).toBeCloseTo(34.31, 1); // Env Temp, NOT the combined's 72.19
+  });
+
   it("retries summary once before marking a flapping Whatsminer offline", async () => {
     summaryCalls = 0;
     const s = await pollDevice(dev, flakyWhatsminer, 1000);
