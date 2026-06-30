@@ -3,7 +3,7 @@ import type { CommandOutcome } from "../core/model/result";
 import type { Transport, ControlCommand, CommandParams } from "../core/drivers/types";
 import { getDriver } from "../core/drivers/registry";
 import { resolveSecret } from "../core/drivers/defaults";
-import { parseDeviceHealth } from "../core/diagnose/parse";
+import { parseDeviceHealth, parseWhatsminerHealth, type DeviceHealth } from "../core/diagnose/parse";
 import { lookupSpec } from "../core/devices/catalog";
 import { buildRequest } from "../core/cgminer/protocol";
 import { pollDevice } from "../core/monitor/poller";
@@ -128,7 +128,9 @@ export class MiningService {
     );
   }
 
-  /** Read `stats` from the device and return DeviceHealth JSON in `data`. */
+  /** Read per-board health from the device and return DeviceHealth JSON in `data`.
+   *  Whatsminer uses a different API schema than cgminer (edevs/devs + summary), so it
+   *  gets a dedicated parser; everything else uses the cgminer `stats` path. */
   private async diagnose(device: Device): Promise<CommandOutcome> {
     const ask = async (cmd: string): Promise<string> => {
       try {
@@ -137,19 +139,46 @@ export class MiningService {
         return "";
       }
     };
-    const stats = await ask("stats");
-    let health = parseDeviceHealth(stats);
-    if (health.boards.length === 0) {
-      const combined = await ask("summary+stats+pools");
-      const h2 = parseDeviceHealth(combined);
-      if (h2.boards.length > 0) health = h2;
+    let health: DeviceHealth;
+    let reached = false;
+    let rawSample = "";
+    if (device.firmware === "whatsminer") {
+      const summary = await ask("summary");
+      let devs = await ask("edevs");
+      health = parseWhatsminerHealth(devs, summary);
+      if (health.boards.length === 0) {
+        const alt = await ask("devs");
+        const h2 = parseWhatsminerHealth(alt, summary);
+        if (h2.boards.length > 0) health = h2;
+        if (alt) devs = alt;
+      }
+      reached = !!(devs || summary);
+      rawSample = devs || summary;
+    } else {
+      const stats = await ask("stats");
+      health = parseDeviceHealth(stats);
+      let combined = "";
+      if (health.boards.length === 0) {
+        combined = await ask("summary+stats+pools");
+        const h2 = parseDeviceHealth(combined);
+        if (h2.boards.length > 0) health = h2;
+      }
+      reached = !!(stats || combined);
+      rawSample = stats || combined;
     }
-    if (!stats && health.boards.length === 0)
-      return { deviceId: device.id, ok: false, error: "ما قدر يوصل الجهاز" };
-    // Attach what we know about this model (vendor, cooling, rated hashrate) so
-    // the viewer shows accurate, model-aware diagnostics.
+    if (!reached) return { deviceId: device.id, ok: false, error: "ما قدر يوصل الجهاز" };
+    // Attach what we know about this model (vendor, cooling, rated hashrate) so the
+    // viewer shows accurate, model-aware diagnostics.
     const spec = lookupSpec(device.model) ?? lookupSpec(device.name);
-    return { deviceId: device.id, ok: true, data: JSON.stringify({ ...health, spec }) };
+    // Reached the device but parsed no boards → attach a trimmed raw sample so the
+    // failure is never silent (and the exact fields can be added if a firmware differs).
+    const raw =
+      health.boards.length === 0 ? rawSample.replace(/\0/g, "").slice(0, 600) : undefined;
+    return {
+      deviceId: device.id,
+      ok: true,
+      data: JSON.stringify({ ...health, spec, ...(raw ? { raw } : {}) }),
+    };
   }
 
   async sendBulk(

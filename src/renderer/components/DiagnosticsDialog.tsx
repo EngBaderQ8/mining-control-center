@@ -5,7 +5,7 @@ import type { DeviceHealth } from "../../core/diagnose/parse";
 import type { DeviceSpec } from "../../core/devices/catalog";
 import { t } from "../i18n";
 
-type Health = DeviceHealth & { spec?: DeviceSpec | null };
+type Health = DeviceHealth & { spec?: DeviceSpec | null; raw?: string };
 
 function issueText(code: string, v: Record<string, number>): string {
   switch (code) {
@@ -104,6 +104,29 @@ export function DiagnosticsDialog({
             <div style={{ fontSize: 12.5 }}>
               {t("• تأكد أن لابتوب الموقع (الموصول بشبكة الأسيكات) محدّث لآخر نسخة — هو اللي يقرأ تفاصيل اللوحات ويرسلها.")}
             </div>
+            {health?.raw && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  {t("بيانات الجهاز الخام (انسخها وأرسلها للدعم لو استمرّت المشكلة):")}
+                </div>
+                <pre
+                  style={{
+                    fontSize: 10.5,
+                    direction: "ltr",
+                    textAlign: "left",
+                    maxHeight: 130,
+                    overflow: "auto",
+                    background: "var(--surface2)",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {health.raw}
+                </pre>
+              </div>
+            )}
           </div>
         ) : (
           <>
