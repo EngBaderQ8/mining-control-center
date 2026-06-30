@@ -30,7 +30,11 @@ export type ControlCommand =
   | "startMining"
   | "reboot"
   | "setPool"
-  | "setProfile";
+  | "setProfile"
+  // Not a driver control op — handled in service.sendCommand: reads the device's
+  // `stats` on the agent (same LAN as the miner) and returns DeviceHealth JSON in
+  // CommandOutcome.data, so a remote viewer can diagnose without direct access.
+  | "diagnose";
 
 /** Power profile applied via setProfile (params.mode). */
 export type PowerProfile = "normal" | "lowpower" | "highperf";

@@ -2,7 +2,7 @@ import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./t
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 
-const PATHS: Record<Exclude<ControlCommand, "setPool" | "setProfile">, string> = {
+const PATHS: Record<Exclude<ControlCommand, "setPool" | "setProfile" | "diagnose">, string> = {
   restartMining: "/api/v1/mining/restart",
   stopMining: "/api/v1/mining/pause",
   startMining: "/api/v1/mining/resume",
@@ -19,6 +19,7 @@ export class VnishDriver implements DeviceDriver {
     secret?: string,
     params?: CommandParams,
   ): Promise<CommandOutcome> {
+    if (command === "diagnose") return { deviceId: device.id, ok: false, error: "diagnose handled by agent" };
     if (command === "setProfile")
       return { deviceId: device.id, ok: false, error: "بروفايلات الطاقة غير مدعومة على Vnish بعد" };
     try {

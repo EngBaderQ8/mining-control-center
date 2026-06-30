@@ -3,7 +3,7 @@ import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 import { parseResponse } from "../cgminer/parse";
 
-const VERB: Record<Exclude<ControlCommand, "setPool" | "setProfile">, string> = {
+const VERB: Record<Exclude<ControlCommand, "setPool" | "setProfile" | "diagnose">, string> = {
   stopMining: "pause",
   startMining: "resume",
   restartMining: "restart",
@@ -20,6 +20,7 @@ export class BraiinsDriver implements DeviceDriver {
     _secret?: string,
     params?: CommandParams,
   ): Promise<CommandOutcome> {
+    if (command === "diagnose") return { deviceId: device.id, ok: false, error: "diagnose handled by agent" };
     if (command === "setProfile")
       return { deviceId: device.id, ok: false, error: "بروفايلات الطاقة غير مدعومة على Braiins بعد" };
     try {

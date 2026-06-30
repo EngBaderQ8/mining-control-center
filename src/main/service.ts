@@ -3,6 +3,8 @@ import type { CommandOutcome } from "../core/model/result";
 import type { Transport, ControlCommand, CommandParams } from "../core/drivers/types";
 import { getDriver } from "../core/drivers/registry";
 import { resolveSecret } from "../core/drivers/defaults";
+import { parseDeviceHealth } from "../core/diagnose/parse";
+import { buildRequest } from "../core/cgminer/protocol";
 import { pollDevice } from "../core/monitor/poller";
 import { pollAll } from "../core/monitor/scheduler";
 import { runBulk } from "../core/bulk/engine";
@@ -102,6 +104,9 @@ export class MiningService {
   ): Promise<CommandOutcome> {
     const device = this.deps.repo.listDevices().find((d) => d.id === deviceId);
     if (!device) return { deviceId, ok: false, error: "device not found" };
+    // "diagnose" isn't a driver op — read the miner's stats here (this agent is on
+    // the miner's LAN) and return the parsed health so a remote viewer can see it.
+    if (command === "diagnose") return this.diagnose(device);
     return getDriver(device.firmware).execute(
       device,
       command,
@@ -109,6 +114,27 @@ export class MiningService {
       resolveSecret(device.firmware, this.secretFor(deviceId)),
       params,
     );
+  }
+
+  /** Read `stats` from the device and return DeviceHealth JSON in `data`. */
+  private async diagnose(device: Device): Promise<CommandOutcome> {
+    const ask = async (cmd: string): Promise<string> => {
+      try {
+        return await this.deps.transport.tcp4028(device.host, device.apiPort, buildRequest(cmd));
+      } catch {
+        return "";
+      }
+    };
+    const stats = await ask("stats");
+    let health = parseDeviceHealth(stats);
+    if (health.boards.length === 0) {
+      const combined = await ask("summary+stats+pools");
+      const h2 = parseDeviceHealth(combined);
+      if (h2.boards.length > 0) health = h2;
+    }
+    if (!stats && health.boards.length === 0)
+      return { deviceId: device.id, ok: false, error: "ما قدر يوصل الجهاز" };
+    return { deviceId: device.id, ok: true, data: JSON.stringify(health) };
   }
 
   async sendBulk(

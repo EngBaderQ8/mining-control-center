@@ -46,6 +46,30 @@ describe("MiningService", () => {
     expect(seen[0]?.cmd).toContain('"pause"'); // braiins stopMining => pause
   });
 
+  it("handles a routed 'diagnose' command by reading stats and returning health JSON", async () => {
+    const transport: Transport = {
+      async tcp4028(_h, _p, cmd) {
+        if (cmd.includes("stats"))
+          return '{"STATS":[{"chain_acn1":76,"chain_acn2":76,"chain_acn3":0,"chain_rate1":"100","chain_rate2":"100","chain_rate3":"0","fan1":4000,"fan2":0}]}';
+        return "{}";
+      },
+      async http() {
+        return { status: 200, body: "ok" };
+      },
+    };
+    const emitted = { statuses: [] as DeviceStatus[][], alerts: [] as Alert[][] };
+    const { service } = makeService(transport, emitted);
+    service.addSite({ id: "s1", name: "site" });
+    service.addDevice({
+      id: "d1", siteId: "s1", name: "n", model: "S19", firmware: "stock", host: "h", apiPort: 4028, controlPort: 80,
+    });
+    const outcome = await service.sendCommand("d1", "diagnose");
+    expect(outcome.ok).toBe(true);
+    const health = JSON.parse(outcome.data!);
+    expect(health.boards).toHaveLength(3);
+    expect(health.issues.some((i: { code: string }) => i.code === "boardDown")).toBe(true);
+  });
+
   it("emits statuses and offline alerts across poll cycles", async () => {
     let alive = true;
     const transport: Transport = {

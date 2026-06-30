@@ -2,7 +2,7 @@ import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./t
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 
-const PATH: Record<Exclude<ControlCommand, "setPool" | "setProfile">, string> = {
+const PATH: Record<Exclude<ControlCommand, "setPool" | "setProfile" | "diagnose">, string> = {
   reboot: "/cgi-bin/reboot.cgi",
   restartMining: "/cgi-bin/miner_restart.cgi",
   stopMining: "/cgi-bin/miner_restart.cgi", // stock has no pause; honest restart fallback
@@ -22,6 +22,9 @@ export class StockDriver implements DeviceDriver {
     secret?: string,
     params?: CommandParams,
   ): Promise<CommandOutcome> {
+    // "diagnose" is intercepted upstream (service.sendCommand) and never reaches a
+    // driver; this guard makes that explicit and narrows the command type.
+    if (command === "diagnose") return { deviceId: device.id, ok: false, error: "diagnose handled by agent" };
     // Accept either "user:pass" or a bare password. Split on the FIRST colon
     // only (so passwords containing ':' survive); with no colon the whole value
     // is the password and the user defaults to "root".

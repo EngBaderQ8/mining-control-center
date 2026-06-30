@@ -63,6 +63,7 @@ const CMD_LABEL: Record<ControlCommand, string> = {
   reboot: "إعادة تشغيل الجهاز (Reboot)",
   setPool: "تغيير البول",
   setProfile: "تغيير وضع الطاقة",
+  diagnose: "تشخيص الجهاز",
 };
 
 function VersionBadge({

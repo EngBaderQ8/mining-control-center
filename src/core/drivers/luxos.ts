@@ -17,6 +17,7 @@ export class LuxOsDriver implements DeviceDriver {
     _secret?: string,
     params?: CommandParams,
   ): Promise<CommandOutcome> {
+    if (command === "diagnose") return { deviceId: device.id, ok: false, error: "diagnose handled by agent" };
     try {
       const logon = await t.tcp4028(
         device.host,
