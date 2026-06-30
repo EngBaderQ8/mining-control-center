@@ -86,17 +86,21 @@ export function extractStatusFromRaw(
   // Search stats AND summary: Antminer puts temp*/fan* in stats; Whatsminer puts
   // "Temperature"/"Fan Speed In|Out" in summary (its `stats` cmd is unsupported).
   const hwRaw = `${statRaw} ${sumRaw}`;
+  // Per the farm owner's request, Whatsminer devices display the INTAKE-AIR
+  // temperature — "Env Temp", the value WhatsMinerTool shows in its EnvTemp column
+  // (~30-40°C) — rather than the much hotter board/chip temps. Antminer has no
+  // "Env Temp", so it keeps showing its board temps as before.
+  const envTemp = one(hwRaw, "Env Temp");
   let temps = many(hwRaw, '"temp[^"]*"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
   if (temps.length === 0) {
-    // Some Whatsminer firmware reports NO board "Temperature" — only chip temps
-    // ("Chip Temp Avg/Max", and ambient "Env Temp"). Fall back to the AVERAGE chip
-    // temp: it tracks the board-temp devices (~70-80) and overheats only when truly
-    // hot, whereas "Chip Temp Max" runs ~10° hotter and would false-alarm in a 45°C
-    // climate. Never use "Env Temp" (ambient air, not the device). Max is a last resort.
+    // A Whatsminer with neither "Env Temp" nor board "Temperature": fall back to
+    // chip temps so it still shows something.
     temps = many(hwRaw, '"Chip Temp Avg"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
     if (temps.length === 0)
       temps = many(hwRaw, '"Chip Temp Max"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
   }
+  const maxTempC =
+    envTemp > 0 && envTemp < 200 ? envTemp : temps.length ? Math.max(...temps) : 0;
   // Broadened to catch "Fan Speed In/Out"; >100 excludes count fields like fan_num.
   const fans = many(hwRaw, '"fan[^"]*"\\s*:\\s*"?(\\d+)').filter((f) => f > 100);
   const userM = /"User"\s*:\s*"([^"]+)"/i.exec(poolRaw);
@@ -110,7 +114,7 @@ export function extractStatusFromRaw(
     state: hash5 > 0 ? "online" : "offline",
     hashrateTHs: hash5,
     avgHashrateTHs: hashAv,
-    maxTempC: temps.length ? Math.max(...temps) : 0,
+    maxTempC,
     fanRpm: fans.length ? fans[0]! : 0,
     pool,
     worker,

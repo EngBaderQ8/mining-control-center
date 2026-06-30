@@ -21,36 +21,37 @@ describe("Whatsminer (MicroBT) summary", () => {
     expect(s.avgHashrateTHs).toBeCloseTo(122.9, 0); // MHS av ÷ 1e6
   });
 
-  it("reads Temperature + Fan Speed from the summary (not from the bad stats)", () => {
+  it("shows Env Temp (intake air) as the Whatsminer device temperature, with Fan Speed", () => {
     const s = extractStatusFromRaw("wm", wmSummary, wmStatsErr, "{}", Date.now());
-    expect(s.maxTempC).toBe(80); // "Temperature" (board), not Chip Temp Max
+    // The owner wants Env Temp (WhatsMinerTool's EnvTemp) — NOT board 80 or chip 101.
+    expect(s.maxTempC).toBe(32);
     expect(s.fanRpm).toBeGreaterThan(4000); // "Fan Speed In"
   });
 
-  it("prefers the per-board hashboard Temperature (from edevs, the WhatsMinerTool value) over chip temps", () => {
-    // Whatsminer `edevs` carries per-board "Temperature" (~70-74, the value the
-    // official tool shows); `summary` only has chip temps (~86-95). Must show the
-    // board temp so healthy miners don't trip a false overheat warning.
-    const sum = '{"Msg":{"MHS av":123000000,"Chip Temp Avg":86,"Chip Temp Max":95}}';
-    const edevs = '{"DEVS":[{"Temperature":73.5,"Chip Temp Avg":86},{"Temperature":74.1,"Chip Temp Avg":88}]}';
-    const s = extractStatusFromRaw("wm", sum, `${edevs} ${sum}`, "{}", Date.now());
-    expect(s.state).toBe("online");
-    expect(s.maxTempC).toBeCloseTo(74.1, 1); // board temp, NOT chip 86/95
-  });
-
-  it("uses Chip Temp Avg (not Max, not ambient Env Temp) when a Whatsminer has no board Temperature", () => {
-    // Real device 192.168.0.47: no "Temperature" field at all — only Env Temp
-    // (ambient) and Chip Temp Min/Max/Avg. Must read ~76 (avg), not 0, not 87
-    // (max — would false-alarm in heat), not 34 (ambient).
-    const noBoardTemp =
+  it("shows Env Temp even when chip temps are present (real 192.168.0.47)", () => {
+    // Real device: Env Temp 33.9 (intake) alongside chip temps 68/87/76. Must show
+    // the Env Temp the owner asked for — not the hotter chip temps that would warn.
+    const dev =
       '{"STATUS":"S","Code":131,"Msg":{"Elapsed":20096,"MHS av":123307112,"HS RT":123211912,' +
       '"Fan Speed In":5073,"Fan Speed Out":5337,"Env Temp":33.937,' +
       '"Chip Temp Min":67.92,"Chip Temp Max":87.359,"Chip Temp Avg":76.333}}';
-    const s = extractStatusFromRaw("wm47", noBoardTemp, "", "{}", Date.now());
+    const s = extractStatusFromRaw("wm47", dev, "", "{}", Date.now());
     expect(s.state).toBe("online");
-    expect(s.maxTempC).toBeCloseTo(76.33, 1); // Chip Temp Avg
-    expect(s.maxTempC).toBeLessThan(80); // not Chip Temp Max (87)
-    expect(s.fanRpm).toBeGreaterThan(4000); // Fan Speed In
+    expect(s.maxTempC).toBeCloseTo(33.937, 1); // Env Temp, not chip temps
+    expect(s.fanRpm).toBeGreaterThan(4000);
+  });
+
+  it("falls back to the board Temperature when there is no Env Temp (Antminer-style)", () => {
+    const sum = '{"Msg":{"MHS av":123000000,"Chip Temp Avg":86,"Chip Temp Max":95}}';
+    const boards = '{"DEVS":[{"Temperature":73.5},{"Temperature":74.1}]}';
+    const s = extractStatusFromRaw("wm", sum, `${boards} ${sum}`, "{}", Date.now());
+    expect(s.maxTempC).toBeCloseTo(74.1, 1); // board temp, NOT chip 86/95
+  });
+
+  it("falls back to Chip Temp Avg only when neither Env Temp nor board Temperature exists", () => {
+    const dev = '{"Msg":{"MHS av":123000000,"Chip Temp Max":87,"Chip Temp Avg":76}}';
+    const s = extractStatusFromRaw("wm", dev, "", "{}", Date.now());
+    expect(s.maxTempC).toBeCloseTo(76, 0); // Chip Temp Avg (last resort)
   });
 
   it("handles a Whatsminer that reports cgminer-style SUMMARY with MHS av already in TH/s", () => {
