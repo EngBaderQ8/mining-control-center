@@ -1,7 +1,23 @@
-import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
+import type {
+  DeviceDriver,
+  Transport,
+  ControlCommand,
+  CommandParams,
+  FlashTransport,
+  FirmwareImage,
+  FlashOutcome,
+  FlashPhase,
+} from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 import { parsePools } from "./pools";
+
+/** Split a stored "user:pass" / bare-password secret into web-UI credentials. */
+function creds(secret?: string): { user: string; pass: string } {
+  const raw = secret ?? "root:root";
+  const sep = raw.indexOf(":");
+  return sep === -1 ? { user: "root", pass: raw } : { user: raw.slice(0, sep), pass: raw.slice(sep + 1) };
+}
 
 const PATH: Record<Exclude<ControlCommand, "setPool" | "setProfile" | "diagnose">, string> = {
   reboot: "/cgi-bin/reboot.cgi",
@@ -29,10 +45,7 @@ export class StockDriver implements DeviceDriver {
     // Accept either "user:pass" or a bare password. Split on the FIRST colon
     // only (so passwords containing ':' survive); with no colon the whole value
     // is the password and the user defaults to "root".
-    const rawSecret = secret ?? "root:root";
-    const sep = rawSecret.indexOf(":");
-    const user = sep === -1 ? "root" : rawSecret.slice(0, sep);
-    const pass = sep === -1 ? rawSecret : rawSecret.slice(sep + 1);
+    const { user, pass } = creds(secret);
     try {
       // setPool posts the pool configuration to the miner config CGI; other
       // commands are simple GETs. Exact conf schema varies by model (see risks).
@@ -78,6 +91,56 @@ export class StockDriver implements DeviceDriver {
         : { deviceId: device.id, ok: false, error: `HTTP ${res.status}` };
     } catch (e) {
       return { deviceId: device.id, ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * Antminer stock flash: multipart POST the signed `.tar.gz` (field `datafile`)
+   * to /cgi-bin/upgrade.cgi with Digest auth. Stock firmware preserves the config
+   * partition across a signed upgrade, so settings are kept automatically. The
+   * bootloader signature check makes this SAFE: a wrong/tampered/unsigned image is
+   * rejected (-> `refused`, device untouched), never half-written.
+   */
+  async flash(
+    device: Device,
+    image: FirmwareImage,
+    t: FlashTransport,
+    secret?: string,
+    onProgress?: (phase: FlashPhase) => void,
+  ): Promise<FlashOutcome> {
+    const { user, pass } = creds(secret);
+    try {
+      onProgress?.("flashing");
+      const res = await t.httpUpload({
+        host: device.host,
+        port: device.controlPort,
+        path: "/cgi-bin/upgrade.cgi",
+        auth: { kind: "digest", user, pass },
+        files: [{ field: "datafile", filename: image.fileName, data: image.bytes }],
+        timeoutMs: 300000,
+      });
+      const body = (res.body ?? "").toLowerCase();
+      const ok = /success|successed|finish|complete|reboot/.test(body);
+      const rejected =
+        /signature|verify\s*fail|invalid\s*(file|image|firmware)|not\s*match|unsupported|wrong\s*(file|image)|bad\s*file/.test(
+          body,
+        );
+      if (ok) {
+        onProgress?.("rebooting");
+        return { ack: "flashed" };
+      }
+      if (rejected) return { ack: "refused", detail: body.slice(0, 200) || `HTTP ${res.status}` };
+      if (res.status === 401 || res.status === 403)
+        return { ack: "refused", detail: `auth rejected (HTTP ${res.status})` };
+      if (res.status >= 200 && res.status < 300) {
+        // 2xx with no clear marker: assume accepted; the version read-back is the
+        // real judge (an unchanged version after reboot is reported as failed).
+        onProgress?.("rebooting");
+        return { ack: "flashed" };
+      }
+      return { ack: "failed", detail: `HTTP ${res.status}` };
+    } catch (e) {
+      return { ack: "failed", detail: (e as Error).message };
     }
   }
 }

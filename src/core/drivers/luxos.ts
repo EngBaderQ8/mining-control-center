@@ -1,4 +1,13 @@
-import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
+import type {
+  DeviceDriver,
+  Transport,
+  ControlCommand,
+  CommandParams,
+  FlashTransport,
+  FirmwareImage,
+  FlashOutcome,
+  FlashPhase,
+} from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 import { parseResponse } from "../cgminer/parse";
@@ -80,6 +89,51 @@ export class LuxOsDriver implements DeviceDriver {
       return { deviceId: device.id, ok: true };
     } catch (e) {
       return { deviceId: device.id, ok: false, error: (e as Error).message };
+    }
+  }
+
+  /**
+   * LuxOS flash is PULL-based and the SAFEST path: no firmware bytes are pushed
+   * over the wire. We `logon` for a session, then `updaterun` — the miner fetches
+   * and verifies its OWN signed image, then reboots. `image.bytes` is empty (the
+   * server sends no url/sha256 for luxos). A "no update available"/"already latest"
+   * reply is a safe refusal, not a failure.
+   */
+  async flash(
+    device: Device,
+    _image: FirmwareImage,
+    t: FlashTransport,
+    _secret?: string,
+    onProgress?: (phase: FlashPhase) => void,
+  ): Promise<FlashOutcome> {
+    try {
+      onProgress?.("flashing");
+      const logon = await t.tcp4028(device.host, device.apiPort, JSON.stringify({ command: "logon" }));
+      const parsed = parseResponse(logon);
+      const session =
+        parsed.ok && Array.isArray((parsed.value as SessionResponse).SESSION)
+          ? String((parsed.value as SessionResponse).SESSION?.[0]?.SessionID ?? "")
+          : "";
+      if (!session) return { ack: "failed", detail: parsed.ok ? "logon returned no SessionID" : parsed.error };
+
+      const raw = await t.tcp4028(
+        device.host,
+        device.apiPort,
+        JSON.stringify({ command: "updaterun", parameter: session }),
+      );
+      const r = parseResponse(raw);
+      if (!r.ok) return { ack: "failed", detail: r.error };
+      const st = (r.value as { STATUS?: Array<{ STATUS?: string; Msg?: string }> }).STATUS?.[0];
+      if (st?.STATUS === "E" || st?.STATUS === "F") {
+        const msg = String(st.Msg ?? "");
+        if (/no update|already|latest|not available|up to date|unknown command|invalid/i.test(msg))
+          return { ack: "refused", detail: msg };
+        return { ack: "failed", detail: msg || "miner rejected updaterun" };
+      }
+      onProgress?.("rebooting");
+      return { ack: "flashed" };
+    } catch (e) {
+      return { ack: "failed", detail: (e as Error).message };
     }
   }
 }
