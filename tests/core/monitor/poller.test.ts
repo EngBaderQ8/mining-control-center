@@ -82,7 +82,29 @@ const wmCombinedVsSummary: Transport = {
   },
 };
 
+// A device LABELLED whatsminer polls the btminer path directly (no cgminer combined).
+const wmLabeled: Device = { ...dev, firmware: "whatsminer" };
+const wmSummaryTransport: Transport = {
+  async tcp4028(_h, _p, cmd) {
+    if (cmd.includes("pools")) return '{"POOLS":[{"URL":"stratum+tcp://p:3333","User":"acct.wm1"}]}';
+    if (cmd.includes("summary"))
+      return '{"STATUS":"S","Msg":{"MHS av":123000000,"Env Temp":33.5,"Fan Speed In":5000}}';
+    return "{}";
+  },
+  async http() {
+    throw new Error("no");
+  },
+};
+
 describe("pollDevice", () => {
+  it("polls a whatsminer-labelled device via the btminer summary path, showing Env Temp + worker", async () => {
+    const s = await pollDevice(wmLabeled, wmSummaryTransport, 1000);
+    expect(s.state).toBe("online");
+    expect(s.hashrateTHs).toBeCloseTo(123, 0);
+    expect(s.maxTempC).toBeCloseTo(33.5, 1); // Env Temp, not a board/chip temp
+    expect(s.worker).toBe("wm1");
+  });
+
   it("shows a Whatsminer's Env Temp (from the standalone summary) even when the combined reply has a board Temperature", async () => {
     const s = await pollDevice(dev, wmCombinedVsSummary, 1000);
     expect(s.state).toBe("online");

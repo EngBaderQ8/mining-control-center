@@ -41,7 +41,9 @@ const OFFLINE_ALERT_CONFIRM_MS = 60_000;
 
 export const DEFAULT_CONFIG: ServiceConfig = {
   pollIntervalMs: 10_000,
-  maxConcurrency: 16,
+  // Poll fewer miners at once: Whatsminer (and cheap site routers) drop
+  // connections under a burst, which showed up as healthy miners flapping offline.
+  maxConcurrency: 10,
   warnTempC: 80,
   overheatC: 90,
   hashDropFrac: 0.7,

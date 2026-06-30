@@ -38,59 +38,80 @@ export async function pollDevice(
       return "";
     }
   };
+  const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-  // Fast path: Antminer returns hashrate + temps + chains + pools in ONE
-  // connection. (Whatsminer rejects the `stats` part, so it won't match here.)
-  const combined = await ask("summary+stats+pools");
-  if (combined) {
-    const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
-    if (s.hashrateTHs > 0) {
-      if (/"MHS /.test(combined)) {
-        // Whatsminer: the combined (`summary+stats+pools`) reply is cgminer-format
-        // and carries a board "Temperature" (~72°). The owner wants the intake-air
-        // "Env Temp" (~34°), which ONLY the btminer `summary` reply contains — so
-        // fetch it and read the temperature from there.
-        const sumRaw = await ask("summary");
-        if (sumRaw) {
-          const sWM = extractStatusFromRaw(device.id, sumRaw, sumRaw, combined, now);
-          if (sWM.hashrateTHs > 0) return { ...sWM, health: parseDeviceHealth(combined) };
+  // One full poll attempt — returns a live status, or null if the miner didn't
+  // answer (so the caller can retry before declaring it offline).
+  const full = async (): Promise<DeviceStatus | null> => {
+    // Whatsminer: the btminer `summary` already carries hashrate (MHS) + Env Temp
+    // + fan in ONE connection. Go straight to it (the cgminer `summary+stats+pools`
+    // combined hides Env Temp behind a board temp) and add `pools` for the worker.
+    // Whatsminer tolerates few 4028 connections, so this keeps it to two.
+    if (device.firmware === "whatsminer") {
+      const sumRaw = await ask("summary");
+      if (!sumRaw) return null;
+      const probe = extractStatusFromRaw(device.id, sumRaw, sumRaw, sumRaw, now);
+      if (probe.hashrateTHs <= 0) return null;
+      const poolRaw = await ask("pools");
+      return {
+        ...extractStatusFromRaw(device.id, sumRaw, sumRaw, poolRaw || sumRaw, now),
+        health: parseDeviceHealth(""),
+      };
+    }
+
+    // Antminer fast path: hashrate + temps + chains + pools in ONE connection.
+    const combined = await ask("summary+stats+pools");
+    if (combined) {
+      const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
+      if (s.hashrateTHs > 0) {
+        if (/"MHS /.test(combined)) {
+          // A Whatsminer still labelled "stock": the combined reply is cgminer-
+          // format (board temp ~72), so read the owner's Env Temp (~34) from the
+          // btminer `summary`.
+          const sumRaw = await ask("summary");
+          if (sumRaw) {
+            const sWM = extractStatusFromRaw(device.id, sumRaw, sumRaw, combined, now);
+            if (sWM.hashrateTHs > 0) return { ...sWM, health: parseDeviceHealth("") };
+          }
+          return { ...s, health: parseDeviceHealth("") };
         }
-        return { ...s, health: parseDeviceHealth(combined) };
-      }
-      let health = parseDeviceHealth(combined);
-      if (health.boards.length === 0) {
-        const statsAlone = await ask("stats");
-        if (statsAlone) {
-          const h2 = parseDeviceHealth(statsAlone);
-          if (h2.boards.length > 0) health = h2;
+        let health = parseDeviceHealth(combined);
+        if (health.boards.length === 0) {
+          const statsAlone = await ask("stats");
+          if (statsAlone) {
+            const h2 = parseDeviceHealth(statsAlone);
+            if (h2.boards.length > 0) health = h2;
+          }
         }
+        return { ...s, health };
       }
-      return { ...s, health };
+    }
+    // Combined gave nothing usable — try `summary` directly (+ stats for Antminer).
+    const sumRaw = await ask("summary");
+    if (sumRaw) {
+      const isWM = /"MHS /.test(sumRaw);
+      const statRaw = !isWM ? await ask("stats") : "";
+      const poolRaw = await ask("pools");
+      const s = extractStatusFromRaw(device.id, sumRaw, statRaw || sumRaw, poolRaw || sumRaw, now);
+      if (s.hashrateTHs > 0) return { ...s, health: parseDeviceHealth(statRaw) };
+    }
+    return null;
+  };
+
+  const first = await full();
+  if (first && first.hashrateTHs > 0) return first;
+
+  // The miner missed a beat — retry a cheap single `summary` twice (with a short
+  // pause) before declaring it offline. Healthy miners (especially Whatsminer)
+  // intermittently refuse a connection under load; without this they falsely flap
+  // online/offline.
+  for (let i = 0; i < 2; i++) {
+    await sleep(250);
+    const raw = await ask("summary");
+    if (raw) {
+      const s = extractStatusFromRaw(device.id, raw, raw, raw, now);
+      if (s.hashrateTHs > 0) return { ...s, health: parseDeviceHealth("") };
     }
   }
-
-  // Recovery path (Whatsminer, or an Antminer whose combined reply failed).
-  // Whatsminer tolerates few concurrent 4028 connections, so keep it minimal:
-  // `summary` carries hashrate + temp + fan; one retry rides out a refused
-  // connection (the cause of false "offline" flapping).
-  const fetchSummary = async (withPool: boolean): Promise<DeviceStatus | null> => {
-    const sumRaw = await ask("summary");
-    if (!sumRaw) return null;
-    const poolRaw = withPool ? await ask("pools") : "";
-    // Antminer keeps temps in `stats`. Whatsminer reports its temp (Env Temp) in
-    // `summary` and rejects `stats` — so only fetch `stats` for non-Whatsminer.
-    const statRaw = withPool && !/"MHS /.test(sumRaw) ? await ask("stats") : "";
-    return extractStatusFromRaw(device.id, sumRaw, statRaw || sumRaw, poolRaw || combined, now);
-  };
-  let s = await fetchSummary(true);
-  if (!s || s.hashrateTHs <= 0) {
-    const retry = await fetchSummary(false); // one retry, summary-only (1 connection)
-    if (retry && retry.hashrateTHs > 0) s = retry;
-    else s = s ?? retry;
-  }
-  if (!s) {
-    if (!combined) return offline(device.id, now);
-    s = extractStatusFromRaw(device.id, combined, combined, combined, now);
-  }
-  return { ...s, health: parseDeviceHealth(combined) };
+  return offline(device.id, now);
 }
