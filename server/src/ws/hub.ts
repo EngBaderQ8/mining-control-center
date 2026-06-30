@@ -71,6 +71,17 @@ export class ConnectionHub {
         this.repo.deleteSite(this.userId, msg.siteId);
         this.broadcastSnapshot();
         break;
+      case "site.rename": {
+        const name = msg.name.trim();
+        const site = this.repo.listSites(this.userId).find((s) => s.id === msg.siteId);
+        if (name && site && this.repo.upsertSite({ id: msg.siteId, name, userId: this.userId })) {
+          // Push the rename to ALL the user's sockets so the owning agent updates its
+          // local repo (and re-registers the new name), then refresh viewers.
+          this.broadcast(this.userId, { type: "site.rename", siteId: msg.siteId, name });
+          this.broadcastSnapshot();
+        }
+        break;
+      }
       case "command.send": {
         const agentId = this.repo.deviceAgent(this.userId, msg.deviceId);
         if (!agentId) {

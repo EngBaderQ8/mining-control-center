@@ -98,6 +98,21 @@ describe("ConnectionHub", () => {
     expect(broadcasts.length).toBe(before + 1);
   });
 
+  it("renames a site: updates the DB and broadcasts the rename (to the owning agent) + a snapshot", async () => {
+    const { repo, router, uid, broadcast, broadcasts } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    repo.upsertSite({ id: "s1", userId: uid, name: "old" });
+    await hub.handleMessage({ type: "site.rename", siteId: "s1", name: "new name" });
+    expect(repo.listSites(uid)[0]!.name).toBe("new name");
+    expect(broadcasts.some((m) => m.type === "site.rename" && m.name === "new name")).toBe(true);
+    expect(broadcasts.some((m) => m.type === "snapshot")).toBe(true);
+    // Renaming a site that doesn't exist / to empty does nothing.
+    const before = broadcasts.length;
+    await hub.handleMessage({ type: "site.rename", siteId: "nope", name: "x" });
+    await hub.handleMessage({ type: "site.rename", siteId: "s1", name: "  " });
+    expect(broadcasts.length).toBe(before);
+  });
+
   it("deletes a device and a site, broadcasting a fresh snapshot", async () => {
     const { repo, router, uid, broadcast, broadcasts } = setup();
     const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);

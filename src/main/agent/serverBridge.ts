@@ -275,17 +275,16 @@ export class ServerBridge {
     if (this.connected) this.client.send({ type: "site.delete", siteId });
   }
 
-  /** Rename a site locally and on the server. Re-registering the site with its new
-   *  name makes the server detect the change and live-broadcast it to all viewers. */
+  /** Rename a site. Routed through the server so it works from ANY laptop (even one
+   *  that only VIEWS this site), updates the shared DB + all viewers live, and reaches
+   *  the OWNING agent so it persists the new name (and re-registers it). */
   renameSite(siteId: string, name: string): void {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const existing = this.deps.repo.listSites().find((s) => s.id === siteId);
-    if (!existing) return;
-    const site = { id: siteId, name: trimmed };
-    this.deps.repo.upsertSite(site);
-    this.agent?.registerSite(site);
-    this.requestSnapshot();
+    // If this laptop owns the site, update locally too (immediate + offline-safe).
+    if (this.deps.repo.listSites().some((s) => s.id === siteId))
+      this.deps.repo.upsertSite({ id: siteId, name: trimmed });
+    if (this.connected) this.client.send({ type: "site.rename", siteId, name: trimmed });
   }
 
   /**
@@ -507,6 +506,12 @@ export class ServerBridge {
         this.deps.emitStatuses(m.statuses);
         break;
       }
+      case "site.rename":
+        // If this agent owns the site, persist the new name locally so it survives
+        // and re-registers correctly. Viewers that don't own it just get the snapshot.
+        if (this.deps.repo.listSites().some((s) => s.id === m.siteId))
+          this.deps.repo.upsertSite({ id: m.siteId, name: m.name });
+        break;
       case "command.ack": {
         const resolve = this.pending.get(m.commandId);
         if (resolve) {

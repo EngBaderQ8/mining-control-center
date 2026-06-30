@@ -46,6 +46,15 @@ export interface SiteDelete {
   type: "site.delete";
   siteId: string;
 }
+// Rename a site. Sent viewer->server (rename from any laptop, even one that doesn't
+// own the site locally); the server updates its DB, broadcasts a fresh snapshot to
+// viewers, AND fans this same message out so the OWNING agent updates its local repo
+// (otherwise the agent would re-register the old name on its next reconnect).
+export interface SiteRename {
+  type: "site.rename";
+  siteId: string;
+  name: string;
+}
 
 // Server -> Viewer
 export interface SnapshotMsg {
@@ -80,9 +89,15 @@ export type AgentMessage =
   | DeviceRegister
   | StatusUpdate
   | CommandResult;
-export type ViewerMessage = SnapshotRequest | CommandSend | DeviceDelete | SiteDelete;
+export type ViewerMessage = SnapshotRequest | CommandSend | DeviceDelete | SiteDelete | SiteRename;
 export type ClientMessage = AgentMessage | ViewerMessage;
-export type ServerMessage = SnapshotMsg | CommandAck | CommandExec | StatusUpdate | UpdateNow;
+export type ServerMessage =
+  | SnapshotMsg
+  | CommandAck
+  | CommandExec
+  | StatusUpdate
+  | UpdateNow
+  | SiteRename;
 
 const CLIENT_TYPES = new Set<string>([
   "agent.hello",
@@ -94,6 +109,7 @@ const CLIENT_TYPES = new Set<string>([
   "command.send",
   "device.delete",
   "site.delete",
+  "site.rename",
 ]);
 
 export function isClientMessage(v: unknown): v is ClientMessage {
