@@ -203,11 +203,15 @@ export class ServerBridge {
     // device reports (some Whatsminer firmware send "Temperature":0 and keep the
     // real heat in "Chip Temp Max", which a temp*-prefixed parser misses).
     const cleanSum = sum.raw.replace(/\0/g, "");
-    const tempFan = [
-      ...cleanSum.matchAll(/"([^"]*(?:temp|fan)[^"]*)"\s*:\s*"?(-?[\d.]+)/gi),
-    ]
-      .map((m) => `${m[1]}=${m[2]}`)
-      .join(", ");
+    const fieldsOf = (raw: string): string =>
+      [...raw.replace(/\0/g, "").matchAll(/"([^"]*(?:temp|fan)[^"]*)"\s*:\s*"?(-?[\d.]+)/gi)]
+        .map((m) => `${m[1]}=${m[2]}`)
+        .join(", ");
+    const tempFan = fieldsOf(sum.raw);
+    // Whatsminer's hashboard temperature lives in `edevs`, not `summary` — probe it
+    // too so we can see the real per-board temps (what WhatsMinerTool displays).
+    const edevsProbe = await diagnoseHost(ip, 4028, 9000, "edevs");
+    const edevsTempFan = fieldsOf(edevsProbe.raw);
     return {
       connected: ver.connected,
       gotData: ver.gotData,
@@ -216,7 +220,7 @@ export class ServerBridge {
       state: status.state,
       hashrateTHs: status.hashrateTHs,
       maxTempC: status.maxTempC,
-      summarySample: `${cleanSum.slice(0, 160)}${tempFan ? `  ⟦حقول الحرارة/المروحة: ${tempFan}⟧` : "  ⟦لا حقول حرارة/مروحة⟧"}`,
+      summarySample: `${cleanSum.slice(0, 140)}${tempFan ? `  ⟦summary: ${tempFan}⟧` : "  ⟦summary: لا حقول⟧"}${edevsTempFan ? `  ⟦edevs: ${edevsTempFan}⟧` : "  ⟦edevs: لا حقول⟧"}`,
       boardsFound: health.boards.length,
       statsChainSample,
       ...(ver.error ? { error: ver.error } : {}),

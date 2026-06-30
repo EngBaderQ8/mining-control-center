@@ -45,10 +45,19 @@ export async function pollDevice(
   if (combined) {
     const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
     if (s.hashrateTHs > 0) {
+      if (/"MHS /.test(combined)) {
+        // Whatsminer: the HASHBOARD temperature (~70-74°C — exactly what the
+        // official WhatsMinerTool shows) is reported per board by `edevs`, NOT in
+        // `summary` (which only has chip-junction temps that run ~15° hotter and
+        // would trip false overheat warnings). Read it for an accurate temp.
+        const edevs = await ask("edevs");
+        const sWM = edevs
+          ? extractStatusFromRaw(device.id, combined, `${edevs} ${combined}`, combined, now)
+          : s;
+        return { ...sWM, health: parseDeviceHealth(combined) };
+      }
       let health = parseDeviceHealth(combined);
-      // Fetch per-board detail only for Antminer-style replies (Whatsminer has no
-      // chains and rejects `stats` — don't waste a connection on it).
-      if (health.boards.length === 0 && !/"MHS /.test(combined)) {
+      if (health.boards.length === 0) {
         const statsAlone = await ask("stats");
         if (statsAlone) {
           const h2 = parseDeviceHealth(statsAlone);
@@ -67,12 +76,13 @@ export async function pollDevice(
     const sumRaw = await ask("summary");
     if (!sumRaw) return null;
     const poolRaw = withPool ? await ask("pools") : "";
-    // Antminer keeps temps (and per-board detail) in `stats`, NOT in `summary`.
-    // Fetch it on the first attempt for non-Whatsminer replies (Whatsminer carries
-    // temp/fan in `summary` and rejects `stats`) so an Antminer that ends up on
-    // this path doesn't lose its temperature reading.
-    const statRaw = withPool && !/"MHS /.test(sumRaw) ? await ask("stats") : "";
-    return extractStatusFromRaw(device.id, sumRaw, statRaw || sumRaw, poolRaw || combined, now);
+    // Antminer keeps temps (and per-board detail) in `stats`. Whatsminer keeps the
+    // hashboard temperature in `edevs` (~70-74°C, the WhatsMinerTool value) — its
+    // `summary` has only chip temps, and it rejects `stats`. Fetch the right one so
+    // neither family loses an accurate temperature reading.
+    const isWM = /"MHS /.test(sumRaw);
+    const extraRaw = withPool ? await ask(isWM ? "edevs" : "stats") : "";
+    return extractStatusFromRaw(device.id, sumRaw, extraRaw || sumRaw, poolRaw || combined, now);
   };
   let s = await fetchSummary(true);
   if (!s || s.hashrateTHs <= 0) {

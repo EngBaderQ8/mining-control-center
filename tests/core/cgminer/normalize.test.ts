@@ -27,6 +27,17 @@ describe("Whatsminer (MicroBT) summary", () => {
     expect(s.fanRpm).toBeGreaterThan(4000); // "Fan Speed In"
   });
 
+  it("prefers the per-board hashboard Temperature (from edevs, the WhatsMinerTool value) over chip temps", () => {
+    // Whatsminer `edevs` carries per-board "Temperature" (~70-74, the value the
+    // official tool shows); `summary` only has chip temps (~86-95). Must show the
+    // board temp so healthy miners don't trip a false overheat warning.
+    const sum = '{"Msg":{"MHS av":123000000,"Chip Temp Avg":86,"Chip Temp Max":95}}';
+    const edevs = '{"DEVS":[{"Temperature":73.5,"Chip Temp Avg":86},{"Temperature":74.1,"Chip Temp Avg":88}]}';
+    const s = extractStatusFromRaw("wm", sum, `${edevs} ${sum}`, "{}", Date.now());
+    expect(s.state).toBe("online");
+    expect(s.maxTempC).toBeCloseTo(74.1, 1); // board temp, NOT chip 86/95
+  });
+
   it("uses Chip Temp Avg (not Max, not ambient Env Temp) when a Whatsminer has no board Temperature", () => {
     // Real device 192.168.0.47: no "Temperature" field at all — only Env Temp
     // (ambient) and Chip Temp Min/Max/Avg. Must read ~76 (avg), not 0, not 87
