@@ -774,11 +774,27 @@ tr:last-child td{border-bottom:0}
     <div id="updstatus" style="font-size:12.5px;margin-top:8px"></div>
     <div class="muted" style="font-size:11.5px;margin-top:6px">ارفع ملف التثبيت (.exe) اللي بناه المطوّر واكتب رقم نسخته. يُوقّع تلقائياً (Ed25519) ويُدفع لكل الأجهزة المتصلة لتحدّث نفسها — وكل جهاز يتحقق من التوقيع والبصمة قبل التثبيت.</div>
   </div>
+  <div class="panel" style="border-color:#3a2b25"><h2>🔩 فلاش فِرموير للأجهزة (تدريجي — جهاز جهاز)</h2>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">ارفع صورة فِرموير موقّعة ثم افلِشها على الأجهزة المطابقة — جهازاً واحداً كل مرة، ولازم تأكيد منك قبل كل جهاز تالٍ. أي فشل يوقف بقية الدفعة فوراً. مدعوم: Antminer ستوك، Braiins، LuxOS فقط.</div>
+    <div class="row" style="gap:8px;margin-bottom:8px">
+      <select id="fwFam" class="in" style="font-size:12.5px" onchange="fwFamChange()"><option value="stock">Antminer (ستوك)</option><option value="braiins">Braiins OS+</option><option value="luxos">LuxOS</option></select>
+      <input id="fwModel" class="in" placeholder="الموديل (مثل S19 Pro)" style="font-size:12.5px;width:150px">
+      <input id="fwVer" class="in" placeholder="النسخة" style="font-size:12.5px;width:110px">
+      <input type="file" id="fwFile" accept=".tar.gz,.tgz,.bin,.swu" class="in" style="font-size:12px">
+      <button class="btn primary" onclick="uploadFw()">رفع وتوقيع</button>
+    </div>
+    <div id="fwLuxHint" class="muted hide" style="font-size:11.5px;margin-bottom:8px">ℹ️ LuxOS يسحب صورته الموقّعة بنفسه من خوادم Luxor — الملف المرفوع مجرد علامة للنسخة (ارفع أي ملف صغير).</div>
+    <div id="fwUpStatus" style="font-size:12.5px;margin-bottom:8px"></div>
+    <div id="fwCatalog" class="scroll"></div>
+    <div id="fwFlash"></div>
+    <div class="muted" style="font-size:11px;margin-top:8px">كل صورة تُوقَّع (Ed25519) عند الرفع. الوكيل يتحقق من SHA-256 ومن أن فِرمور الجهاز وموديله يطابقان قبل أي كتابة، ولا يُعتبر الفلاش ناجحاً إلا إذا تغيّرت نسخة الجهاز فعلاً بعد إعادة التشغيل.</div>
+  </div>
   <div class="panel"><h2>🖥️ صحة الوكلاء (لابتوبات المواقع)</h2><div class="scroll"><div id="agents"></div></div></div>
 </div>
 <script>
 var TOKEN=localStorage.getItem('mcc_admin_token')||'';
 var ACCTS=[],DEVS=[],SORT={k:'hashrate',d:-1},OPS_HEALTH={};
+var FWMAP={},FWBATCH=null,FWPOLL=null,FWID='',FWMODEL='';
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function n(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
 function n1(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:1});}
@@ -789,7 +805,7 @@ function doLogin(){var em=document.getElementById('em').value.trim(),pw=document
 function logout(){TOKEN='';localStorage.removeItem('mcc_admin_token');location.reload();}
 function start(){api('/admin/api/overview').then(function(r){if(r.status===403){document.getElementById('le').textContent='هذا الحساب ليس مديراً.';logout();return;}document.getElementById('login').classList.add('hide');document.getElementById('dash').classList.remove('hide');loadAll();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
 var AUTO=null;
-function loadAll(){ov();ops();chart();accounts();devices();agents();loadManifest();loadOA();startAuto();}
+function loadAll(){ov();ops();chart();accounts();devices();agents();loadManifest();loadOA();loadFw();startAuto();}
 function startAuto(){if(AUTO)return;AUTO=setInterval(function(){ov();ops();accounts();agents();var d=new Date();document.getElementById('live').textContent='🔴 مباشر · '+d.toLocaleTimeString('ar-SA');},15000);}
 function loadOA(){api('/admin/api/owner-alerts').then(function(r){return r.json();}).then(function(c){document.getElementById('oaChat').value=c.chatId||'';document.getElementById('oaEnabled').checked=!!c.enabled;document.getElementById('oaToken').placeholder=c.configured?'(توكن محفوظ — اتركه فاضي للإبقاء عليه)':'Bot Token';}).catch(function(){});}
 function saveOA(){var body={token:document.getElementById('oaToken').value,chatId:document.getElementById('oaChat').value,enabled:document.getElementById('oaEnabled').checked};api('/admin/api/owner-alerts',{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(){document.getElementById('oaStatus').textContent='✅ حُفظ';document.getElementById('oaToken').value='';loadOA();}).catch(function(){document.getElementById('oaStatus').textContent='❌ فشل الحفظ';});}
@@ -876,6 +892,60 @@ function detail(id){var a=acctById(id),email=a?a.email:'';api('/admin/api/accoun
 function susp(id,s){api('/admin/api/suspend',{method:'POST',body:JSON.stringify({userId:id,suspended:!!s})}).then(function(){accounts();});}
 function resetpw(id){var a=acctById(id),email=a?a.email:'';var pw=prompt('باسورد جديد للحساب «'+email+'» (٦ أحرف فأكثر):');if(!pw)return;if(pw.length<6){alert('قصير جداً');return;}api('/admin/api/reset-password',{method:'POST',body:JSON.stringify({userId:id,password:pw})}).then(function(r){return r.json();}).then(function(j){alert(j.ok?'تم تغيير الباسورد':(j.error||'فشل'));});}
 function del(id){var a=acctById(id),email=a?a.email:'';if(!confirm('حذف الحساب «'+email+'» وكل بياناته نهائياً؟'))return;api('/admin/api/delete',{method:'POST',body:JSON.stringify({userId:id})}).then(function(){accounts();});}
+function fwFamChange(){document.getElementById('fwLuxHint').classList.toggle('hide',document.getElementById('fwFam').value!=='luxos');}
+function loadFw(){api('/admin/api/firmware/list').then(function(r){return r.json();}).then(function(d){var list=d.firmware||[];FWMAP={};list.forEach(function(f){FWMAP[f.id]=f;});
+  if(!list.length){document.getElementById('fwCatalog').innerHTML='<div class="muted" style="font-size:12.5px">لا توجد صور فِرموير مرفوعة بعد.</div>';return;}
+  var rows=list.map(function(f){return '<tr><td>'+esc(f.family)+'</td><td>'+esc(f.model)+'</td><td>'+esc(f.version)+'</td><td class="muted">'+(f.size?(Math.round(f.size/1048576)+'MB'):'—')+'</td><td class="muted" style="font-size:11px">'+esc((f.sha256||'').slice(0,10))+'</td><td><button class="btn sm" style="border-color:var(--acc);color:var(--acc)" onclick="flashOpen(\\''+f.id+'\\')">🔩 فلاش</button></td></tr>';}).join('');
+  document.getElementById('fwCatalog').innerHTML='<table><thead><tr><th>الفرمور</th><th>الموديل</th><th>النسخة</th><th>الحجم</th><th>SHA</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+}).catch(function(){});}
+function uploadFw(){var fam=document.getElementById('fwFam').value,model=document.getElementById('fwModel').value.trim(),ver=document.getElementById('fwVer').value.trim(),f=document.getElementById('fwFile').files[0],st=document.getElementById('fwUpStatus');
+  if(!model){st.innerHTML='<span class="amb">اكتب الموديل</span>';return;}
+  if(!ver){st.innerHTML='<span class="amb">اكتب النسخة</span>';return;}
+  if(!f){st.innerHTML='<span class="amb">اختر ملف الفِرموير</span>';return;}
+  if(!/\\.(tar\\.gz|tgz|bin|swu)$/i.test(f.name)){st.innerHTML='<span class="amb">امتداد غير مدعوم (tar.gz / tgz / bin / swu)</span>';return;}
+  var xhr=new XMLHttpRequest();xhr.open('POST','/admin/api/firmware/upload?family='+encodeURIComponent(fam)+'&model='+encodeURIComponent(model)+'&version='+encodeURIComponent(ver)+'&name='+encodeURIComponent(f.name));xhr.setRequestHeader('authorization','Bearer '+TOKEN);
+  xhr.upload.onprogress=function(e){if(e.lengthComputable)st.innerHTML='⬆ جاري الرفع… '+Math.round(e.loaded/e.total*100)+'%';};
+  xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);if(j.ok){st.innerHTML='<span class="grn">✅ تم رفع وتوقيع الصورة.</span>';document.getElementById('fwFile').value='';loadFw();}else{st.innerHTML='<span class="amb">'+esc(j.error||'فشل')+'</span>';}}catch(e){st.innerHTML='<span class="amb">فشل ('+xhr.status+')</span>';}};
+  xhr.onerror=function(){st.innerHTML='<span class="amb">تعذّر الاتصال</span>';};st.innerHTML='⬆ جاري الرفع…';xhr.send(f);}
+function flashOpen(id){var f=FWMAP[id];if(!f)return;FWID=id;FWMODEL=f.model;
+  var accOpts='<option value="ALL">كل الأجهزة المطابقة (كل العملاء)</option>'+ACCTS.map(function(a){return '<option value="'+esc(a.id)+'">'+esc(a.email)+'</option>';}).join('');
+  document.getElementById('fwFlash').innerHTML=
+   '<div class="panel" style="border-color:#3a2530;background:#171019;margin-top:10px">'+
+   '<div class="row" style="justify-content:space-between"><h2 style="margin:0">🔩 فلاش: '+esc(f.family)+' / '+esc(f.model)+' · نسخة '+esc(f.version)+'</h2>'+
+   '<button class="btn sm" onclick="flashClose()">إغلاق ✕</button></div>'+
+   '<div class="muted" style="font-size:12px;margin:8px 0">سيُفلَش فقط على الأجهزة التي فِرمورها <b>'+esc(f.family)+'</b> وموديلها يطابق <b>'+esc(f.model)+'</b>. تدريجي: جهاز واحد كل مرة مع تأكيدك قبل كل جهاز تالٍ — وأي فشل يوقف الباقي.</div>'+
+   '<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><span class="muted" style="font-size:12.5px">الهدف:</span><select id="fwTarget" class="in" style="font-size:12.5px">'+accOpts+'</select></div>'+
+   '<div class="row" style="gap:8px;align-items:center">للتأكيد اكتب الموديل بالضبط: <input id="fwConfirm" class="in" style="font-size:12.5px;width:170px" placeholder="'+esc(f.model)+'" oninput="fwConfirmCheck()"><button id="fwGo" class="btn danger" disabled onclick="flashStart()">🔩 ابدأ الفلاش التدريجي</button></div>'+
+   '<div id="fwFlashStatus" style="font-size:12.5px;margin-top:8px"></div>'+
+   '<div id="fwJobs" style="margin-top:10px"></div></div>';
+  document.getElementById('fwFlash').scrollIntoView({behavior:'smooth'});}
+function fwConfirmCheck(){document.getElementById('fwGo').disabled=(document.getElementById('fwConfirm').value.trim()!==FWMODEL);}
+function flashClose(){document.getElementById('fwFlash').innerHTML='';if(FWPOLL){clearInterval(FWPOLL);FWPOLL=null;}FWBATCH=null;}
+function flashStart(){var go=document.getElementById('fwGo');if(go.disabled)return;go.disabled=true;
+  var target=document.getElementById('fwTarget').value,tgt=(target==='ALL')?'ALL':{userId:target};
+  document.getElementById('fwFlashStatus').innerHTML='… جاري بدء الدفعة';
+  api('/admin/api/firmware/flash',{method:'POST',body:JSON.stringify({firmwareId:FWID,target:tgt,autoContinue:false})}).then(function(r){return r.json();}).then(function(j){
+    if(j.error){document.getElementById('fwFlashStatus').innerHTML='<span class="amb">'+esc(j.error)+'</span>';go.disabled=false;return;}
+    var sk=(j.skipped||[]).length;
+    if(!j.batchId){document.getElementById('fwFlashStatus').innerHTML='<span class="amb">ما فيه أجهزة مطابقة (تم تخطّي '+sk+').</span>';go.disabled=false;return;}
+    FWBATCH=j.batchId;document.getElementById('fwFlashStatus').innerHTML='<span class="grn">بدأت الدفعة — '+j.matched+' جهاز مطابق'+(sk?(' · تخطّي '+sk):'')+'. يُفلَش جهاز واحد الآن…</span>';
+    fwJobsPoll();
+  }).catch(function(){document.getElementById('fwFlashStatus').innerHTML='<span class="amb">تعذّر بدء الدفعة</span>';go.disabled=false;});}
+function fwState(s){var m={queued:['بالانتظار','off'],downloading:['تنزيل','wn'],verifying:['تحقق','wn'],matching:['مطابقة','wn'],flashing:['يفلش','wn'],rebooting:['إعادة تشغيل','wn'],confirming:['تأكيد النسخة','wn'],success:['✓ نجح','on'],failed:['✗ فشل','off'],refused:['مرفوض','off'],stopped:['موقوف','off']};return m[s]||[s,'off'];}
+function fwJobsPoll(){if(FWPOLL)clearInterval(FWPOLL);fwJobsLoad();FWPOLL=setInterval(fwJobsLoad,5000);}
+function fwJobsLoad(){if(!FWBATCH)return;api('/admin/api/firmware/jobs?batchId='+encodeURIComponent(FWBATCH)).then(function(r){return r.json();}).then(function(d){var jobs=d.jobs||[];
+  var ACT={downloading:1,verifying:1,matching:1,flashing:1,rebooting:1,confirming:1},anyAct=false,anyQ=false,anyFail=false,done=0;
+  var rows=jobs.map(function(j){var st=fwState(j.state);if(ACT[j.state])anyAct=true;if(j.state==='queued')anyQ=true;if(j.state==='failed'||j.state==='refused')anyFail=true;if(j.state==='success'||j.state==='failed'||j.state==='refused'||j.state==='stopped')done++;
+    return '<tr><td class="muted" style="font-size:11px">'+esc((j.deviceId||'').slice(0,8))+'</td><td><span class="pill '+st[1]+'">'+st[0]+'</span></td><td class="muted" style="font-size:11.5px">'+esc(j.newVersion||j.error||'')+'</td></tr>';}).join('');
+  var banner='';
+  if(anyFail){banner='<div style="background:rgba(248,113,113,.12);border:1px solid var(--red);color:var(--red);padding:8px 10px;border-radius:8px;margin-bottom:8px;font-size:12.5px">⛔ توقفت الدفعة بسبب فشل/رفض جهاز — أُلغيت بقية الأجهزة. راجع الجهاز يدوياً قبل أي محاولة جديدة.</div>';}
+  else if(!anyAct&&anyQ){banner='<div style="background:rgba(45,212,167,.1);border:1px solid var(--grn);padding:8px 10px;border-radius:8px;margin-bottom:8px;font-size:12.5px"><span class="grn">✓ نجح الجهاز السابق.</span> تأكّد أنه يعمل ثم <button class="btn sm" style="border-color:var(--grn);color:var(--grn)" onclick="fwContinue()">▶ متابعة للجهاز التالي</button></div>';}
+  var ctrl=((anyAct||anyQ)&&!anyFail)?'<button class="btn sm danger" onclick="fwCancel()">✕ إلغاء الباقي</button>':'';
+  document.getElementById('fwJobs').innerHTML=banner+'<div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="muted" style="font-size:12px">التقدّم: '+done+'/'+jobs.length+'</span>'+ctrl+'</div><div class="scroll"><table><thead><tr><th>الجهاز</th><th>الحالة</th><th>تفاصيل</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  if(!anyAct&&!anyQ){if(FWPOLL){clearInterval(FWPOLL);FWPOLL=null;}}
+}).catch(function(){});}
+function fwContinue(){if(!FWBATCH)return;api('/admin/api/firmware/continue',{method:'POST',body:JSON.stringify({batchId:FWBATCH})}).then(function(){fwJobsPoll();});}
+function fwCancel(){if(!FWBATCH)return;if(!confirm('إلغاء بقية الأجهزة في هذه الدفعة؟ (الجهاز الجاري حالياً لن يتوقف)'))return;api('/admin/api/firmware/cancel',{method:'POST',body:JSON.stringify({batchId:FWBATCH})}).then(function(){fwJobsLoad();});}
 if(TOKEN)start();
 setInterval(function(){if(TOKEN&&!document.getElementById('dash').classList.contains('hide')){ov();ops();accounts();devices();agents();}},30000);
 </script></body></html>`;
