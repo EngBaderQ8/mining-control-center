@@ -11,6 +11,7 @@ export interface ServerConnection {
 export interface AgentDeps {
   agentId: string;
   agentName: string;
+  appVersion?: string;
   conn: ServerConnection;
   listDevices: () => Device[];
   listSites?: () => Site[];
@@ -38,7 +39,12 @@ export class AgentRuntime {
   /** (Re)send hello + the local sites/devices. Safe to call again after a
    *  reconnect WITHOUT re-subscribing the message handler. */
   announce(): void {
-    this.deps.conn.send({ type: "agent.hello", agentId: this.deps.agentId, name: this.deps.agentName });
+    this.deps.conn.send({
+      type: "agent.hello",
+      agentId: this.deps.agentId,
+      name: this.deps.agentName,
+      ...(this.deps.appVersion ? { version: this.deps.appVersion } : {}),
+    });
     for (const site of this.deps.listSites?.() ?? [])
       this.deps.conn.send({ type: "site.register", site });
     for (const device of this.deps.listDevices())

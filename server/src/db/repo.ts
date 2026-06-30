@@ -72,14 +72,58 @@ export class ServerRepo {
       .all() as AccountSummary[];
   }
 
-  listAllAgents(): Array<{ id: string; userId: string; name: string; lastSeenAt: number | null }> {
+  listAllAgents(): Array<{ id: string; userId: string; name: string; version: string | null; lastSeenAt: number | null }> {
     return this.db
-      .prepare(`SELECT id,userId,name,lastSeenAt FROM agents ORDER BY lastSeenAt DESC`)
-      .all() as Array<{ id: string; userId: string; name: string; lastSeenAt: number | null }>;
+      .prepare(`SELECT id,userId,name,version,lastSeenAt FROM agents ORDER BY lastSeenAt DESC`)
+      .all() as ReturnType<ServerRepo["listAllAgents"]>;
   }
 
   setSuspended(userId: string, suspended: boolean): void {
     this.db.prepare(`UPDATE users SET suspended=? WHERE id=?`).run(suspended ? 1 : 0, userId);
+  }
+
+  setUserPassword(userId: string, passwordHash: string): void {
+    this.db.prepare(`UPDATE users SET passwordHash=? WHERE id=?`).run(passwordHash, userId);
+  }
+
+  /** All devices joined with their owner email + current status — for fleet
+   *  analytics and the global device search. */
+  devicesForAdmin(): Array<{
+    userId: string;
+    email: string;
+    name: string;
+    model: string;
+    firmware: string;
+    host: string;
+    state: string | null;
+    hashrateTHs: number | null;
+    maxTempC: number | null;
+    pool: string | null;
+    worker: string | null;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT d.userId, u.email, d.name, d.model, d.firmware, d.host,
+                s.state, s.hashrateTHs, s.maxTempC, s.pool, s.worker
+         FROM devices d
+         LEFT JOIN users u ON u.id = d.userId
+         LEFT JOIN device_status s ON s.deviceId = d.id`,
+      )
+      .all() as ReturnType<ServerRepo["devicesForAdmin"]>;
+  }
+
+  recordMetric(at: number, hashrate: number, devices: number, online: number, users: number): void {
+    this.db
+      .prepare(`INSERT OR REPLACE INTO metrics_history(at,hashrate,devices,online,users) VALUES(?,?,?,?,?)`)
+      .run(at, hashrate, devices, online, users);
+    // Keep ~7 days of points.
+    this.db.prepare(`DELETE FROM metrics_history WHERE at < ?`).run(at - 7 * 24 * 60 * 60 * 1000);
+  }
+
+  listHistory(sinceMs: number): Array<{ at: number; hashrate: number; devices: number; online: number; users: number }> {
+    return this.db
+      .prepare(`SELECT at,hashrate,devices,online,users FROM metrics_history WHERE at >= ? ORDER BY at ASC`)
+      .all(sinceMs) as ReturnType<ServerRepo["listHistory"]>;
   }
 
   /** Delete a user and ALL their data (sites, devices, statuses, agents). */
@@ -169,12 +213,12 @@ export class ServerRepo {
       .all(userId) as DeviceStatus[];
   }
 
-  touchAgent(id: string, userId: string, name: string): void {
+  touchAgent(id: string, userId: string, name: string, version?: string): void {
     this.db
       .prepare(
-        `INSERT INTO agents(id,userId,name,lastSeenAt) VALUES(?,?,?,?)
-         ON CONFLICT(id) DO UPDATE SET name=excluded.name,lastSeenAt=excluded.lastSeenAt`,
+        `INSERT INTO agents(id,userId,name,version,lastSeenAt) VALUES(?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,lastSeenAt=excluded.lastSeenAt`,
       )
-      .run(id, userId, name, Date.now());
+      .run(id, userId, name, version ?? null, Date.now());
   }
 }

@@ -28,6 +28,8 @@ export interface BridgeDeps {
   emitStatuses: (statuses: DeviceStatus[]) => void;
   emitAlerts: (alerts: Alert[]) => void;
   notify: (msg: string) => void;
+  appVersion?: string; // reported to the server (admin version view)
+  onUpdateNow?: () => void; // server asked this client to update now
 }
 
 export interface AuthStatus {
@@ -352,6 +354,7 @@ export class ServerBridge {
       this.agent = new AgentRuntime({
         agentId: s.agentId,
         agentName: s.agentName,
+        ...(this.deps.appVersion ? { appVersion: this.deps.appVersion } : {}),
         conn: this.client,
         listSites: () => this.deps.repo.listSites(),
         listDevices: () => this.deps.repo.listDevices(),
@@ -388,6 +391,10 @@ export class ServerBridge {
       }
       case "command.exec":
         // handled by AgentRuntime's own subscriber
+        break;
+      case "update.now":
+        // The owner triggered a fleet-wide update from the admin dashboard.
+        this.deps.onUpdateNow?.();
         break;
     }
   }

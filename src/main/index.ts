@@ -247,6 +247,9 @@ function buildBridge(): ServerBridge {
         void sendTelegram(tg.token, tg.chatId, `⛏ تنبيه التعدين:\n${msg}`);
       }
     },
+    appVersion: app.getVersion(),
+    // The owner pressed "update all" in the admin dashboard — check + install now.
+    onUpdateNow: () => triggerUpdateCheck?.("admin-push"),
   });
 }
 

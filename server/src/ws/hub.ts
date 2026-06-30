@@ -25,7 +25,7 @@ export class ConnectionHub {
     switch (msg.type) {
       case "agent.hello":
         this.agentId = msg.agentId;
-        this.repo.touchAgent(msg.agentId, this.userId, msg.name);
+        this.repo.touchAgent(msg.agentId, this.userId, msg.name, msg.version);
         this.router.attachAgent(msg.agentId, (exec) => this.send(exec));
         break;
       case "site.register":

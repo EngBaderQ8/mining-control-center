@@ -43,6 +43,14 @@ async function main(): Promise<void> {
   const auth = new AuthService(repo, JWT_SECRET);
   const router = new CommandRouter();
 
+  // Snapshot fleet-wide metrics every 10 min for the admin dashboard trend chart.
+  const snapshotMetrics = (): void => {
+    const o = repo.adminOverview();
+    repo.recordMetric(Date.now(), o.hashrate, o.devices, o.online, o.users);
+  };
+  snapshotMetrics();
+  setInterval(snapshotMetrics, 10 * 60 * 1000);
+
   // Sockets grouped by user, for broadcasting status updates.
   const userSockets = new Map<string, Set<WebSocket>>();
   function broadcast(userId: string, msg: ServerMessage): void {
@@ -51,11 +59,26 @@ async function main(): Promise<void> {
     const data = JSON.stringify(msg);
     for (const s of set) if (s.readyState === s.OPEN) s.send(data);
   }
+  // Tell clients to check for an app update now. userId targets one customer's
+  // installs; omitted = the whole fleet. Returns how many sockets were notified.
+  function pushUpdate(userId?: string): number {
+    const data = JSON.stringify({ type: "update.now" } satisfies ServerMessage);
+    const sets = userId ? [userSockets.get(userId)] : [...userSockets.values()];
+    let count = 0;
+    for (const set of sets) {
+      if (!set) continue;
+      for (const s of set) if (s.readyState === s.OPEN) {
+        s.send(data);
+        count++;
+      }
+    }
+    return count;
+  }
 
   const server = createServer({ key, cert }, (req, res) => {
     void (async () => {
       if (handleDownload(req, res, DATA_DIR)) return;
-      if (await handleAdmin(req, res, { repo, jwtSecret: JWT_SECRET, adminEmails: ADMIN_EMAILS })) return;
+      if (await handleAdmin(req, res, { repo, jwtSecret: JWT_SECRET, adminEmails: ADMIN_EMAILS, pushUpdate })) return;
       if (await handleAuth(req, res, auth)) return;
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "not found" }));

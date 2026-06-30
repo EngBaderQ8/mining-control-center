@@ -20,10 +20,18 @@ export function applySchema(db: Database.Database): void {
       deviceId TEXT PRIMARY KEY, userId TEXT NOT NULL, state TEXT, hashrateTHs REAL, avgHashrateTHs REAL,
       maxTempC REAL, fanRpm REAL, pool TEXT, worker TEXT, hwErrorRate REAL, uptimeSec INTEGER, lastSeen INTEGER
     );
+    CREATE TABLE IF NOT EXISTS metrics_history (
+      at INTEGER PRIMARY KEY, hashrate REAL, devices INTEGER, online INTEGER, users INTEGER
+    );
   `);
   // Migration: add the admin `suspended` flag to existing user tables.
   const cols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
   if (!cols.some((c) => c.name === "suspended")) {
     db.exec(`ALTER TABLE users ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0`);
+  }
+  // Migration: track each agent's running app version (for the admin version view).
+  const acol = db.prepare(`PRAGMA table_info(agents)`).all() as Array<{ name: string }>;
+  if (!acol.some((c) => c.name === "version")) {
+    db.exec(`ALTER TABLE agents ADD COLUMN version TEXT`);
   }
 }

@@ -7,6 +7,7 @@ export interface AgentHello {
   type: "agent.hello";
   agentId: string;
   name: string;
+  version?: string; // the running app version (for the admin fleet/version view)
 }
 export interface SiteRegister {
   type: "site.register";
@@ -68,6 +69,11 @@ export interface CommandExec {
   params?: Record<string, string>;
 }
 
+// Server -> client: check for an app update right now (admin-triggered rollout).
+export interface UpdateNow {
+  type: "update.now";
+}
+
 export type AgentMessage =
   | AgentHello
   | SiteRegister
@@ -76,7 +82,7 @@ export type AgentMessage =
   | CommandResult;
 export type ViewerMessage = SnapshotRequest | CommandSend | DeviceDelete | SiteDelete;
 export type ClientMessage = AgentMessage | ViewerMessage;
-export type ServerMessage = SnapshotMsg | CommandAck | CommandExec | StatusUpdate;
+export type ServerMessage = SnapshotMsg | CommandAck | CommandExec | StatusUpdate | UpdateNow;
 
 const CLIENT_TYPES = new Set<string>([
   "agent.hello",
