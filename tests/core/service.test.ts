@@ -5,7 +5,11 @@ import type { Transport } from "../../src/core/drivers/types";
 import type { DeviceStatus } from "../../src/core/model/device";
 import type { Alert } from "../../src/core/alerts/rules";
 
-function makeService(transport: Transport, emitted: { statuses: DeviceStatus[][]; alerts: Alert[][] }) {
+function makeService(
+  transport: Transport,
+  emitted: { statuses: DeviceStatus[][]; alerts: Alert[][] },
+  clock: { t: number } = { t: 1000 },
+) {
   const repo = new DeviceRepo();
   const service = new MiningService(
     {
@@ -15,11 +19,11 @@ function makeService(transport: Transport, emitted: { statuses: DeviceStatus[][]
       decrypt: (e) => e.toString("utf8"),
       emitStatuses: (s) => emitted.statuses.push(s),
       emitAlerts: (a) => emitted.alerts.push(a),
-      now: () => 1000,
+      now: () => clock.t,
     },
     { ...DEFAULT_CONFIG, pollIntervalMs: 999_999 },
   );
-  return { service, repo };
+  return { service, repo, clock };
 }
 
 describe("MiningService", () => {
@@ -70,7 +74,7 @@ describe("MiningService", () => {
     expect(health.issues.some((i: { code: string }) => i.code === "boardDown")).toBe(true);
   });
 
-  it("emits statuses and offline alerts across poll cycles", async () => {
+  it("debounces offline alerts (no flap-spam), fires once after the confirm window, with the device NAME", async () => {
     let alive = true;
     const transport: Transport = {
       async tcp4028(_h, _p, cmd) {
@@ -85,16 +89,32 @@ describe("MiningService", () => {
       },
     };
     const emitted = { statuses: [] as DeviceStatus[][], alerts: [] as Alert[][] };
-    const { service } = makeService(transport, emitted);
+    const clock = { t: 1000 };
+    const { service } = makeService(transport, emitted, clock);
     service.addSite({ id: "s1", name: "site" });
-    service.addDevice(
-      { id: "d1", siteId: "s1", name: "n", model: "S19", firmware: "stock", host: "h", apiPort: 4028, controlPort: 80 },
-    );
+    service.addDevice({
+      id: "d1", siteId: "s1", name: "ASIC-47", model: "S19", firmware: "stock", host: "h", apiPort: 4028, controlPort: 80,
+    });
     const first = await service.pollOnce();
     expect(first[0]?.state).toBe("online");
     expect(emitted.statuses).toHaveLength(1);
+
+    // Goes offline — but a brief flap must NOT alert immediately.
     alive = false;
     await service.pollOnce();
-    expect(emitted.alerts.flat().map((a) => a.kind)).toContain("offline");
+    expect(emitted.alerts.flat().map((a) => a.kind)).not.toContain("offline");
+
+    // Still offline past the confirm window → fires exactly once, with the name.
+    clock.t += 70_000;
+    await service.pollOnce();
+    const offline = emitted.alerts.flat().filter((a) => a.kind === "offline");
+    expect(offline).toHaveLength(1);
+    expect(offline[0]!.message).toContain("ASIC-47");
+    expect(offline[0]!.message).not.toContain("d1"); // the UUID, not used
+
+    // Keeps polling while offline → no duplicate spam.
+    clock.t += 70_000;
+    await service.pollOnce();
+    expect(emitted.alerts.flat().filter((a) => a.kind === "offline")).toHaveLength(1);
   });
 });

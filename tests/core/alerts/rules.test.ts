@@ -17,13 +17,19 @@ const base: DeviceStatus = {
 };
 
 describe("evaluateAlerts", () => {
-  it("fires on going offline", () => {
+  it("does NOT fire offline here (the service debounces that to avoid flap-spam)", () => {
     const a = evaluateAlerts(
       base,
       { ...base, state: "offline", hashrateTHs: 0 },
       { overheatC: 80, hashDropFrac: 0.7 },
     );
-    expect(a.map((x) => x.kind)).toContain("offline");
+    expect(a.map((x) => x.kind)).not.toContain("offline");
+  });
+  it("uses the device name (not the UUID) in the message when provided", () => {
+    const prev = { ...base, maxTempC: 70 };
+    const now = { ...base, maxTempC: 85 };
+    const a = evaluateAlerts(prev, now, { overheatC: 80, hashDropFrac: 0.7 }, "ASIC-47");
+    expect(a[0]?.message).toContain("ASIC-47");
   });
   it("fires overheat once on transition", () => {
     const prev = { ...base, maxTempC: 70 };

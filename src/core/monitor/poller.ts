@@ -67,7 +67,12 @@ export async function pollDevice(
     const sumRaw = await ask("summary");
     if (!sumRaw) return null;
     const poolRaw = withPool ? await ask("pools") : "";
-    return extractStatusFromRaw(device.id, sumRaw, sumRaw, poolRaw || combined, now);
+    // Antminer keeps temps (and per-board detail) in `stats`, NOT in `summary`.
+    // Fetch it on the first attempt for non-Whatsminer replies (Whatsminer carries
+    // temp/fan in `summary` and rejects `stats`) so an Antminer that ends up on
+    // this path doesn't lose its temperature reading.
+    const statRaw = withPool && !/"MHS /.test(sumRaw) ? await ask("stats") : "";
+    return extractStatusFromRaw(device.id, sumRaw, statRaw || sumRaw, poolRaw || combined, now);
   };
   let s = await fetchSummary(true);
   if (!s || s.hashrateTHs <= 0) {

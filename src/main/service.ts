@@ -34,6 +34,11 @@ export interface ServiceConfig {
 /** Max auto-reboots while a device stays in one offline episode (resets when it returns). */
 const MAX_REBOOTS_PER_EPISODE = 2;
 
+/** A device must stay offline this long before an offline alert fires (and it
+ *  fires only once per episode) — so a brief connection flap doesn't spam a
+ *  notification every poll. */
+const OFFLINE_ALERT_CONFIRM_MS = 60_000;
+
 export const DEFAULT_CONFIG: ServiceConfig = {
   pollIntervalMs: 10_000,
   maxConcurrency: 16,
@@ -55,6 +60,10 @@ export class MiningService {
   private offlineSince = new Map<string, number>();
   private lastRecoveryAt = new Map<string, number>();
   private rebootAttempts = new Map<string, number>();
+  // For the debounced offline alert: when the current offline episode began, and
+  // whether we've already alerted for it.
+  private offlineAlertSince = new Map<string, number>();
+  private offlineAlerted = new Set<string>();
 
   constructor(
     private deps: ServiceDeps,
@@ -167,16 +176,33 @@ export class MiningService {
       { maxConcurrency: this.config.maxConcurrency, warnTempC: this.config.warnTempC, now },
       (d) => pollDevice(d, this.deps.transport, now),
     );
+    const nameById = new Map(devices.map((d) => [d.id, d.name]));
     const alerts: Alert[] = [];
     for (const s of statuses) {
+      const name = nameById.get(s.deviceId) ?? s.deviceId;
       const prev = this.latest.get(s.deviceId);
       if (prev)
         alerts.push(
-          ...evaluateAlerts(prev, s, {
-            overheatC: this.config.overheatC,
-            hashDropFrac: this.config.hashDropFrac,
-          }),
+          ...evaluateAlerts(
+            prev,
+            s,
+            { overheatC: this.config.overheatC, hashDropFrac: this.config.hashDropFrac },
+            name,
+          ),
         );
+      // Debounced offline alert: a device must stay offline for the confirm
+      // window before we notify (filters brief flaps), and we notify once.
+      if (s.state === "offline") {
+        const since = this.offlineAlertSince.get(s.deviceId) ?? now;
+        if (!this.offlineAlertSince.has(s.deviceId)) this.offlineAlertSince.set(s.deviceId, now);
+        if (now - since >= OFFLINE_ALERT_CONFIRM_MS && !this.offlineAlerted.has(s.deviceId)) {
+          this.offlineAlerted.add(s.deviceId);
+          alerts.push({ deviceId: s.deviceId, kind: "offline", message: `${name} غير متصل` });
+        }
+      } else {
+        this.offlineAlertSince.delete(s.deviceId);
+        this.offlineAlerted.delete(s.deviceId);
+      }
       this.latest.set(s.deviceId, s);
     }
     this.deps.emitStatuses(statuses);

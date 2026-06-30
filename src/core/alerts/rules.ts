@@ -15,15 +15,18 @@ export function evaluateAlerts(
   prev: DeviceStatus,
   now: DeviceStatus,
   th: AlertThresholds,
+  name: string = now.deviceId,
 ): Alert[] {
   const out: Alert[] = [];
-  if (prev.state !== "offline" && now.state === "offline")
-    out.push({ deviceId: now.deviceId, kind: "offline", message: `${now.deviceId} غير متصل` });
+  // NOTE: the offline alert is NOT fired here. A device that briefly flaps
+  // offline (common on Whatsminer's connection-sensitive API) would otherwise
+  // spam a notification every poll. The service debounces it — alerting only
+  // after the device stays offline for a confirmation window, and only once.
   if (prev.maxTempC < th.overheatC && now.maxTempC >= th.overheatC)
     out.push({
       deviceId: now.deviceId,
       kind: "overheat",
-      message: `${now.deviceId} حرارة ${now.maxTempC}°C`,
+      message: `${name} حرارة ${now.maxTempC}°C`,
     });
   const dropped =
     now.state !== "offline" &&
@@ -32,6 +35,6 @@ export function evaluateAlerts(
   const wasOk =
     prev.avgHashrateTHs === 0 || prev.hashrateTHs >= prev.avgHashrateTHs * th.hashDropFrac;
   if (dropped && wasOk)
-    out.push({ deviceId: now.deviceId, kind: "hashdrop", message: `${now.deviceId} هبوط هاش` });
+    out.push({ deviceId: now.deviceId, kind: "hashdrop", message: `${name} هبوط هاش` });
   return out;
 }
