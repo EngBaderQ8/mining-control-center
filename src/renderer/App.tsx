@@ -608,7 +608,13 @@ export function App(): React.ReactElement {
 
       {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
       {recOpen && <RecoveryDialog onClose={() => setRecOpen(false)} />}
-      {diagDevice && <DiagnosticsDialog device={diagDevice} onClose={() => setDiagDevice(null)} />}
+      {diagDevice && (
+        <DiagnosticsDialog
+          device={diagDevice}
+          health={statusById.get(diagDevice.id)?.health}
+          onClose={() => setDiagDevice(null)}
+        />
+      )}
 
       {profileOpen && (
         <ProfileDialog

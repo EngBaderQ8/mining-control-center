@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { api } from "../ipc";
+import React from "react";
 import type { Device } from "../../core/model/device";
+import type { DeviceHealth } from "../../core/diagnose/parse";
 import { t } from "../i18n";
-
-type Health = Awaited<ReturnType<typeof api.diagnoseDevice>>;
 
 function issueText(code: string, v: Record<string, number>): string {
   switch (code) {
@@ -22,30 +20,25 @@ function issueText(code: string, v: Record<string, number>): string {
   }
 }
 
-export function DiagnosticsDialog({ device, onClose }: { device: Device; onClose: () => void }): React.ReactElement {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [busy, setBusy] = useState(true);
-
-  useEffect(() => {
-    setBusy(true);
-    void api
-      .diagnoseDevice(device.host)
-      .then(setHealth)
-      .finally(() => setBusy(false));
-  }, [device.host]);
-
+export function DiagnosticsDialog({
+  device,
+  health,
+  onClose,
+}: {
+  device: Device;
+  health: DeviceHealth | undefined;
+  onClose: () => void;
+}): React.ReactElement {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
-        <h3>🔧 {t("تشخيص الجهاز")}: {device.name}</h3>
+        <h3>
+          🔧 {t("تشخيص الجهاز")}: {device.name}
+        </h3>
 
-        {busy ? (
-          <div style={{ color: "var(--muted)", padding: "20px 0", textAlign: "center" }}>
-            {t("…جاري فحص الجهاز")}
-          </div>
-        ) : !health?.reachable ? (
-          <div style={{ color: "var(--red)", padding: "16px 0" }}>
-            {t("❌ ما قدر يوصل الجهاز للتشخيص.")} {health?.error ?? ""}
+        {!health || (health.boards.length === 0 && health.issues.length === 0) ? (
+          <div style={{ color: "var(--muted)", padding: "18px 0", textAlign: "center", lineHeight: 1.7 }}>
+            {t("…جاري جمع بيانات التشخيص — خلّ البرنامج يكمّل دورة فحص (لين دقيقة) ثم افتح التشخيص.")}
           </div>
         ) : (
           <>
@@ -92,9 +85,7 @@ export function DiagnosticsDialog({ device, onClose }: { device: Device; onClose
                     <tr key={b.board}>
                       <td>{b.board}</td>
                       <td className={b.chips === 0 ? "red" : ""}>{b.chips}</td>
-                      <td className={b.rateGhs < 1 ? "red" : "green"}>
-                        {(b.rateGhs / 1000).toFixed(1)} TH
-                      </td>
+                      <td className={b.rateGhs < 1 ? "red" : "green"}>{(b.rateGhs / 1000).toFixed(1)} TH</td>
                       <td className={b.hwErrors > 50 ? "amber" : ""}>{b.hwErrors}</td>
                     </tr>
                   ))}

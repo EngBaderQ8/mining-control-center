@@ -81,6 +81,10 @@ export class ServerRepo {
   }
 
   upsertStatus(userId: string, s: DeviceStatus): void {
+    // Strip nested fields (e.g. health) that aren't DB columns — they still ride
+    // along in the live broadcast, just not persisted.
+    const { health: _health, ...flat } = s;
+    void _health;
     this.db
       .prepare(
         `INSERT INTO device_status(deviceId,userId,state,hashrateTHs,avgHashrateTHs,maxTempC,fanRpm,pool,worker,hwErrorRate,uptimeSec,lastSeen)
@@ -88,7 +92,7 @@ export class ServerRepo {
          ON CONFLICT(deviceId) DO UPDATE SET state=@state,hashrateTHs=@hashrateTHs,avgHashrateTHs=@avgHashrateTHs,
            maxTempC=@maxTempC,fanRpm=@fanRpm,pool=@pool,worker=@worker,hwErrorRate=@hwErrorRate,uptimeSec=@uptimeSec,lastSeen=@lastSeen`,
       )
-      .run({ ...s, userId });
+      .run({ ...flat, userId });
   }
 
   listStatuses(userId: string): DeviceStatus[] {

@@ -2,6 +2,7 @@ import type { Device, DeviceStatus } from "../model/device";
 import type { Transport } from "../drivers/types";
 import { buildRequest } from "../cgminer/protocol";
 import { extractStatusFromRaw } from "../cgminer/normalize";
+import { parseDeviceHealth } from "../diagnose/parse";
 
 function offline(deviceId: string, now: number): DeviceStatus {
   return {
@@ -42,7 +43,7 @@ export async function pollDevice(
   const combined = await ask("summary+stats+pools");
   if (combined) {
     const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
-    if (s.hashrateTHs > 0) return s;
+    if (s.hashrateTHs > 0) return { ...s, health: parseDeviceHealth(combined) };
   }
 
   // Fallback: separate sequential requests.
@@ -50,11 +51,12 @@ export async function pollDevice(
   const statRaw = await ask("stats");
   const poolRaw = await ask("pools");
   if (!sumRaw && !statRaw && !combined) return offline(device.id, now);
-  return extractStatusFromRaw(
+  const s = extractStatusFromRaw(
     device.id,
     sumRaw || combined,
     statRaw || combined,
     poolRaw || combined,
     now,
   );
+  return { ...s, health: parseDeviceHealth(statRaw || combined) };
 }

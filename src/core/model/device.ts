@@ -18,6 +18,8 @@ export interface Site {
 
 export type DeviceState = "online" | "offline" | "warning";
 
+import type { DeviceHealth } from "../diagnose/parse";
+
 export interface DeviceStatus {
   deviceId: string;
   state: DeviceState;
@@ -30,4 +32,5 @@ export interface DeviceStatus {
   hwErrorRate: number; // 0..1
   uptimeSec: number;
   lastSeen: number; // epoch ms
+  health?: DeviceHealth; // per-board/fan diagnostics (computed by the agent's poll)
 }

@@ -7,6 +7,8 @@ export const EN: Record<string, string> = {
   "التنبؤ بالأعطال": "Failure prediction",
   "تشخيص الجهاز": "Device diagnostics",
   "…جاري فحص الجهاز": "…Diagnosing device",
+  "…جاري جمع بيانات التشخيص — خلّ البرنامج يكمّل دورة فحص (لين دقيقة) ثم افتح التشخيص.":
+    "…Gathering diagnostic data — let the app complete a poll cycle (up to a minute), then open diagnostics.",
   "❌ ما قدر يوصل الجهاز للتشخيص.": "❌ Could not reach the device to diagnose.",
   "الجهاز سليم — ما فيه أعطال مكتشفة.": "Device is healthy — no faults detected.",
   "المشاكل المكتشفة ({n}):": "Detected problems ({n}):",
