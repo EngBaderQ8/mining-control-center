@@ -13,6 +13,7 @@ import {
   sendOwnerTelegram,
   type IncidentState,
 } from "./monitor/ownerAlerts";
+import { FlashSequencer } from "./firmware/sequencer";
 import { ConnectionHub } from "./ws/hub";
 import { createPrivateKey, sign as edSign, type KeyObject } from "node:crypto";
 import { handleAuth } from "./http/authRoutes";
@@ -63,6 +64,7 @@ async function main(): Promise<void> {
   const repo = new ServerRepo(db);
   const auth = new AuthService(repo, JWT_SECRET);
   const router = new CommandRouter();
+  const flashSequencer = new FlashSequencer(repo, router, DATA_DIR);
 
   // Snapshot fleet-wide metrics every 10 min for the admin dashboard trend chart.
   const snapshotMetrics = (): void => {
@@ -131,6 +133,7 @@ async function main(): Promise<void> {
           adminEmails: ADMIN_EMAILS,
           pushUpdate,
           router,
+          flashSequencer,
           dataDir: DATA_DIR,
           signManifest,
         })
@@ -170,6 +173,7 @@ async function main(): Promise<void> {
       repo,
       router,
       broadcast,
+      flashSequencer,
     );
 
     ws.on("message", (raw) => {

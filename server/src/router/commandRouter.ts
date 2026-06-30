@@ -1,7 +1,7 @@
-import type { CommandExec } from "../protocol/messages";
+import type { CommandExec, ServerMessage } from "../protocol/messages";
 import type { CommandOutcome } from "../../../src/core/model/result";
 
-type Sender = (exec: CommandExec) => void;
+type Sender = (m: ServerMessage) => void;
 interface Pending {
   resolve: (o: CommandOutcome) => void;
   reject: (e: Error) => void;
@@ -18,6 +18,16 @@ export class CommandRouter {
 
   detachAgent(agentId: string): void {
     this.agents.delete(agentId);
+  }
+
+  /** Fire-and-forget send to a specific agent (no response promise) — used for the
+   *  long-running firmware flash job, which reports back asynchronously, not within
+   *  routeCommand's short timeout. Returns false if that agent isn't connected. */
+  sendToAgent(agentId: string, m: ServerMessage): boolean {
+    const send = this.agents.get(agentId);
+    if (!send) return false;
+    send(m);
+    return true;
   }
 
   routeCommand(agentId: string, exec: CommandExec, timeoutMs = 15000): Promise<CommandOutcome> {

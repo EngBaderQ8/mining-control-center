@@ -1,5 +1,6 @@
 import type { ServerRepo } from "../db/repo";
 import type { CommandRouter } from "../router/commandRouter";
+import type { FlashSequencer } from "../firmware/sequencer";
 import type { ClientMessage, ServerMessage } from "../protocol/messages";
 
 type Send = (m: ServerMessage) => void;
@@ -19,6 +20,7 @@ export class ConnectionHub {
     private repo: ServerRepo,
     private router: CommandRouter,
     private broadcast: Broadcast,
+    private flashSequencer: FlashSequencer,
   ) {}
 
   async handleMessage(msg: ClientMessage): Promise<void> {
@@ -55,6 +57,18 @@ export class ConnectionHub {
       case "command.result":
         this.router.resolveResult(msg.commandId, msg.outcome);
         break;
+      case "flash.progress": {
+        // Only the agent that OWNS the job may report on it (no cross-agent spoofing).
+        const job = this.repo.getFlashJob(msg.jobId);
+        if (job && job.agentId === this.agentId) this.flashSequencer.onProgress(msg.jobId, msg.phase);
+        break;
+      }
+      case "flash.result": {
+        const job = this.repo.getFlashJob(msg.jobId);
+        if (job && job.agentId === this.agentId)
+          this.flashSequencer.onResult(msg.jobId, msg.state, msg.newVersion, msg.error);
+        break;
+      }
       case "snapshot.request":
         this.send({
           type: "snapshot",

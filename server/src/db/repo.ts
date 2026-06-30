@@ -252,6 +252,23 @@ export class ServerRepo {
       .all(userId) as Array<{ id: string; agentId: string }>;
   }
 
+  /** Devices to consider for a firmware flash: one device, one account, or ALL.
+   *  Returns the fields the flash targeter needs (agent, model, firmware). */
+  flashTargets(scope: { deviceId?: string; userId?: string }): Array<{
+    id: string;
+    userId: string;
+    agentId: string;
+    model: string;
+    firmware: string;
+  }> {
+    const cols = `id, userId, agentId, model, firmware`;
+    if (scope.deviceId)
+      return this.db.prepare(`SELECT ${cols} FROM devices WHERE id=?`).all(scope.deviceId) as never;
+    if (scope.userId)
+      return this.db.prepare(`SELECT ${cols} FROM devices WHERE userId=?`).all(scope.userId) as never;
+    return this.db.prepare(`SELECT ${cols} FROM devices`).all() as never;
+  }
+
   // —— Firmware flash jobs (admin firmware push; the server sequences one per device) ——
   createFlashJobs(
     rows: Array<{

@@ -41,5 +41,24 @@ export function handleUpdatePublic(req: IncomingMessage, res: ServerResponse, da
     createReadStream(f).pipe(res);
     return true;
   }
+
+  // Hosted ASIC firmware images. The agent verifies sha256 (from the signed catalog)
+  // before flashing, so public GET is fine; basename() blocks traversal, and the
+  // signed catalog.json (with the bot/secret-free metadata) is NOT served.
+  if (path.startsWith("/firmware/")) {
+    const name = basename(decodeURIComponent(path.slice("/firmware/".length)));
+    const f = join(dataDir, "firmware", name);
+    if (!name || name === "catalog.json" || !existsSync(f) || !statSync(f).isFile()) {
+      res.writeHead(404);
+      res.end();
+      return true;
+    }
+    res.writeHead(200, {
+      "content-type": "application/octet-stream",
+      "content-length": String(statSync(f).size),
+    });
+    createReadStream(f).pipe(res);
+    return true;
+  }
   return false;
 }

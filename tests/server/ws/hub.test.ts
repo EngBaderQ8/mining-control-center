@@ -4,6 +4,7 @@ import { applySchema } from "../../../server/src/db/schema";
 import { ServerRepo } from "../../../server/src/db/repo";
 import { CommandRouter } from "../../../server/src/router/commandRouter";
 import { ConnectionHub } from "../../../server/src/ws/hub";
+import { FlashSequencer } from "../../../server/src/firmware/sequencer";
 import type { ServerMessage } from "../../../server/src/protocol/messages";
 
 function setup() {
@@ -12,21 +13,23 @@ function setup() {
   const repo = new ServerRepo(db);
   const uid = repo.createUser("a@b.com", "h");
   const router = new CommandRouter();
+  const flashSequencer = new FlashSequencer(repo, router, ":memory:");
   const broadcasts: ServerMessage[] = [];
   return {
     repo,
     router,
     uid,
     broadcasts,
+    flashSequencer,
     broadcast: (_u: string, m: ServerMessage) => broadcasts.push(m),
   };
 }
 
 describe("ConnectionHub", () => {
   it("registers an agent + device, then a viewer command routes to the agent", async () => {
-    const { repo, router, uid, broadcast } = setup();
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
     const agentSent: ServerMessage[] = [];
-    const agentHub = new ConnectionHub(uid, (m) => agentSent.push(m), repo, router, broadcast);
+    const agentHub = new ConnectionHub(uid, (m) => agentSent.push(m), repo, router, broadcast, flashSequencer);
     await agentHub.handleMessage({ type: "agent.hello", agentId: "ag1", name: "site1" });
     await agentHub.handleMessage({
       type: "device.register",
@@ -44,7 +47,7 @@ describe("ConnectionHub", () => {
     repo.upsertSite({ id: "s1", userId: uid, name: "site1" });
 
     const viewerSent: ServerMessage[] = [];
-    const viewerHub = new ConnectionHub(uid, (m) => viewerSent.push(m), repo, router, broadcast);
+    const viewerHub = new ConnectionHub(uid, (m) => viewerSent.push(m), repo, router, broadcast, flashSequencer);
     const done = viewerHub.handleMessage({
       type: "command.send",
       commandId: "c1",
@@ -66,16 +69,16 @@ describe("ConnectionHub", () => {
   });
 
   it("acks failure for an unknown device", async () => {
-    const { repo, router, uid, broadcast } = setup();
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
     const sent: ServerMessage[] = [];
-    const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast);
+    const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast, flashSequencer);
     await hub.handleMessage({ type: "command.send", commandId: "x", deviceId: "ghost", command: "reboot" });
     expect(sent[0]).toMatchObject({ type: "command.ack", outcome: { ok: false } });
   });
 
   it("broadcasts a live snapshot when a NEW site/device registers, but stays silent on identical reconnect re-register", async () => {
-    const { repo, router, uid, broadcast, broadcasts } = setup();
-    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);
     const device = {
       id: "d1", siteId: "s1", name: "n", model: "S19",
       firmware: "stock" as const, host: "h", apiPort: 4028, controlPort: 80,
@@ -99,8 +102,8 @@ describe("ConnectionHub", () => {
   });
 
   it("renames a site: updates the DB and broadcasts the rename (to the owning agent) + a snapshot", async () => {
-    const { repo, router, uid, broadcast, broadcasts } = setup();
-    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);
     repo.upsertSite({ id: "s1", userId: uid, name: "old" });
     await hub.handleMessage({ type: "site.rename", siteId: "s1", name: "new name" });
     expect(repo.listSites(uid)[0]!.name).toBe("new name");
@@ -114,8 +117,8 @@ describe("ConnectionHub", () => {
   });
 
   it("deletes a device and a site, broadcasting a fresh snapshot", async () => {
-    const { repo, router, uid, broadcast, broadcasts } = setup();
-    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);
     repo.upsertSite({ id: "s1", userId: uid, name: "site" });
     repo.upsertDevice({
       id: "d1", userId: uid, siteId: "s1", agentId: "ag1", name: "n", model: "S19",
@@ -131,9 +134,9 @@ describe("ConnectionHub", () => {
   });
 
   it("broadcasts status updates and answers snapshot requests", async () => {
-    const { repo, router, uid, broadcast, broadcasts } = setup();
+    const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
     const sent: ServerMessage[] = [];
-    const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast);
+    const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast, flashSequencer);
     // The device must be owned by this user for its status to be accepted.
     repo.upsertDevice({
       id: "d1", userId: uid, siteId: "s1", agentId: "ag1", name: "n", model: "S19",
@@ -163,8 +166,8 @@ describe("ConnectionHub", () => {
   });
 
   it("ignores status for a device not owned by the user (no spoofing)", async () => {
-    const { repo, router, uid, broadcast, broadcasts } = setup();
-    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);
     await hub.handleMessage({
       type: "status.update",
       statuses: [

@@ -12,6 +12,11 @@ import { lookupSpec } from "../../../src/core/devices/catalog";
 import type { ControlCommand } from "../../../src/core/drivers/types";
 import type { CommandOutcome } from "../../../src/core/model/result";
 import { readOwnerConfig, writeOwnerConfig, sendOwnerTelegram } from "../monitor/ownerAlerts";
+import { readCatalog, appendCatalog, firmwareById, modelMatches } from "../firmware/catalog";
+import type { FlashSequencer } from "../firmware/sequencer";
+import type { Firmware } from "../../../src/core/model/device";
+
+const FIRMWARE_FAMILIES: Firmware[] = ["stock", "braiins", "vnish", "luxos", "whatsminer"];
 
 /** Control ops the admin may route to any account's miners (whitelist). */
 const ADMIN_COMMANDS: ControlCommand[] = [
@@ -30,6 +35,7 @@ export interface AdminDeps {
   adminEmails: Set<string>; // lowercased
   pushUpdate: (userId?: string) => number; // tell clients to update now
   router: CommandRouter; // route control commands to the owning agent (remote control)
+  flashSequencer: FlashSequencer; // sequences firmware-flash jobs one device at a time
   dataDir: string;
   signManifest?: (payload: string) => string | null; // Ed25519 sign (needs UPDATE_PRIVATE_KEY)
 }
@@ -485,6 +491,167 @@ export async function handleAdmin(
       audit(req, uid, "upload-update", `${version} sha=${sha256.slice(0, 12)}`);
       const notified = deps.pushUpdate(); // ask all connected clients to update now
       send(res, 200, { ok: true, version, sha256, size, notified });
+      return true;
+    }
+    if (path === "/admin/api/firmware/upload" && req.method === "POST") {
+      if (!deps.signManifest) {
+        send(res, 400, { error: "الخادم بدون UPDATE_PRIVATE_KEY — التوقيع معطّل" });
+        return true;
+      }
+      const q = new URL(req.url ?? "", "http://local");
+      const family = (q.searchParams.get("family") ?? "").trim() as Firmware;
+      const model = (q.searchParams.get("model") ?? "").trim();
+      const version = (q.searchParams.get("version") ?? "").trim();
+      const name = basename(q.searchParams.get("name") ?? "");
+      if (
+        !FIRMWARE_FAMILIES.includes(family) ||
+        !model ||
+        !version ||
+        !/^[A-Za-z0-9._-]+\.(tar\.gz|tgz|bin|swu)$/.test(name)
+      ) {
+        send(res, 400, { error: "bad request (family/model/version/name)" });
+        return true;
+      }
+      const dir = join(deps.dataDir, "firmware");
+      mkdirSync(dir, { recursive: true });
+      const dest = join(dir, name);
+      const part = `${dest}.part`;
+      if (resolve(dest) !== join(resolve(dir), name)) {
+        send(res, 400, { error: "bad name" });
+        return true;
+      }
+      const hash = createHash("sha256");
+      let size = 0;
+      let tooBig = false;
+      const fileOut = createWriteStream(part);
+      try {
+        await new Promise<void>((res2, reject) => {
+          req.on("data", (c: Buffer) => {
+            size += c.length;
+            if (size > 600 * 1024 * 1024) {
+              tooBig = true;
+              req.destroy();
+              fileOut.destroy();
+              reject(new Error("too large"));
+              return;
+            }
+            hash.update(c);
+          });
+          req.pipe(fileOut);
+          fileOut.on("finish", () => res2());
+          fileOut.on("error", reject);
+          req.on("error", reject);
+        });
+      } catch {
+        try {
+          rmSync(part, { force: true });
+        } catch {
+          /* ignore */
+        }
+        send(res, tooBig ? 413 : 400, { error: tooBig ? "الملف كبير جداً (>600MB)" : "فشل الرفع" });
+        return true;
+      }
+      const sha256 = hash.digest("hex");
+      const uploadedAt = Date.now();
+      const id = randomUUID();
+      const sig = deps.signManifest(`${family}:${model}:${version}:${sha256}:${size}:${uploadedAt}:${name}`);
+      if (!sig) {
+        rmSync(part, { force: true });
+        send(res, 500, { error: "signing failed" });
+        return true;
+      }
+      renameSync(part, dest);
+      appendCatalog(deps.dataDir, { id, family, model, version, file: name, sha256, size, sig, uploadedAt });
+      audit(req, uid, "firmware-upload", `${family}/${model} ${version} sha=${sha256.slice(0, 12)}`);
+      send(res, 200, { ok: true, id, sha256, size });
+      return true;
+    }
+    if (path === "/admin/api/firmware/list" && req.method === "GET") {
+      send(res, 200, { firmware: readCatalog(deps.dataDir) });
+      return true;
+    }
+    if (path === "/admin/api/firmware/flash" && req.method === "POST") {
+      const b = await readBody(req);
+      const firmwareId = typeof b["firmwareId"] === "string" ? b["firmwareId"] : "";
+      const fw = firmwareById(deps.dataDir, firmwareId);
+      if (!fw) {
+        send(res, 404, { error: "firmware not found" });
+        return true;
+      }
+      const t = b["target"];
+      let scope: { deviceId?: string; userId?: string } | null = null;
+      if (t && typeof t === "object" && typeof (t as { deviceId?: unknown }).deviceId === "string")
+        scope = { deviceId: (t as { deviceId: string }).deviceId };
+      else if (t && typeof t === "object" && typeof (t as { userId?: unknown }).userId === "string")
+        scope = { userId: (t as { userId: string }).userId };
+      else if (t === "ALL") scope = {};
+      if (!scope) {
+        send(res, 400, { error: "bad target" });
+        return true;
+      }
+      const autoContinue = !!b["autoContinue"];
+      const matched: Array<{ id: string; userId: string; agentId: string }> = [];
+      const skipped: Array<{ deviceId: string; reason: string }> = [];
+      for (const d of repo.flashTargets(scope)) {
+        if (d.firmware !== fw.family) {
+          skipped.push({ deviceId: d.id, reason: `firmware ${d.firmware}≠${fw.family}` });
+        } else if (!modelMatches(d.model, fw.model)) {
+          skipped.push({ deviceId: d.id, reason: `model "${d.model}"≠"${fw.model}"` });
+        } else if (!d.agentId) {
+          skipped.push({ deviceId: d.id, reason: "no agent" });
+        } else {
+          matched.push({ id: d.id, userId: d.userId, agentId: d.agentId });
+        }
+      }
+      if (matched.length === 0) {
+        send(res, 200, { batchId: null, matched: 0, skipped });
+        return true;
+      }
+      const batchId = randomUUID();
+      repo.createFlashJobs(
+        matched.map((d) => ({
+          jobId: randomUUID(),
+          batchId,
+          userId: d.userId,
+          deviceId: d.id,
+          agentId: d.agentId,
+          firmwareId,
+        })),
+      );
+      audit(
+        req,
+        uid,
+        "firmware-flash",
+        `${fw.family}/${fw.model} ${fw.version} -> ${matched.length} devices batch=${batchId}`,
+      );
+      deps.flashSequencer.startBatch(batchId, autoContinue);
+      send(res, 200, { batchId, matched: matched.length, skipped });
+      return true;
+    }
+    if (path === "/admin/api/firmware/jobs" && req.method === "GET") {
+      const q = new URL(req.url ?? "", "http://local");
+      const batchId = q.searchParams.get("batchId") ?? "";
+      send(res, 200, { jobs: batchId ? repo.listFlashJobs(batchId) : [] });
+      return true;
+    }
+    if (path === "/admin/api/firmware/continue" && req.method === "POST") {
+      const b = await readBody(req);
+      const batchId = typeof b["batchId"] === "string" ? b["batchId"] : "";
+      if (batchId) {
+        deps.flashSequencer.continueBatch(batchId);
+        audit(req, uid, "firmware-continue", batchId);
+      }
+      send(res, 200, { ok: true });
+      return true;
+    }
+    if (path === "/admin/api/firmware/cancel" && req.method === "POST") {
+      const b = await readBody(req);
+      const batchId = typeof b["batchId"] === "string" ? b["batchId"] : "";
+      if (batchId) {
+        deps.flashSequencer.cancelBatch(batchId);
+        audit(req, uid, "firmware-cancel", batchId);
+      }
+      send(res, 200, { ok: true });
       return true;
     }
     if (path === "/admin/api/push-update" && req.method === "POST") {
