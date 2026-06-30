@@ -27,6 +27,21 @@ describe("Whatsminer (MicroBT) summary", () => {
     expect(s.fanRpm).toBeGreaterThan(4000); // "Fan Speed In"
   });
 
+  it("uses Chip Temp Avg (not Max, not ambient Env Temp) when a Whatsminer has no board Temperature", () => {
+    // Real device 192.168.0.47: no "Temperature" field at all — only Env Temp
+    // (ambient) and Chip Temp Min/Max/Avg. Must read ~76 (avg), not 0, not 87
+    // (max — would false-alarm in heat), not 34 (ambient).
+    const noBoardTemp =
+      '{"STATUS":"S","Code":131,"Msg":{"Elapsed":20096,"MHS av":123307112,"HS RT":123211912,' +
+      '"Fan Speed In":5073,"Fan Speed Out":5337,"Env Temp":33.937,' +
+      '"Chip Temp Min":67.92,"Chip Temp Max":87.359,"Chip Temp Avg":76.333}}';
+    const s = extractStatusFromRaw("wm47", noBoardTemp, "", "{}", Date.now());
+    expect(s.state).toBe("online");
+    expect(s.maxTempC).toBeCloseTo(76.33, 1); // Chip Temp Avg
+    expect(s.maxTempC).toBeLessThan(80); // not Chip Temp Max (87)
+    expect(s.fanRpm).toBeGreaterThan(4000); // Fan Speed In
+  });
+
   it("handles a Whatsminer that reports cgminer-style SUMMARY with MHS av already in TH/s", () => {
     // Real device 192.168.0.54: SUMMARY array, MHS av = 111.77 (the value IS the
     // TH/s, not MH/s) and NO current-metric key — must read ~111 TH, not ~0.

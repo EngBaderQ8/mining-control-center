@@ -86,7 +86,17 @@ export function extractStatusFromRaw(
   // Search stats AND summary: Antminer puts temp*/fan* in stats; Whatsminer puts
   // "Temperature"/"Fan Speed In|Out" in summary (its `stats` cmd is unsupported).
   const hwRaw = `${statRaw} ${sumRaw}`;
-  const temps = many(hwRaw, '"temp[^"]*"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
+  let temps = many(hwRaw, '"temp[^"]*"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
+  if (temps.length === 0) {
+    // Some Whatsminer firmware reports NO board "Temperature" — only chip temps
+    // ("Chip Temp Avg/Max", and ambient "Env Temp"). Fall back to the AVERAGE chip
+    // temp: it tracks the board-temp devices (~70-80) and overheats only when truly
+    // hot, whereas "Chip Temp Max" runs ~10° hotter and would false-alarm in a 45°C
+    // climate. Never use "Env Temp" (ambient air, not the device). Max is a last resort.
+    temps = many(hwRaw, '"Chip Temp Avg"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
+    if (temps.length === 0)
+      temps = many(hwRaw, '"Chip Temp Max"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
+  }
   // Broadened to catch "Fan Speed In/Out"; >100 excludes count fields like fan_num.
   const fans = many(hwRaw, '"fan[^"]*"\\s*:\\s*"?(\\d+)').filter((f) => f > 100);
   const userM = /"User"\s*:\s*"([^"]+)"/i.exec(poolRaw);
