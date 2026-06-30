@@ -39,15 +39,16 @@ export async function pollDevice(
     }
   };
 
-  // One connection that returns everything (fields land in a single blob).
+  // Fast path: Antminer returns hashrate + temps + chains + pools in ONE
+  // connection. (Whatsminer rejects the `stats` part, so it won't match here.)
   const combined = await ask("summary+stats+pools");
   if (combined) {
     const s = extractStatusFromRaw(device.id, combined, combined, combined, now);
     if (s.hashrateTHs > 0) {
       let health = parseDeviceHealth(combined);
-      if (health.boards.length === 0) {
-        // Some firmware omits the per-chain breakdown from the combined reply —
-        // fetch `stats` alone (full per-board detail) so diagnostics still work.
+      // Fetch per-board detail only for Antminer-style replies (Whatsminer has no
+      // chains and rejects `stats` — don't waste a connection on it).
+      if (health.boards.length === 0 && !/"MHS /.test(combined)) {
         const statsAlone = await ask("stats");
         if (statsAlone) {
           const h2 = parseDeviceHealth(statsAlone);
@@ -58,17 +59,25 @@ export async function pollDevice(
     }
   }
 
-  // Fallback: separate sequential requests.
-  const sumRaw = await ask("summary");
-  const statRaw = await ask("stats");
-  const poolRaw = await ask("pools");
-  if (!sumRaw && !statRaw && !combined) return offline(device.id, now);
-  const s = extractStatusFromRaw(
-    device.id,
-    sumRaw || combined,
-    statRaw || combined,
-    poolRaw || combined,
-    now,
-  );
-  return { ...s, health: parseDeviceHealth(statRaw || combined) };
+  // Recovery path (Whatsminer, or an Antminer whose combined reply failed).
+  // Whatsminer tolerates few concurrent 4028 connections, so keep it minimal:
+  // `summary` carries hashrate + temp + fan; one retry rides out a refused
+  // connection (the cause of false "offline" flapping).
+  const fetchSummary = async (withPool: boolean): Promise<DeviceStatus | null> => {
+    const sumRaw = await ask("summary");
+    if (!sumRaw) return null;
+    const poolRaw = withPool ? await ask("pools") : "";
+    return extractStatusFromRaw(device.id, sumRaw, sumRaw, poolRaw || combined, now);
+  };
+  let s = await fetchSummary(true);
+  if (!s || s.hashrateTHs <= 0) {
+    const retry = await fetchSummary(false); // one retry, summary-only (1 connection)
+    if (retry && retry.hashrateTHs > 0) s = retry;
+    else s = s ?? retry;
+  }
+  if (!s) {
+    if (!combined) return offline(device.id, now);
+    s = extractStatusFromRaw(device.id, combined, combined, combined, now);
+  }
+  return { ...s, health: parseDeviceHealth(combined) };
 }

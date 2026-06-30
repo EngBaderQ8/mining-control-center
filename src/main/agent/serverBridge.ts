@@ -260,16 +260,31 @@ export class ServerBridge {
     const worker = async (): Promise<void> => {
       while (i < hosts.length) {
         const host = hosts[i++]!;
-        const d = await diagnoseHost(host, 4028, 1500);
-        if (d.connected) connected++;
-        if (d.gotData) {
-          responded++;
-          const det = detectFromVersion(d.raw);
-          if (det) found.push({ host, firmware: det.firmware, model: det.model });
+        let conn = false;
+        let det: ReturnType<typeof detectFromVersion> = null;
+        let gotData = false;
+        // Antminer answers `version`; some Whatsminer firmware only answers
+        // `get_version`, and a few only reveal themselves via `summary`. 2.8s
+        // timeout for Whatsminer's slower handshake.
+        const cmds = ["version", "get_version", "summary"];
+        for (let p = 0; p < cmds.length; p++) {
+          const d = await diagnoseHost(host, 4028, 2800, cmds[p]!);
+          if (d.connected) conn = true;
+          if (d.gotData) {
+            gotData = true;
+            det = detectFromVersion(d.raw);
+            if (det) break;
+          }
+          if (p === 0 && !d.connected) break; // nothing on 4028 — dead host, skip alternates
         }
+        if (conn) connected++;
+        if (gotData) responded++;
+        if (det) found.push({ host, firmware: det.firmware, model: det.model });
       }
     };
-    await Promise.all(Array.from({ length: Math.min(64, hosts.length) }, worker));
+    // Lower concurrency (was 64): Whatsminer/cheap routers drop probes under a
+    // big burst, which made genuine miners go undiscovered.
+    await Promise.all(Array.from({ length: Math.min(20, hosts.length) }, worker));
     return { found, connected, responded };
   }
 

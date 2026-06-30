@@ -50,7 +50,31 @@ const dead: Transport = {
   },
 };
 
+// Whatsminer-style flapping: combined fails, first `summary` is a refused/empty
+// connection, the retry succeeds — must NOT be marked offline.
+let summaryCalls = 0;
+const flakyWhatsminer: Transport = {
+  async tcp4028(_h, _p, cmd) {
+    if (cmd.includes("summary+stats+pools")) return ""; // Whatsminer rejects the combined
+    if (cmd.includes("summary")) {
+      summaryCalls++;
+      return summaryCalls === 1 ? "" : '{"STATUS":"S","Msg":{"MHS av":100000000,"MHS 1m":100000000,"Temperature":75}}';
+    }
+    return "{}";
+  },
+  async http() {
+    throw new Error("no");
+  },
+};
+
 describe("pollDevice", () => {
+  it("retries summary once before marking a flapping Whatsminer offline", async () => {
+    summaryCalls = 0;
+    const s = await pollDevice(dev, flakyWhatsminer, 1000);
+    expect(s.state).toBe("online");
+    expect(s.hashrateTHs).toBeCloseTo(100, 0);
+  });
+
   it("returns online normalized status", async () => {
     const s = await pollDevice(dev, ok, 1000);
     expect(s.state).toBe("online");
