@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api } from "./ipc";
 import type { Device, DeviceStatus, Site } from "../core/model/device";
 import type { ControlCommand } from "../core/drivers/types";
+import { lastOctet } from "../core/drivers/pools";
 import {
   computeSummary,
   groupBySite,
@@ -364,17 +365,27 @@ export function App(): React.ReactElement {
   );
 
   const onSetPool = useCallback(
-    async (pool: PoolInput) => {
+    async (input: PoolInput) => {
       const ids = [...selectedIds];
       setPoolOpen(false);
-      if (ids.length === 0) return;
+      if (ids.length === 0 || input.pools.length === 0) return;
+      const byId = new Map(devices.map((d) => [d.id, d]));
       const results = await Promise.all(
-        ids.map((id) => api.sendCommand(id, "setPool", { ...pool })),
+        ids.map((id) => {
+          // Per device: optionally suffix each worker with the IP's last number.
+          const dev = byId.get(id);
+          const suffix = input.appendIp && dev ? lastOctet(dev.host) : null;
+          const pools = input.pools.map((p) => ({
+            ...p,
+            user: suffix ? `${p.user}.${suffix}` : p.user,
+          }));
+          return api.sendCommand(id, "setPool", { poolsJson: JSON.stringify(pools) });
+        }),
       );
       const ok = results.filter((r) => r.ok).length;
       showToast(t("تغيير البول: نجح {ok} / {total}", { ok, total: results.length }));
     },
-    [selectedIds, showToast],
+    [selectedIds, devices, showToast],
   );
 
   const onDeleteDevice = useCallback(

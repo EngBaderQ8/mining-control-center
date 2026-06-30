@@ -2,6 +2,7 @@ import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./t
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
 import { parseResponse } from "../cgminer/parse";
+import { parsePools } from "./pools";
 
 interface SessionResponse {
   SESSION?: Array<{ SessionID?: string }>;
@@ -62,11 +63,14 @@ export class LuxOsDriver implements DeviceDriver {
           r = await send({ command: "reboot", parameter: session });
           break;
         case "setPool": {
-          const p = params ?? {};
-          r = await send({
-            command: "addpool",
-            parameter: `${session},${p["url"] ?? ""},${p["user"] ?? ""},${p["pass"] ?? ""}`,
-          });
+          // Add each provided pool (LuxOS has no atomic replace).
+          for (const p of parsePools(params)) {
+            r = await send({
+              command: "addpool",
+              parameter: `${session},${p.url},${p.user},${p.pass}`,
+            });
+            if (!r.ok) break;
+          }
           break;
         }
         case "setProfile":

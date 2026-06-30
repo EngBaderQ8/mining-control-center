@@ -1,6 +1,7 @@
 import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
+import { parsePools } from "./pools";
 
 const PATHS: Record<Exclude<ControlCommand, "setPool" | "setProfile" | "diagnose">, string> = {
   restartMining: "/api/v1/mining/restart",
@@ -55,15 +56,7 @@ export class VnishDriver implements DeviceDriver {
               path: "/api/v1/settings/pools",
               auth: { kind: "bearer" as const, token },
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                pools: [
-                  {
-                    url: params?.["url"] ?? "",
-                    user: params?.["user"] ?? "",
-                    pass: params?.["pass"] ?? "",
-                  },
-                ],
-              }),
+              body: JSON.stringify({ pools: parsePools(params) }),
             }
           : {
               host: device.host,

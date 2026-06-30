@@ -1,6 +1,7 @@
 import type { DeviceDriver, Transport, ControlCommand, CommandParams } from "./types";
 import type { Device } from "../model/device";
 import type { CommandOutcome } from "../model/result";
+import { parsePools } from "./pools";
 
 const PATH: Record<Exclude<ControlCommand, "setPool" | "setProfile" | "diagnose">, string> = {
   reboot: "/cgi-bin/reboot.cgi",
@@ -47,9 +48,7 @@ export class StockDriver implements DeviceDriver {
           auth: digest,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            pools: [
-              { url: params?.["url"] ?? "", user: params?.["user"] ?? "", pass: params?.["pass"] ?? "" },
-            ],
+            pools: parsePools(params),
           }),
         };
       } else if (command === "setProfile") {
