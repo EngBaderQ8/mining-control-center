@@ -12,6 +12,21 @@ export interface UserRow {
   suspended: number;
 }
 
+export interface FlashJobRow {
+  jobId: string;
+  batchId: string;
+  userId: string;
+  deviceId: string;
+  agentId: string;
+  firmwareId: string;
+  // queued|downloading|verifying|matching|flashing|rebooting|confirming|success|failed|refused|stopped
+  state: string;
+  error: string | null;
+  newVersion: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AccountSummary {
   id: string;
   email: string;
@@ -237,6 +252,153 @@ export class ServerRepo {
       .all(userId) as Array<{ id: string; agentId: string }>;
   }
 
+  /** Devices to consider for a firmware flash: one device, one account, or ALL.
+   *  Returns the fields the flash targeter needs (agent, model, firmware). */
+  flashTargets(scope: { deviceId?: string; userId?: string }): Array<{
+    id: string;
+    userId: string;
+    agentId: string;
+    model: string;
+    firmware: string;
+  }> {
+    const cols = `id, userId, agentId, model, firmware`;
+    if (scope.deviceId)
+      return this.db.prepare(`SELECT ${cols} FROM devices WHERE id=?`).all(scope.deviceId) as never;
+    if (scope.userId)
+      return this.db.prepare(`SELECT ${cols} FROM devices WHERE userId=?`).all(scope.userId) as never;
+    return this.db.prepare(`SELECT ${cols} FROM devices`).all() as never;
+  }
+
+  // —— Firmware flash jobs (admin firmware push; the server sequences one per device) ——
+  createFlashJobs(
+    rows: Array<{
+      jobId: string;
+      batchId: string;
+      userId: string;
+      deviceId: string;
+      agentId: string;
+      firmwareId: string;
+    }>,
+  ): void {
+    const now = Date.now();
+    const stmt = this.db.prepare(
+      `INSERT INTO flash_jobs(jobId,batchId,userId,deviceId,agentId,firmwareId,state,createdAt,updatedAt)
+       VALUES(@jobId,@batchId,@userId,@deviceId,@agentId,@firmwareId,'queued',@now,@now)`,
+    );
+    this.db.transaction((rs: typeof rows) => {
+      for (const r of rs) stmt.run({ ...r, now });
+    })(rows);
+  }
+
+  listFlashJobs(batchId: string): FlashJobRow[] {
+    // Secondary `rowid ASC` makes the order deterministic even though every row in a
+    // batch shares the same createdAt (insertion order, stable).
+    return this.db
+      .prepare(`SELECT * FROM flash_jobs WHERE batchId=? ORDER BY createdAt ASC, rowid ASC`)
+      .all(batchId) as FlashJobRow[];
+  }
+
+  getFlashJob(jobId: string): FlashJobRow | undefined {
+    return this.db.prepare(`SELECT * FROM flash_jobs WHERE jobId=?`).get(jobId) as
+      | FlashJobRow
+      | undefined;
+  }
+
+  /** Tenant-scoped job lookup: the authoritative isolation boundary for flash.result/
+   *  flash.progress (a job's agentId is spoofable; its userId — from the verified JWT — is not). */
+  getFlashJobForUser(userId: string, jobId: string): FlashJobRow | undefined {
+    return this.db.prepare(`SELECT * FROM flash_jobs WHERE jobId=? AND userId=?`).get(jobId, userId) as
+      | FlashJobRow
+      | undefined;
+  }
+
+  /** The next still-queued job in a batch (the server flashes strictly one at a time). */
+  nextQueuedJob(batchId: string): FlashJobRow | undefined {
+    return this.db
+      .prepare(
+        `SELECT * FROM flash_jobs WHERE batchId=? AND state='queued' ORDER BY createdAt ASC, rowid ASC LIMIT 1`,
+      )
+      .get(batchId) as FlashJobRow | undefined;
+  }
+
+  /** Atomically claim a queued job (queued -> flashing). Returns true ONLY for the
+   *  caller that won the row, so two interleaved dispatches can never both start the
+   *  same device. */
+  claimQueuedJob(jobId: string): boolean {
+    const r = this.db
+      .prepare(`UPDATE flash_jobs SET state='flashing', updatedAt=? WHERE jobId=? AND state='queued'`)
+      .run(Date.now(), jobId);
+    return r.changes === 1;
+  }
+
+  /** True if any device IN THIS BATCH is mid-flash (non-terminal, non-queued). */
+  hasInFlightJob(batchId: string): boolean {
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM flash_jobs WHERE batchId=? AND state NOT IN ('queued','success','failed','refused','stopped') LIMIT 1`,
+      )
+      .get(batchId);
+  }
+
+  /** True if any device ANYWHERE is mid-flash — enforces one-flash-at-a-time across
+   *  the whole fleet, not merely within a single batch (caps the brick blast radius). */
+  anyFlashActive(): boolean {
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM flash_jobs WHERE state NOT IN ('queued','success','failed','refused','stopped') LIMIT 1`,
+      )
+      .get();
+  }
+
+  /** Devices that already have a live (queued or in-flight) flash job in ANY batch, so
+   *  a new batch never double-queues the same physical miner. */
+  activeFlashDeviceIds(): Set<string> {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT deviceId FROM flash_jobs WHERE state NOT IN ('success','failed','refused','stopped')`,
+      )
+      .all() as Array<{ deviceId: string }>;
+    return new Set(rows.map((r) => r.deviceId));
+  }
+
+  /** Update a job's state. Terminal states are ONE-WAY: a row already in a terminal
+   *  state is never overwritten (blocks a late/duplicate/watchdog-raced result from
+   *  relabeling a brick as success). Returns how many rows changed (0 = already terminal). */
+  setFlashState(jobId: string, state: string, fields?: { error?: string; newVersion?: string }): number {
+    const r = this.db
+      .prepare(
+        `UPDATE flash_jobs SET state=?, error=COALESCE(?,error), newVersion=COALESCE(?,newVersion), updatedAt=?
+         WHERE jobId=? AND state NOT IN ('success','failed','refused','stopped')`,
+      )
+      .run(state, fields?.error ?? null, fields?.newVersion ?? null, Date.now(), jobId);
+    return r.changes;
+  }
+
+  /** STOP-on-failure: cancel every still-queued device in a batch (blast-radius cap). */
+  stopQueuedJobs(batchId: string): void {
+    this.db
+      .prepare(`UPDATE flash_jobs SET state='stopped', updatedAt=? WHERE batchId=? AND state='queued'`)
+      .run(Date.now(), batchId);
+  }
+
+  /** On boot, fail any job left mid-flash by a crash/restart (its in-memory watchdog is
+   *  gone) and stop the rest of that batch — so a job can never dangle forever and a
+   *  restart never silently resumes a half-finished flash. */
+  reconcileInterruptedFlashJobs(): void {
+    const stuck = this.db
+      .prepare(
+        `SELECT DISTINCT batchId FROM flash_jobs WHERE state NOT IN ('queued','success','failed','refused','stopped')`,
+      )
+      .all() as Array<{ batchId: string }>;
+    this.db
+      .prepare(
+        `UPDATE flash_jobs SET state='failed', error='server restarted mid-flash', updatedAt=?
+         WHERE state NOT IN ('queued','success','failed','refused','stopped')`,
+      )
+      .run(Date.now());
+    for (const b of stuck) this.stopQueuedJobs(b.batchId);
+  }
+
   upsertStatus(userId: string, s: DeviceStatus): void {
     // Strip nested fields (e.g. health) that aren't DB columns — they still ride
     // along in the live broadcast, just not persisted.
@@ -260,12 +422,26 @@ export class ServerRepo {
       .all(userId) as DeviceStatus[];
   }
 
-  touchAgent(id: string, userId: string, name: string, version?: string): void {
+  /** The userId that owns this agentId (agentIds are a GLOBAL namespace), or undefined. */
+  agentOwner(id: string): string | undefined {
+    const r = this.db.prepare(`SELECT userId FROM agents WHERE id=?`).get(id) as
+      | { userId: string }
+      | undefined;
+    return r?.userId;
+  }
+
+  /** Register/refresh an agent. REFUSES (returns false) if the agentId is already bound
+   *  to a DIFFERENT user — so one authenticated tenant can never claim another tenant's
+   *  agentId and hijack its router slot / flash reports. */
+  touchAgent(id: string, userId: string, name: string, version?: string): boolean {
+    const owner = this.agentOwner(id);
+    if (owner && owner !== userId) return false;
     this.db
       .prepare(
         `INSERT INTO agents(id,userId,name,version,lastSeenAt) VALUES(?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,lastSeenAt=excluded.lastSeenAt`,
       )
       .run(id, userId, name, version ?? null, Date.now());
+    return true;
   }
 }
