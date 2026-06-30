@@ -199,6 +199,15 @@ export class ServerBridge {
     const clean = statsRaw.replace(/\0/g, "");
     const ci = clean.search(/chain[_a-z]*\d/i);
     const statsChainSample = ci >= 0 ? clean.slice(ci, ci + 220) : clean.slice(0, 220);
+    // Surface EVERY temperature/fan field by name so we can see exactly what a
+    // device reports (some Whatsminer firmware send "Temperature":0 and keep the
+    // real heat in "Chip Temp Max", which a temp*-prefixed parser misses).
+    const cleanSum = sum.raw.replace(/\0/g, "");
+    const tempFan = [
+      ...cleanSum.matchAll(/"([^"]*(?:temp|fan)[^"]*)"\s*:\s*"?(-?[\d.]+)/gi),
+    ]
+      .map((m) => `${m[1]}=${m[2]}`)
+      .join(", ");
     return {
       connected: ver.connected,
       gotData: ver.gotData,
@@ -207,7 +216,7 @@ export class ServerBridge {
       state: status.state,
       hashrateTHs: status.hashrateTHs,
       maxTempC: status.maxTempC,
-      summarySample: sum.raw.replace(/\0/g, "").slice(0, 160),
+      summarySample: `${cleanSum.slice(0, 160)}${tempFan ? `  ⟦حقول الحرارة/المروحة: ${tempFan}⟧` : "  ⟦لا حقول حرارة/مروحة⟧"}`,
       boardsFound: health.boards.length,
       statsChainSample,
       ...(ver.error ? { error: ver.error } : {}),
