@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { SiteGroup, SortKey, SortState } from "../state/store";
 import type { ControlCommand } from "../../core/drivers/types";
 import { DeviceTable } from "./DeviceTable";
@@ -15,6 +15,7 @@ interface Props {
   onSelectSite: (ids: string[]) => void;
   onCommand: (id: string, cmd: ControlCommand) => void;
   onDeleteSite: (siteId: string, siteName: string) => void;
+  onRenameSite: (siteId: string, newName: string) => void;
   onDeleteDevice: (deviceId: string) => void;
   onDiagnose: (device: import("../../core/model/device").Device) => void;
 }
@@ -30,10 +31,18 @@ export function SiteSection({
   onSelectSite,
   onCommand,
   onDeleteSite,
+  onRenameSite,
   onDeleteDevice,
   onDiagnose,
 }: Props): React.ReactElement {
   const { site, views } = group;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(site.name);
+  const saveRename = (): void => {
+    const name = draft.trim();
+    if (name && name !== site.name) onRenameSite(site.id, name);
+    setEditing(false);
+  };
   // Three explicit, non-overlapping counts that sum to the total.
   const online = views.filter((v) => v.status?.state === "online").length;
   const warning = views.filter((v) => v.status?.state === "warning").length;
@@ -63,12 +72,46 @@ export function SiteSection({
           </span>
         </button>
         <span className="spacer" style={{ marginInlineStart: "auto" }} />
-        <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
-          {t("تحديد كل الموقع")}
-        </button>
-        <button className="btn stop" onClick={() => onDeleteSite(site.id, site.name)}>
-          {t("🗑 حذف الموقع")}
-        </button>
+        {editing ? (
+          <>
+            <input
+              className="input"
+              value={draft}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveRename();
+                if (e.key === "Escape") setEditing(false);
+              }}
+              style={{ minWidth: 160 }}
+            />
+            <button className="btn primary" onClick={saveRename}>
+              {t("حفظ")}
+            </button>
+            <button className="btn" onClick={() => setEditing(false)}>
+              {t("إلغاء")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className="btn"
+              title={t("تغيير اسم الموقع")}
+              onClick={() => {
+                setDraft(site.name);
+                setEditing(true);
+              }}
+            >
+              {t("✏️ تعديل الاسم")}
+            </button>
+            <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
+              {t("تحديد كل الموقع")}
+            </button>
+            <button className="btn stop" onClick={() => onDeleteSite(site.id, site.name)}>
+              {t("🗑 حذف الموقع")}
+            </button>
+          </>
+        )}
       </div>
       {!collapsed && (
         <DeviceTable

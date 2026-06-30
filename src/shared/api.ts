@@ -96,6 +96,7 @@ export const CH = {
   deviceDelete: "device:delete",
   siteAdd: "site:add",
   siteDelete: "site:delete",
+  siteRename: "site:rename",
   // profit / network
   networkStats: "profit:netstats",
   // telegram alerts
@@ -143,6 +144,7 @@ export interface Api {
   addSite(site: Site): Promise<void>;
   deleteDevice(deviceId: string): Promise<void>;
   deleteSite(siteId: string): Promise<void>;
+  renameSite(siteId: string, name: string): Promise<void>;
   setCredentials(deviceIds: string[], secret: string): Promise<void>;
   scanNetwork(
     siteName: string,

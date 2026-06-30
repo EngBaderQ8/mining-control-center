@@ -409,6 +409,15 @@ export function App(): React.ReactElement {
     [reload, showToast],
   );
 
+  const onRenameSite = useCallback(
+    async (siteId: string, newName: string) => {
+      await api.renameSite(siteId, newName);
+      await reload();
+      showToast(t("تم تغيير اسم الموقع"));
+    },
+    [reload, showToast],
+  );
+
   const onAddDevice = useCallback(
     async (p: NewDevicePayload) => {
       let createdSiteId: string | null = null;
@@ -608,6 +617,7 @@ export function App(): React.ReactElement {
                 onSelectSite={selectSite}
                 onCommand={onCommand}
                 onDeleteSite={onDeleteSite}
+                onRenameSite={onRenameSite}
                 onDeleteDevice={onDeleteDevice}
                 onDiagnose={setDiagDevice}
               />

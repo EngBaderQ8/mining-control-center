@@ -275,6 +275,19 @@ export class ServerBridge {
     if (this.connected) this.client.send({ type: "site.delete", siteId });
   }
 
+  /** Rename a site locally and on the server. Re-registering the site with its new
+   *  name makes the server detect the change and live-broadcast it to all viewers. */
+  renameSite(siteId: string, name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const existing = this.deps.repo.listSites().find((s) => s.id === siteId);
+    if (!existing) return;
+    const site = { id: siteId, name: trimmed };
+    this.deps.repo.upsertSite(site);
+    this.agent?.registerSite(site);
+    this.requestSnapshot();
+  }
+
   /**
    * Scan the local network for ASICs and auto-register everything found under a
    * new site. Runs on the agent (the machine on the miners' LAN). Returns how
