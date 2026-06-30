@@ -10,6 +10,7 @@ interface Props {
   onCheckUpdate: () => void;
   onTelegram: () => void;
   onRecovery: () => void;
+  onSettings: () => void;
 }
 
 export function Toolbar({
@@ -20,6 +21,7 @@ export function Toolbar({
   onCheckUpdate,
   onTelegram,
   onRecovery,
+  onSettings,
 }: Props): React.ReactElement {
   return (
     <div className="bar">
@@ -66,6 +68,9 @@ export function Toolbar({
       </button>
       <button className="btn" onClick={onCheckUpdate} title={t("تحقق من وجود تحديث")}>
         🔄 {t("تحديث")}
+      </button>
+      <button className="btn" onClick={onSettings} title={t("إعدادات البرنامج")}>
+        ⚙️ {t("الإعدادات")}
       </button>
     </div>
   );

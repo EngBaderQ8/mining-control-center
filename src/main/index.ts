@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut } from "electron";
 import { join } from "node:path";
 import { appendFileSync } from "node:fs";
+import { appIcon } from "./icon";
+import { AppSettingsStore } from "./appSettings";
 // electron-updater is CommonJS and exposes `autoUpdater` as a NAMED export. A
 // default import (`electronUpdater.autoUpdater`) resolves to undefined in the
 // packaged app — hence "Cannot read properties of undefined (reading
@@ -22,9 +24,15 @@ import { sendTelegram, detectChatId } from "./alerts/telegram";
 import { RecoveryConfig } from "./recovery/config";
 import { buildDailyReport } from "../core/report/daily";
 import { startBotPoller } from "./alerts/botPoller";
-import type { TelegramSettings, RecoverySettings } from "../shared/api";
+import type { TelegramSettings, RecoverySettings, AppSettings } from "../shared/api";
+import { DEFAULT_APP_SETTINGS } from "../shared/api";
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let appSettings: AppSettingsStore | null = null;
+let isQuitting = false; // set true for a real quit (tray "Exit" / before-quit / update install)
+let updateReady = false; // an update is downloaded and about to install — never trap the window
+let bgNoticeShown = false; // show the "running in background" hint only once
 let alertConfig: AlertConfig | null = null;
 let recoveryConfig: RecoveryConfig | null = null;
 // Set by setupAutoUpdate so the startup check can be deferred until the renderer
@@ -32,16 +40,40 @@ let recoveryConfig: RecoveryConfig | null = null;
 let triggerUpdateCheck: ((trigger: string) => void) | null = null;
 let updateSetupError = "";
 
-function createWindow(): BrowserWindow {
+function createWindow(show = true): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
     title: "Mining Control Center",
+    icon: appIcon(),
+    show,
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Closing the ✕ hides to the tray (keeps monitoring) when background mode is on.
+  // A real quit (tray "Exit", OS shutdown) sets isQuitting; a pending update sets
+  // updateReady — in BOTH cases we must let the window actually close, otherwise
+  // the auto-update install (which closes windows before before-quit fires) would
+  // be silently blocked and the whole fleet would never update.
+  win.on("close", (e) => {
+    if (isQuitting || updateReady) return;
+    // Only hide-to-tray when a tray actually exists, else the user would be
+    // stranded with no window and no way back.
+    if (tray && appSettings?.get().runInBackground) {
+      e.preventDefault();
+      win.hide();
+      if (!bgNoticeShown) {
+        bgNoticeShown = true;
+        notifyMessage(
+          "يعمل بالخلفية",
+          "البرنامج يكمل المراقبة بالخلفية. افتحه من الأيقونة بجانب الساعة، أو أغلقه نهائياً من قائمتها.",
+        );
+      }
+    }
   });
 
   win.webContents.on("did-finish-load", () => console.log("[mcc] renderer loaded"));
@@ -72,6 +104,59 @@ function createWindow(): BrowserWindow {
 function sendToWindow(channel: string, payload: unknown): void {
   const w = mainWindow;
   if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
+}
+
+/** Bring the window back (recreating it if it was fully closed). */
+function showWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    mainWindow = createWindow(true);
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+/** System-tray icon so the app stays reachable while running in the background.
+ *  Best-effort: a tray failure must never crash startup or strand the user. */
+function createTray(): void {
+  if (tray) return;
+  try {
+    tray = new Tray(appIcon());
+    tray.setToolTip("مركز التحكم بالتعدين");
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: "فتح البرنامج", click: () => showWindow() },
+        { type: "separator" },
+        {
+          label: "خروج",
+          click: () => {
+            isQuitting = true;
+            app.quit();
+          },
+        },
+      ]),
+    );
+    tray.on("click", () => showWindow());
+    tray.on("double-click", () => showWindow());
+  } catch {
+    tray = null; // no tray → background mode falls back to a normal window
+  }
+}
+
+/** Register/unregister the app in Windows startup per the saved settings. Never
+ *  registers an unpackaged dev build (its path is electron.exe, not the app). */
+function applyLoginItem(s: AppSettings): void {
+  if (!app.isPackaged) return;
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: s.launchAtStartup,
+      openAsHidden: s.startMinimized, // macOS hint
+      args: s.startMinimized ? ["--hidden"] : [],
+    });
+  } catch {
+    /* ignore — startup registration is best-effort */
+  }
 }
 
 function buildBridge(): ServerBridge {
@@ -159,9 +244,16 @@ function setupAutoUpdate(): void {
   });
   updater.on("update-downloaded", (i) => {
     ulog("info", `update-downloaded ${i.version}`);
+    // From now on the window must never be trapped in the tray — the install has
+    // to be able to close it. quitAndInstall closes windows BEFORE before-quit
+    // fires, so we cannot rely on before-quit to set isQuitting in time.
+    updateReady = true;
     send({ state: "ready", version: i.version });
     // Apply automatically so the whole fleet stays current (brief restart).
-    setTimeout(() => updater.quitAndInstall(true, true), 8000);
+    setTimeout(() => {
+      isQuitting = true; // bypass close-to-tray so quitAndInstall can close the window
+      updater.quitAndInstall(true, true);
+    }, 8000);
   });
 
   // One check path for both startup and the manual button — ALWAYS bounded by a
@@ -221,8 +313,33 @@ function setupAutoUpdate(): void {
   setInterval(() => void runCheck("interval"), 60 * 60 * 1000); // hourly
 }
 
-app.whenReady().then(() => {
-  mainWindow = createWindow();
+function startApp(): void {
+  // Desktop-behavior settings (startup + tray) load before the window so the
+  // close handler and hidden-launch decision can read them.
+  appSettings = new AppSettingsStore(join(app.getPath("userData"), "appSettings.json"));
+  applyLoginItem(appSettings.get());
+  // When launched at login we pass "--hidden" so it boots quietly into the tray.
+  // The arg (written only when startMinimized was on) is the single source of
+  // truth for how it was launched — don't re-gate on the live setting.
+  const startHidden = process.argv.includes("--hidden");
+  mainWindow = createWindow(!startHidden);
+  createTray();
+  // If the tray couldn't be created, never leave a hidden window with no way to
+  // open it — show it.
+  if (startHidden && !tray && mainWindow) mainWindow.show();
+  // Defense-in-depth: a global hotkey always brings the window back, even if the
+  // tray icon fails to register with the Windows shell.
+  try {
+    globalShortcut.register("CommandOrControl+Alt+M", () => showWindow());
+  } catch {
+    /* ignore — hotkey is a convenience, not required */
+  }
+  ipcMain.handle(CH.appSettingsGet, () => appSettings?.get() ?? DEFAULT_APP_SETTINGS);
+  ipcMain.handle(CH.appSettingsSet, (_e, partial: Partial<AppSettings>) => {
+    const next = appSettings?.set(partial) ?? DEFAULT_APP_SETTINGS;
+    applyLoginItem(next);
+    return next;
+  });
   // Register the version handler FIRST and independently — it must never depend
   // on the bridge or the updater succeeding, so the running build is always known.
   ipcMain.handle(CH.appVersion, () => app.getVersion());
@@ -300,9 +417,29 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
   });
-});
+}
+
+// Single-instance: a second launch (e.g. clicking the icon while it's in the
+// tray) just surfaces the running window instead of starting a duplicate.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => showWindow());
+  // Any genuine quit (tray Exit, OS shutdown, update install) must bypass the
+  // close-to-tray handler so the window is allowed to close.
+  app.on("before-quit", () => {
+    isQuitting = true;
+  });
+  app.on("will-quit", () => globalShortcut.unregisterAll());
+  app.whenReady().then(startApp);
+}
 
 app.on("window-all-closed", () => {
-  // Windows/Linux: quit when all windows are closed.
-  if (process.platform !== "darwin") app.quit();
+  // Keep monitoring when background mode is on AND a tray exists to reopen from;
+  // otherwise quit (non-mac). Without a tray we must quit, or the app would run
+  // invisibly with no way back. Fall back to the product default if settings
+  // haven't loaded yet (rather than implicitly quitting).
+  if (process.platform === "darwin") return;
+  const keep = appSettings?.get().runInBackground ?? DEFAULT_APP_SETTINGS.runInBackground;
+  if (!tray || !keep) app.quit();
 });

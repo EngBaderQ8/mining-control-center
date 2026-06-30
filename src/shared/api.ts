@@ -31,6 +31,21 @@ export interface RecoverySettings {
   cooldownMin: number;
 }
 
+/** Desktop-behavior settings (Windows startup + background/tray). */
+export interface AppSettings {
+  launchAtStartup: boolean; // register the app to start with Windows
+  // When on, closing the ✕ hides to the tray and keeps monitoring; when off, ✕
+  // quits the app. One flag governs both the close behavior and staying alive.
+  runInBackground: boolean;
+  startMinimized: boolean; // when launched at startup, start hidden in the tray
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  launchAtStartup: false,
+  runInBackground: true,
+  startMinimized: true,
+};
+
 export interface UpdateStatus {
   state: "checking" | "available" | "downloading" | "ready" | "none" | "error" | "uptodate";
   percent?: number;
@@ -79,6 +94,9 @@ export const CH = {
   // self-healing
   recoveryGet: "recovery:get",
   recoverySet: "recovery:set",
+  // desktop behavior (startup + tray)
+  appSettingsGet: "appsettings:get",
+  appSettingsSet: "appsettings:set",
   // updates
   updateCheck: "update:check",
   appVersion: "app:version",
@@ -153,6 +171,9 @@ export interface Api {
   // self-healing
   getRecovery(): Promise<RecoverySettings>;
   setRecovery(s: RecoverySettings): Promise<void>;
+  // desktop behavior (startup + tray)
+  getAppSettings(): Promise<AppSettings>;
+  setAppSettings(s: Partial<AppSettings>): Promise<AppSettings>;
   // updates
   checkUpdate(): Promise<UpdateCheckResult>;
   getVersion(): Promise<string>;

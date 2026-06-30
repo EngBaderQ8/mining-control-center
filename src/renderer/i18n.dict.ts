@@ -15,6 +15,27 @@ export const EN: Record<string, string> = {
   "❌ ما قدر يجيب بيانات التشخيص.": "❌ Couldn't fetch diagnostic data.",
   "تعذّر قراءة بيانات التشخيص.": "Failed to read diagnostic data.",
   "ما قدر يوصل الجهاز.": "Couldn't reach the device.",
+  "الإعدادات": "Settings",
+  "إعدادات البرنامج": "App settings",
+  "خليه يراقب أجهزتك ٢٤ ساعة بدون ما تفتحه كل مرة.":
+    "Let it watch your miners 24/7 without opening it each time.",
+  "التشغيل التلقائي مع ويندوز": "Launch automatically with Windows",
+  "يضيف نفسه لبدء التشغيل، فيشتغل وحده كل ما يشتغل الجهاز.":
+    "Adds itself to startup, so it runs on its own whenever the PC turns on.",
+  "يبدأ مصغّراً بالخلفية": "Start minimized in the background",
+  "لما يشتغل مع ويندوز، يبدأ مخفي بأيقونة شريط المهام بدون نافذة.":
+    "When launched with Windows, it starts hidden in the tray with no window.",
+  "زر الإغلاق (✕) يصغّر للخلفية": "Close button (✕) minimizes to background",
+  "بدل ما يقفل البرنامج، يخفيه ويكمل المراقبة. ترجعه من أيقونة شريط المهام.":
+    "Instead of quitting, it hides and keeps monitoring. Reopen it from the tray icon.",
+  "الاستمرار بالعمل بالخلفية": "Keep running in the background",
+  "يكمل المراقبة والتنبيهات حتى لو ما فيه نافذة مفتوحة.":
+    "Keeps monitoring and alerts even with no window open.",
+  "العمل بالخلفية عند الإغلاق": "Run in the background when closed",
+  "زر الإغلاق (✕) يخفي البرنامج للخلفية ويكمل المراقبة بدل ما يقفله. ترجعه من الأيقونة بجانب الساعة (أو Ctrl+Alt+M).":
+    "The close button (✕) hides the app to the background and keeps monitoring instead of quitting. Reopen it from the tray icon (or Ctrl+Alt+M).",
+  "💡 للمتابعة ٢٤/٧: فعّل «التشغيل التلقائي» + «يبدأ مصغّراً». تلقاه دايماً بأيقونة بجانب ساعة ويندوز.":
+    "💡 For 24/7: enable «Launch with Windows» + «Start minimized». You'll always find it by the Windows clock.",
   "• تأكد أن لابتوب الموقع (الموصول بشبكة الأسيكات) محدّث لآخر نسخة — هو اللي يقرأ تفاصيل اللوحات ويرسلها.":
     "• Make sure the site's laptop (connected to the miners' network) is updated to the latest version — it's the one that reads board details and sends them.",
   "• بعد التحديث، خلّ البرنامج مفتوح دقيقة وحدة وبتظهر تلقائياً.":

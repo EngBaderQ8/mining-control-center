@@ -38,6 +38,7 @@ import { ScanDialog } from "./components/ScanDialog";
 import { TelegramDialog } from "./components/TelegramDialog";
 import { RecoveryDialog } from "./components/RecoveryDialog";
 import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -133,6 +134,7 @@ export function App(): React.ReactElement {
   const [scanOpen, setScanOpen] = useState(false);
   const [tgOpen, setTgOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [diagDevice, setDiagDevice] = useState<Device | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -473,6 +475,7 @@ export function App(): React.ReactElement {
         onScan={() => setScanOpen(true)}
         onTelegram={() => setTgOpen(true)}
         onRecovery={() => setRecOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
         onCheckUpdate={() => {
           // The persistent banner (driven by main-process events) shows the full
           // result: checking -> up-to-date / downloading / error. No transient toast.
@@ -609,6 +612,7 @@ export function App(): React.ReactElement {
 
       {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
       {recOpen && <RecoveryDialog onClose={() => setRecOpen(false)} />}
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {diagDevice && (
         <DiagnosticsDialog
           device={diagDevice}
