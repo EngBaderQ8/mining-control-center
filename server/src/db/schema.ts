@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 export function applySchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, passwordHash TEXT NOT NULL, createdAt INTEGER NOT NULL
+      id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL COLLATE NOCASE, passwordHash TEXT NOT NULL, createdAt INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, lastSeenAt INTEGER
@@ -21,4 +21,9 @@ export function applySchema(db: Database.Database): void {
       maxTempC REAL, fanRpm REAL, pool TEXT, worker TEXT, hwErrorRate REAL, uptimeSec INTEGER, lastSeen INTEGER
     );
   `);
+  // Migration: add the admin `suspended` flag to existing user tables.
+  const cols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "suspended")) {
+    db.exec(`ALTER TABLE users ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0`);
+  }
 }

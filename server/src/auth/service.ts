@@ -12,16 +12,24 @@ export class AuthService {
     private secret: string,
   ) {}
 
+  // Canonical email — lowercase + trim. Prevents case/whitespace variants from
+  // creating a second account (and, critically, from matching an admin email).
+  private canon(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
   async signup(email: string, password: string): Promise<AuthResult> {
-    if (this.repo.findUserByEmail(email)) return { ok: false, error: "email already registered" };
-    const userId = this.repo.createUser(email, await hashPassword(password));
+    const e = this.canon(email);
+    if (this.repo.findUserByEmail(e)) return { ok: false, error: "email already registered" };
+    const userId = this.repo.createUser(e, await hashPassword(password));
     return { ok: true, token: signToken(userId, this.secret), userId };
   }
 
   async login(email: string, password: string): Promise<AuthResult> {
-    const user = this.repo.findUserByEmail(email);
+    const user = this.repo.findUserByEmail(this.canon(email));
     if (!user || !(await verifyPassword(password, user.passwordHash)))
       return { ok: false, error: "invalid credentials" };
+    if (user.suspended) return { ok: false, error: "الحساب موقوف — تواصل مع الدعم" };
     return { ok: true, token: signToken(user.id, this.secret), userId: user.id };
   }
 }

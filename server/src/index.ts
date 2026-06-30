@@ -9,16 +9,30 @@ import { verifyToken } from "./auth/jwt";
 import { CommandRouter } from "./router/commandRouter";
 import { ConnectionHub } from "./ws/hub";
 import { handleAuth } from "./http/authRoutes";
+import { handleAdmin } from "./http/adminRoutes";
 import { handleDownload } from "./http/downloadRoute";
 import { loadOrCreateTls } from "./tls";
 import { isClientMessage, type ServerMessage } from "./protocol/messages";
 
 const PORT = Number(process.env["PORT"] ?? 8443);
 const DATA_DIR = process.env["DATA_DIR"] ?? join(__dirname, "..", "..", "server", "data");
-const JWT_SECRET = process.env["JWT_SECRET"] ?? "dev-insecure-secret-change-me";
+const JWT_SECRET = process.env["JWT_SECRET"] ?? "";
+// Owner admin emails (comma-separated). Only these accounts can open /admin.
+const ADMIN_EMAILS = new Set(
+  (process.env["ADMIN_EMAILS"] ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+);
 
-if (JWT_SECRET === "dev-insecure-secret-change-me")
-  console.warn("[server] WARNING: using default JWT_SECRET — set JWT_SECRET in production");
+// Fail-closed: the whole auth/admin model trusts tokens signed with this secret.
+// A missing/weak/known secret lets anyone forge an admin token — refuse to start.
+if (!JWT_SECRET || JWT_SECRET.length < 16 || JWT_SECRET === "dev-insecure-secret-change-me") {
+  console.error(
+    "[server] FATAL: JWT_SECRET must be set to a strong random value (>=16 chars). Refusing to start.",
+  );
+  process.exit(1);
+}
 
 async function main(): Promise<void> {
   const { key, cert } = await loadOrCreateTls(DATA_DIR);
@@ -41,6 +55,7 @@ async function main(): Promise<void> {
   const server = createServer({ key, cert }, (req, res) => {
     void (async () => {
       if (handleDownload(req, res, DATA_DIR)) return;
+      if (await handleAdmin(req, res, { repo, jwtSecret: JWT_SECRET, adminEmails: ADMIN_EMAILS })) return;
       if (await handleAuth(req, res, auth)) return;
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "not found" }));
@@ -53,6 +68,11 @@ async function main(): Promise<void> {
     const userId = verifyToken(url.searchParams.get("token") ?? "", JWT_SECRET);
     if (!userId) {
       ws.close(4401, "unauthorized");
+      return;
+    }
+    // Suspension cuts off data sync too (not just login) — block the handshake.
+    if (repo.findUserById(userId)?.suspended) {
+      ws.close(4403, "suspended");
       return;
     }
     let set = userSockets.get(userId);

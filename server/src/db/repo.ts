@@ -9,6 +9,19 @@ export interface UserRow {
   email: string;
   passwordHash: string;
   createdAt: number;
+  suspended: number;
+}
+
+export interface AccountSummary {
+  id: string;
+  email: string;
+  createdAt: number;
+  suspended: number;
+  sites: number;
+  devices: number;
+  online: number;
+  hashrate: number;
+  lastSeen: number | null;
 }
 
 export class ServerRepo {
@@ -24,8 +37,61 @@ export class ServerRepo {
 
   findUserByEmail(email: string): UserRow | undefined {
     return this.db
-      .prepare(`SELECT id,email,passwordHash,createdAt FROM users WHERE email=?`)
+      .prepare(`SELECT id,email,passwordHash,createdAt,suspended FROM users WHERE email=?`)
       .get(email) as UserRow | undefined;
+  }
+
+  findUserById(id: string): { id: string; email: string; suspended: number } | undefined {
+    return this.db.prepare(`SELECT id,email,suspended FROM users WHERE id=?`).get(id) as
+      | { id: string; email: string; suspended: number }
+      | undefined;
+  }
+
+  // —— Admin (owner) queries ——
+  adminOverview(): { users: number; sites: number; devices: number; online: number; offline: number; hashrate: number } {
+    const n = (sql: string): number => (this.db.prepare(sql).get() as { c: number }).c;
+    const users = n(`SELECT COUNT(*) c FROM users`);
+    const sites = n(`SELECT COUNT(*) c FROM sites`);
+    const devices = n(`SELECT COUNT(*) c FROM devices`);
+    const online = n(`SELECT COUNT(*) c FROM device_status WHERE state='online'`);
+    const hashrate = (this.db.prepare(`SELECT COALESCE(SUM(hashrateTHs),0) h FROM device_status`).get() as { h: number }).h;
+    return { users, sites, devices, online, offline: Math.max(0, devices - online), hashrate };
+  }
+
+  accountSummaries(): AccountSummary[] {
+    return this.db
+      .prepare(
+        `SELECT u.id, u.email, u.createdAt, u.suspended,
+           (SELECT COUNT(*) FROM sites s WHERE s.userId=u.id) AS sites,
+           (SELECT COUNT(*) FROM devices d WHERE d.userId=u.id) AS devices,
+           (SELECT COUNT(*) FROM device_status ds WHERE ds.userId=u.id AND ds.state='online') AS online,
+           (SELECT COALESCE(SUM(ds.hashrateTHs),0) FROM device_status ds WHERE ds.userId=u.id) AS hashrate,
+           (SELECT MAX(a.lastSeenAt) FROM agents a WHERE a.userId=u.id) AS lastSeen
+         FROM users u ORDER BY u.createdAt DESC`,
+      )
+      .all() as AccountSummary[];
+  }
+
+  listAllAgents(): Array<{ id: string; userId: string; name: string; lastSeenAt: number | null }> {
+    return this.db
+      .prepare(`SELECT id,userId,name,lastSeenAt FROM agents ORDER BY lastSeenAt DESC`)
+      .all() as Array<{ id: string; userId: string; name: string; lastSeenAt: number | null }>;
+  }
+
+  setSuspended(userId: string, suspended: boolean): void {
+    this.db.prepare(`UPDATE users SET suspended=? WHERE id=?`).run(suspended ? 1 : 0, userId);
+  }
+
+  /** Delete a user and ALL their data (sites, devices, statuses, agents). */
+  deleteUser(userId: string): void {
+    const tx = this.db.transaction((uid: string) => {
+      this.db.prepare(`DELETE FROM device_status WHERE userId=?`).run(uid);
+      this.db.prepare(`DELETE FROM devices WHERE userId=?`).run(uid);
+      this.db.prepare(`DELETE FROM sites WHERE userId=?`).run(uid);
+      this.db.prepare(`DELETE FROM agents WHERE userId=?`).run(uid);
+      this.db.prepare(`DELETE FROM users WHERE id=?`).run(uid);
+    });
+    tx(userId);
   }
 
   upsertSite(s: SiteRow): void {

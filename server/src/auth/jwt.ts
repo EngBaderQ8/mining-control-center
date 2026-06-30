@@ -6,7 +6,8 @@ export function signToken(userId: string, secret: string): string {
 
 export function verifyToken(token: string, secret: string): string | null {
   try {
-    const d = jwt.verify(token, secret);
+    // Pin the algorithm — never accept "none" or an attacker-chosen alg.
+    const d = jwt.verify(token, secret, { algorithms: ["HS256"] });
     return typeof d === "object" && d && typeof d.sub === "string" ? d.sub : null;
   } catch {
     return null;
