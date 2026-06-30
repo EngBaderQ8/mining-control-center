@@ -11,6 +11,14 @@ export type { Device, DeviceStatus, Site, CommandOutcome, ControlCommand, Alert,
 // (and republish) if the server ever moves.
 export const DEFAULT_SERVER_ADDR = "144.172.105.191:8443";
 
+// Developer/operator contact, shown in the About menu/dialog.
+export const CONTACT = {
+  telegram: "Darkhorsee_1",
+  telegramUrl: "https://t.me/Darkhorsee_1",
+  whatsapp: "+971582682099",
+  whatsappUrl: "https://wa.me/971582682099",
+} as const;
+
 export interface AuthResponse {
   ok: boolean;
   error?: string;
@@ -103,6 +111,8 @@ export const CH = {
   appSettingsGet: "appsettings:get",
   appSettingsSet: "appsettings:set",
   openSettings: "settings:open", // main -> renderer: File ▸ Settings menu clicked
+  openAbout: "about:open", // main -> renderer: About menu clicked
+  openExternal: "shell:openexternal", // renderer -> main: open a URL in the browser
   // updates
   updateCheck: "update:check",
   appVersion: "app:version",
@@ -189,4 +199,6 @@ export interface Api {
   onAlerts(cb: (alerts: Alert[]) => void): () => void;
   onUpdateStatus(cb: (s: UpdateStatus) => void): () => void;
   onOpenSettings(cb: () => void): () => void;
+  onOpenAbout(cb: () => void): () => void;
+  openExternal(url: string): Promise<void>;
 }

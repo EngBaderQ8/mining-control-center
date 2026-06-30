@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, shell } from "electron";
 import { join } from "node:path";
 import { appendFileSync } from "node:fs";
 import { appIcon } from "./icon";
@@ -25,7 +25,12 @@ import { RecoveryConfig } from "./recovery/config";
 import { buildDailyReport } from "../core/report/daily";
 import { startBotPoller } from "./alerts/botPoller";
 import type { TelegramSettings, RecoverySettings, AppSettings } from "../shared/api";
-import { DEFAULT_APP_SETTINGS } from "../shared/api";
+import { DEFAULT_APP_SETTINGS, CONTACT } from "../shared/api";
+
+/** Open a URL in the user's browser — only safe https links. */
+function openExternalSafe(url: string): void {
+  if (/^https:\/\//i.test(url)) void shell.openExternal(url);
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -177,6 +182,21 @@ function buildAppMenu(): void {
     { role: "editMenu" },
     { role: "viewMenu" },
     { role: "windowMenu" },
+    {
+      label: "About",
+      submenu: [
+        {
+          label: "نبذة / About…",
+          click: () => {
+            showWindow();
+            sendToWindow(CH.openAbout, null);
+          },
+        },
+        { type: "separator" },
+        { label: `📱 تيليجرام: ${CONTACT.telegram}`, click: () => openExternalSafe(CONTACT.telegramUrl) },
+        { label: `💬 واتساب: ${CONTACT.whatsapp}`, click: () => openExternalSafe(CONTACT.whatsappUrl) },
+      ],
+    },
   ]);
   Menu.setApplicationMenu(menu);
 }
@@ -378,6 +398,7 @@ function startApp(): void {
     applyLoginItem(next);
     return next;
   });
+  ipcMain.handle(CH.openExternal, (_e, url: string) => openExternalSafe(url));
   // Register the version handler FIRST and independently — it must never depend
   // on the bridge or the updater succeeding, so the running build is always known.
   ipcMain.handle(CH.appVersion, () => app.getVersion());

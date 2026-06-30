@@ -39,6 +39,7 @@ import { TelegramDialog } from "./components/TelegramDialog";
 import { RecoveryDialog } from "./components/RecoveryDialog";
 import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { AboutDialog } from "./components/AboutDialog";
 import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -135,6 +136,7 @@ export function App(): React.ReactElement {
   const [tgOpen, setTgOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [diagDevice, setDiagDevice] = useState<Device | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -256,11 +258,13 @@ export function App(): React.ReactElement {
         showToast(t("⚠ {count} تنبيه: {message}", { count: alerts.length, message: alerts[0]?.message ?? "" }));
     });
     const offOpenSettings = api.onOpenSettings(() => setSettingsOpen(true));
+    const offOpenAbout = api.onOpenAbout(() => setAboutOpen(true));
     return () => {
       offSnapshot();
       offStatuses();
       offAlerts();
       offOpenSettings();
+      offOpenAbout();
     };
   }, [authed, reload, showToast]);
 
@@ -615,6 +619,7 @@ export function App(): React.ReactElement {
       {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
       {recOpen && <RecoveryDialog onClose={() => setRecOpen(false)} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
       {diagDevice && (
         <DiagnosticsDialog
           device={diagDevice}

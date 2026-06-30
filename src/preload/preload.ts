@@ -66,6 +66,12 @@ const api: Api = {
     ipcRenderer.on(CH.openSettings, handler);
     return () => ipcRenderer.removeListener(CH.openSettings, handler);
   },
+  onOpenAbout: (cb: () => void) => {
+    const handler = (): void => cb();
+    ipcRenderer.on(CH.openAbout, handler);
+    return () => ipcRenderer.removeListener(CH.openAbout, handler);
+  },
+  openExternal: (url: string) => ipcRenderer.invoke(CH.openExternal, url),
 };
 
 contextBridge.exposeInMainWorld("api", api);

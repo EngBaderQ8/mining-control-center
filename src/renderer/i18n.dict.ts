@@ -17,6 +17,13 @@ export const EN: Record<string, string> = {
   "ما قدر يوصل الجهاز.": "Couldn't reach the device.",
   "الإعدادات": "Settings",
   "إعدادات البرنامج": "App settings",
+  "نبذة عن البرنامج": "About",
+  "مركز التحكم بالتعدين — برنامج احترافي لإدارة ومراقبة مزارع تعدين الـ ASIC من مكان واحد: مراقبة لحظية، أرباح، تشخيص الأعطال، وتحكّم كامل عن بُعد لكل المواقع.":
+    "Mining Control Center — a professional app to manage and monitor ASIC mining farms from one place: live monitoring, profit, fault diagnostics, and full remote control across all sites.",
+  "تطوير وإشراف:": "Developed & operated by:",
+  "للتواصل والدعم:": "Contact & support:",
+  "تيليجرام:": "Telegram:",
+  "واتساب:": "WhatsApp:",
   "خليه يراقب أجهزتك ٢٤ ساعة بدون ما تفتحه كل مرة.":
     "Let it watch your miners 24/7 without opening it each time.",
   "التشغيل التلقائي مع ويندوز": "Launch automatically with Windows",
