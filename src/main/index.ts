@@ -39,6 +39,7 @@ let appSettings: AppSettingsStore | null = null;
 let isQuitting = false; // set true for a real quit (tray "Exit" / before-quit / update install)
 let updateReady = false; // an update is downloaded and about to install — never trap the window
 let bgNoticeShown = false; // show the "running in background" hint only once
+let bridgeRef: ServerBridge | null = null; // for clean timer teardown on quit
 let alertConfig: AlertConfig | null = null;
 let recoveryConfig: RecoveryConfig | null = null;
 // Set by setupAutoUpdate so the startup check can be deferred until the renderer
@@ -433,6 +434,7 @@ function startApp(): void {
 
   try {
     const bridge = buildBridge();
+    bridgeRef = bridge; // module-scope handle so before-quit can stop its timers
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
     // Apply persisted self-healing settings + handlers (needs the live bridge).
@@ -509,6 +511,7 @@ if (!app.requestSingleInstanceLock()) {
   // close-to-tray handler so the window is allowed to close.
   app.on("before-quit", () => {
     isQuitting = true;
+    bridgeRef?.dispose(); // stop the auto-discovery timers cleanly
   });
   app.on("will-quit", () => globalShortcut.unregisterAll());
   app.whenReady().then(startApp);

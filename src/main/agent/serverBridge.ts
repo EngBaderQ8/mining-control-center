@@ -10,6 +10,7 @@ import { ConnectionConfig } from "./config";
 import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
 import { subnetHosts, type DiscoveredDevice } from "../../core/discovery/scan";
+import { hostsToRescan } from "../../core/discovery/rescan";
 import { detectFromVersion } from "../../core/discovery/detect";
 import { pollDevice } from "../../core/monitor/poller";
 import { parseDeviceHealth, type DeviceHealth } from "../../core/diagnose/parse";
@@ -53,6 +54,9 @@ export class ServerBridge {
   private connected = false;
   private snapshot: Snapshot = { sites: [], devices: [], statuses: [] };
   private pending = new Map<string, (o: CommandOutcome) => void>();
+  private rescanTimer: ReturnType<typeof setInterval> | null = null;
+  private initialRescan: ReturnType<typeof setTimeout> | null = null;
+  private rescanning = false;
 
   constructor(private deps: BridgeDeps) {
     this.client = new ServerClient(deps.config);
@@ -80,6 +84,21 @@ export class ServerBridge {
       this.connected = c;
       if (c) this.onConnected();
     });
+
+    // Auto-discovery: look for miners that came online after a site was set up and
+    // add them to that site automatically — once a few minutes after start, then
+    // every 10 minutes. Gentle and safe: it only probes UNREGISTERED IPs, so it
+    // never re-connects to a working miner.
+    this.initialRescan = setTimeout(() => void this.rescanKnownSites(), 3 * 60 * 1000);
+    this.rescanTimer = setInterval(() => void this.rescanKnownSites(), 10 * 60 * 1000);
+  }
+
+  /** Stop background timers (for a clean shutdown / tests). */
+  dispose(): void {
+    if (this.initialRescan) clearTimeout(this.initialRescan);
+    if (this.rescanTimer) clearInterval(this.rescanTimer);
+    this.initialRescan = null;
+    this.rescanTimer = null;
   }
 
   authStatus(): AuthStatus {
@@ -265,6 +284,7 @@ export class ServerBridge {
   /** Detailed concurrent probe over hosts: device list + connectivity counters. */
   private async scanDetailed(
     hosts: string[],
+    concurrency = 20,
   ): Promise<{ found: DiscoveredDevice[]; connected: number; responded: number }> {
     const found: DiscoveredDevice[] = [];
     let connected = 0;
@@ -297,7 +317,7 @@ export class ServerBridge {
     };
     // Lower concurrency (was 64): Whatsminer/cheap routers drop probes under a
     // big burst, which made genuine miners go undiscovered.
-    await Promise.all(Array.from({ length: Math.min(20, hosts.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(concurrency, hosts.length) }, worker));
     return { found, connected, responded };
   }
 
@@ -344,6 +364,61 @@ export class ServerBridge {
     }
     this.requestSnapshot(); // one refresh after registering everything
     return { found: found.length, reachable: true, bases, connected, responded };
+  }
+
+  /**
+   * Auto-discovery sweep: for every known site, probe the UNREGISTERED IPs in its
+   * subnet(s) and add any newly-online miners to that site. Skips IPs that already
+   * have a device, so it never disturbs a working miner (and uses a low scan
+   * concurrency to stay gentle on the site network). Runs on a 10-minute timer.
+   */
+  async rescanKnownSites(): Promise<{ added: number }> {
+    // Never overlap a still-running sweep (with several sites a sweep can take
+    // minutes; the 10-min timer firing again would double the network load).
+    if (this.rescanning) return { added: 0 };
+    this.rescanning = true;
+    try {
+      const sites = this.deps.repo.listSites();
+      const devices = this.deps.repo.listDevices();
+      if (sites.length === 0 || devices.length === 0) return { added: 0 };
+      const known = new Set(devices.map((d) => d.host));
+      let added = 0;
+      for (const site of sites) {
+        const hosts = hostsToRescan(site.id, devices, subnetHosts);
+        if (hosts.length === 0) continue;
+        // New miners inherit this site's fleet password (from a sibling that has
+        // one) so control + self-healing work on them — the manual scan does this too.
+        const sib = devices.find((x) => x.siteId === site.id && this.deps.repo.getSecret(x.id));
+        const secret = sib ? this.deps.decrypt(this.deps.repo.getSecret(sib.id)!) : undefined;
+        const { found } = await this.scanDetailed(hosts, 8);
+        for (const d of found) {
+          if (known.has(d.host)) continue; // a device on this IP already exists
+          known.add(d.host);
+          const last = d.host.split(".").pop() ?? "";
+          const controlPort = d.firmware === "stock" || d.firmware === "vnish" ? 80 : 4028;
+          const device: Device = {
+            id: randomUUID(),
+            siteId: site.id,
+            name: `${d.model}-${last}`,
+            model: d.model,
+            firmware: d.firmware,
+            host: d.host,
+            apiPort: 4028,
+            controlPort,
+          };
+          this.service.addDevice(device, secret);
+          this.agent?.registerDevice(device);
+          added++;
+        }
+      }
+      if (added > 0) {
+        this.deps.notify(`🔍 اكتشاف تلقائي: تمت إضافة ${added} جهاز جديد`);
+        this.requestSnapshot();
+      }
+      return { added };
+    } finally {
+      this.rescanning = false;
+    }
   }
 
   async sendCommand(
