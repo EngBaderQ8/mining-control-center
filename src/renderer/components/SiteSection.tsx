@@ -16,6 +16,7 @@ interface Props {
   onCommand: (id: string, cmd: ControlCommand) => void;
   onDeleteSite: (siteId: string, siteName: string) => void;
   onDeleteDevice: (deviceId: string) => void;
+  onDiagnose: (device: import("../../core/model/device").Device) => void;
 }
 
 export function SiteSection({
@@ -30,6 +31,7 @@ export function SiteSection({
   onCommand,
   onDeleteSite,
   onDeleteDevice,
+  onDiagnose,
 }: Props): React.ReactElement {
   const { site, views } = group;
   // Three explicit, non-overlapping counts that sum to the total.
@@ -77,6 +79,7 @@ export function SiteSection({
           onToggle={onToggle}
           onCommand={onCommand}
           onDeleteDevice={onDeleteDevice}
+          onDiagnose={onDiagnose}
         />
       )}
     </div>

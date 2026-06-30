@@ -1,5 +1,6 @@
 import React from "react";
 import type { DeviceView } from "../state/store";
+import type { Device } from "../../core/model/device";
 import type { ControlCommand } from "../../core/drivers/types";
 import { t } from "../i18n";
 
@@ -16,9 +17,10 @@ interface Props {
   onToggle: (id: string) => void;
   onCommand: (id: string, cmd: ControlCommand) => void;
   onDelete: (id: string) => void;
+  onDiagnose: (device: Device) => void;
 }
 
-export function DeviceRow({ view, selected, onToggle, onCommand, onDelete }: Props): React.ReactElement {
+export function DeviceRow({ view, selected, onToggle, onCommand, onDelete, onDiagnose }: Props): React.ReactElement {
   const { device, status } = view;
   const state = status?.state ?? "offline";
   const warnTemp = status && status.maxTempC >= 80;
@@ -66,6 +68,9 @@ export function DeviceRow({ view, selected, onToggle, onCommand, onDelete }: Pro
             onClick={() => onCommand(device.id, "reboot")}
           >
             ⟳
+          </button>
+          <button className="iconbtn" title={t("تشخيص الجهاز")} onClick={() => onDiagnose(device)}>
+            🔧
           </button>
           <button className="iconbtn" title={t("حذف الجهاز")} onClick={() => onDelete(device.id)}>
             🗑

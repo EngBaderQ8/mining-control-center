@@ -22,6 +22,7 @@ const api: Api = {
     ipcRenderer.invoke(CH.deviceScan, siteName, base, secret),
   testHost: (ip: string) => ipcRenderer.invoke(CH.deviceTest, ip),
   getLocalIps: () => ipcRenderer.invoke(CH.localIps),
+  diagnoseDevice: (host: string) => ipcRenderer.invoke(CH.deviceDiagnose, host),
   getNetworkStats: () => ipcRenderer.invoke(CH.networkStats),
   getTelegram: () => ipcRenderer.invoke(CH.telegramGet),
   setTelegram: (s) => ipcRenderer.invoke(CH.telegramSet, s),

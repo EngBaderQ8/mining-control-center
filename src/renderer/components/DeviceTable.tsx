@@ -1,6 +1,7 @@
 import React from "react";
 import type { DeviceView, SortKey, SortState } from "../state/store";
 import { sortViews } from "../state/store";
+import type { Device } from "../../core/model/device";
 import type { ControlCommand } from "../../core/drivers/types";
 import { DeviceRow } from "./DeviceRow";
 import { t } from "../i18n";
@@ -13,6 +14,7 @@ interface Props {
   onToggle: (id: string) => void;
   onCommand: (id: string, cmd: ControlCommand) => void;
   onDeleteDevice: (deviceId: string) => void;
+  onDiagnose: (device: Device) => void;
 }
 
 const COLUMNS: Array<{ key: SortKey | null; label: string }> = [
@@ -35,6 +37,7 @@ export function DeviceTable({
   onToggle,
   onCommand,
   onDeleteDevice,
+  onDiagnose,
 }: Props): React.ReactElement {
   const sorted = sortViews(views, sort);
   return (
@@ -68,6 +71,7 @@ export function DeviceTable({
             onToggle={onToggle}
             onCommand={onCommand}
             onDelete={onDeleteDevice}
+            onDiagnose={onDiagnose}
           />
         ))}
       </tbody>

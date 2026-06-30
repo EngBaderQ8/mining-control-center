@@ -62,6 +62,7 @@ export const CH = {
   deviceAdd: "device:add",
   deviceScan: "device:scan",
   deviceTest: "device:test",
+  deviceDiagnose: "device:diagnose",
   localIps: "device:localips",
   deviceSetSecret: "device:setsecret",
   deviceDelete: "device:delete",
@@ -132,6 +133,14 @@ export interface Api {
     error?: string;
   }>;
   getLocalIps(): Promise<string[]>;
+  diagnoseDevice(host: string): Promise<{
+    reachable: boolean;
+    error?: string;
+    boards: Array<{ board: number; chips: number; rateGhs: number; hwErrors: number }>;
+    fans: number[];
+    temps: number[];
+    issues: Array<{ code: string; severity: "warn" | "high"; values: Record<string, number> }>;
+  }>;
   getNetworkStats(): Promise<{ priceUsd: number; difficulty: number; blockRewardBtc: number }>;
   // telegram alerts
   getTelegram(): Promise<TelegramSettings>;

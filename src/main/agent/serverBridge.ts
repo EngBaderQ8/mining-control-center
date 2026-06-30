@@ -12,6 +12,7 @@ import { AgentRuntime } from "./runtime";
 import { subnetHosts, type DiscoveredDevice } from "../../core/discovery/scan";
 import { detectFromVersion } from "../../core/discovery/detect";
 import { pollDevice } from "../../core/monitor/poller";
+import { parseDeviceHealth, type DeviceHealth } from "../../core/diagnose/parse";
 import { localPrivateBases, localIpv4s } from "../discovery/localSubnet";
 import { diagnoseHost } from "../transport/tcp";
 
@@ -147,6 +148,15 @@ export class ServerBridge {
   /** This machine's connected private IPv4 addresses (for auto-filling the scan range). */
   getLocalIps(): string[] {
     return localIpv4s();
+  }
+
+  /** Deep-diagnose a device: fetch its `stats` and report per-board/fan faults. */
+  async diagnoseDevice(host: string): Promise<DeviceHealth & { reachable: boolean; error?: string }> {
+    const d = await diagnoseHost(host, 4028, 4000, "stats");
+    if (!d.connected) {
+      return { boards: [], fans: [], temps: [], issues: [], reachable: false, ...(d.error ? { error: d.error } : {}) };
+    }
+    return { ...parseDeviceHealth(d.raw), reachable: true };
   }
 
   /** Diagnose a single ASIC IP end-to-end: connectivity, the raw summary reply,

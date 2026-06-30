@@ -37,6 +37,7 @@ import type { PowerProfile } from "../core/drivers/types";
 import { ScanDialog } from "./components/ScanDialog";
 import { TelegramDialog } from "./components/TelegramDialog";
 import { RecoveryDialog } from "./components/RecoveryDialog";
+import { DiagnosticsDialog } from "./components/DiagnosticsDialog";
 import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -131,6 +132,7 @@ export function App(): React.ReactElement {
   const [scanOpen, setScanOpen] = useState(false);
   const [tgOpen, setTgOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
+  const [diagDevice, setDiagDevice] = useState<Device | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   // Collapsed site IDs — persisted so the layout survives reloads (key for many sites).
@@ -586,6 +588,7 @@ export function App(): React.ReactElement {
                 onCommand={onCommand}
                 onDeleteSite={onDeleteSite}
                 onDeleteDevice={onDeleteDevice}
+                onDiagnose={setDiagDevice}
               />
             ))
           )}
@@ -605,6 +608,7 @@ export function App(): React.ReactElement {
 
       {tgOpen && <TelegramDialog onClose={() => setTgOpen(false)} />}
       {recOpen && <RecoveryDialog onClose={() => setRecOpen(false)} />}
+      {diagDevice && <DiagnosticsDialog device={diagDevice} onClose={() => setDiagDevice(null)} />}
 
       {profileOpen && (
         <ProfileDialog
