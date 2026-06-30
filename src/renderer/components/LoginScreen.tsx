@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { api } from "../ipc";
+import { DEFAULT_SERVER_ADDR } from "../../shared/api";
 import { t } from "../i18n";
 
 export function LoginScreen({ onAuthed }: { onAuthed: () => void }): React.ReactElement {
-  const [serverAddr, setServerAddr] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -12,13 +12,14 @@ export function LoginScreen({ onAuthed }: { onAuthed: () => void }): React.React
 
   async function submit(): Promise<void> {
     setError(null);
-    if (!serverAddr.trim() || !email.trim() || !password) {
+    if (!email.trim() || !password) {
       setError(t("عبّئ كل الحقول"));
       return;
     }
     setBusy(true);
     try {
-      await api.setServer(serverAddr.trim(), "");
+      // The server address is fixed and filled automatically — staff only sign in.
+      await api.setServer(DEFAULT_SERVER_ADDR, "");
       const r = mode === "login" ? await api.login(email.trim(), password) : await api.signup(email.trim(), password);
       if (r.ok) onAuthed();
       else setError(r.error ?? t("فشل"));
@@ -33,10 +34,6 @@ export function LoginScreen({ onAuthed }: { onAuthed: () => void }): React.React
       <div className="dialog" style={{ width: "100%" }}>
         <h3>{mode === "login" ? t("تسجيل الدخول") : t("إنشاء حساب")}</h3>
 
-        <div className="field">
-          <label>{t("عنوان الخادم (IP:المنفذ)")}</label>
-          <input className="input" placeholder={t("مثال: 203.0.113.5:8443")} value={serverAddr} onChange={(e) => setServerAddr(e.target.value)} />
-        </div>
         <div className="field">
           <label>{t("البريد")}</label>
           <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} />

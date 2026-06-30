@@ -6,6 +6,11 @@ import type { Snapshot } from "../main/service";
 
 export type { Device, DeviceStatus, Site, CommandOutcome, ControlCommand, Alert, Snapshot };
 
+// The central server is a fixed deployment detail — site staff never type it.
+// The app fills it automatically and only asks for email + password. Change this
+// (and republish) if the server ever moves.
+export const DEFAULT_SERVER_ADDR = "144.172.105.191:8443";
+
 export interface AuthResponse {
   ok: boolean;
   error?: string;
