@@ -26,6 +26,17 @@ describe("Whatsminer (MicroBT) summary", () => {
     expect(s.maxTempC).toBe(80); // "Temperature" (board), not Chip Temp Max
     expect(s.fanRpm).toBeGreaterThan(4000); // "Fan Speed In"
   });
+
+  it("handles a Whatsminer that reports cgminer-style SUMMARY with MHS av already in TH/s", () => {
+    // Real device 192.168.0.54: SUMMARY array, MHS av = 111.77 (the value IS the
+    // TH/s, not MH/s) and NO current-metric key — must read ~111 TH, not ~0.
+    const alt =
+      '{"STATUS":[{"STATUS":"S","Msg":"Summary"}],"SUMMARY":[{"Elapsed":14759,"MHS av":111.77,"Accepted":711,"Rejected":1}],"id":1}';
+    const s = extractStatusFromRaw("wm54", alt, "", "{}", Date.now());
+    expect(s.state).toBe("online");
+    expect(s.hashrateTHs).toBeCloseTo(111.77, 1);
+    expect(s.avgHashrateTHs).toBeCloseTo(111.77, 1);
+  });
 });
 
 describe("normalizeStatus", () => {

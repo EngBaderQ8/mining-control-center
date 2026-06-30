@@ -30,25 +30,41 @@ function many(raw: string, src: string): number[] {
 }
 
 /**
- * Hashrate in TH/s, trying every common firmware key/unit (Antminer GHS, some
- * report MHS/THS, Vnish/Braiins use rate_*). Returns the first non-zero match.
+ * Convert a raw hashrate number to TH/s by INFERRING the unit from its magnitude.
+ * Firmwares disagree wildly — the same ~110 TH miner is reported as 110 (TH/s),
+ * 110000 (GH/s), or 110000000 (MH/s), and even the same key ("MHS av") means MH/s
+ * on one Whatsminer and TH/s on another. A single ASIC is well under ~2000 TH, so
+ * magnitude unambiguously identifies the unit for real miners.
+ */
+function toTH(v: number): number {
+  if (!Number.isFinite(v) || v <= 0) return 0;
+  if (v < 2000) return v; // already TH/s
+  if (v < 5e7) return v / 1_000; // GH/s
+  if (v < 5e10) return v / 1_000_000; // MH/s
+  return v / 1e12; // H/s
+}
+
+/**
+ * Hashrate in TH/s. Tries common keys in preference order (current metrics first,
+ * then averages) and infers the unit by magnitude — so it handles Antminer (GHS),
+ * both Whatsminer reply shapes (MHS in MH/s OR in TH/s), THS, and Vnish rate_*.
+ * The "5s" path falls back to averages (some firmware report only "MHS av").
  */
 function hashTHs(raw: string, which: "5s" | "av"): number {
-  const ghsKeys = which === "5s" ? ["GHS 5s", "GHS 1m", "GHS 5m", "GHS 30m"] : ["GHS av", "GHS 5m"];
-  // Whatsminer reports MHS only (5s/1m/5m/15m/av) + "HS RT" (also MH/s) and has
-  // NO GHS key — so the current-hashrate path must fall back through these or a
-  // live Whatsminer reads 0 and is wrongly marked offline.
-  const mhsKeys =
+  const keys =
     which === "5s"
-      ? ["MHS 5s", "MHS 1m", "HS RT", "MHS 5m", "MHS 15m", "MHS 30m"]
-      : ["MHS av", "MHS 15m", "MHS 5m", "HS RT", "MHS 1m"];
-  const thsKeys = which === "5s" ? ["THS 5s"] : ["THS av"];
-  const rateKeys = which === "5s" ? ["rate_5s", "rate_30m"] : ["rate_avg", "rate_ideal"];
-  for (const k of ghsKeys) if (one(raw, k)) return one(raw, k) / 1000;
-  for (const k of mhsKeys) if (one(raw, k)) return one(raw, k) / 1_000_000;
-  for (const k of thsKeys) if (one(raw, k)) return one(raw, k);
-  // rate_* values are usually GH/s on modded firmware.
-  for (const k of rateKeys) if (one(raw, k)) return one(raw, k) / 1000;
+      ? [
+          "GHS 5s", "MHS 5s", "THS 5s", "HS RT", "GHS 1m", "MHS 1m",
+          "GHS 5m", "MHS 5m", "MHS 15m", "rate_5s", "GHS 30m", "MHS 30m",
+          // Fallbacks when no current-metric key exists (e.g. Whatsminer that
+          // only reports an average): use the average so it isn't read as 0.
+          "GHS av", "MHS av", "THS av", "rate_avg",
+        ]
+      : ["GHS av", "MHS av", "THS av", "MHS 15m", "HS RT", "rate_avg", "rate_ideal"];
+  for (const k of keys) {
+    const v = one(raw, k);
+    if (v) return toTH(v);
+  }
   return 0;
 }
 
