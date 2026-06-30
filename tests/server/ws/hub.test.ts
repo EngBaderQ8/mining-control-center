@@ -73,6 +73,31 @@ describe("ConnectionHub", () => {
     expect(sent[0]).toMatchObject({ type: "command.ack", outcome: { ok: false } });
   });
 
+  it("broadcasts a live snapshot when a NEW site/device registers, but stays silent on identical reconnect re-register", async () => {
+    const { repo, router, uid, broadcast, broadcasts } = setup();
+    const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);
+    const device = {
+      id: "d1", siteId: "s1", name: "n", model: "S19",
+      firmware: "stock" as const, host: "h", apiPort: 4028, controlPort: 80,
+    };
+    await hub.handleMessage({ type: "agent.hello", agentId: "ag1", name: "salamat" });
+    await hub.handleMessage({ type: "site.register", site: { id: "s1", name: "salamat" } });
+    await hub.handleMessage({ type: "device.register", device });
+    // New site + new device → each pushed a fresh snapshot to viewers.
+    expect(broadcasts.filter((m) => m.type === "snapshot").length).toBe(2);
+
+    // Re-registering the SAME site + device (what every reconnect does) must not
+    // re-broadcast — otherwise a 57-device agent would storm viewers on reconnect.
+    const before = broadcasts.length;
+    await hub.handleMessage({ type: "site.register", site: { id: "s1", name: "salamat" } });
+    await hub.handleMessage({ type: "device.register", device });
+    expect(broadcasts.length).toBe(before);
+
+    // A real change (renamed worker host) does broadcast again.
+    await hub.handleMessage({ type: "device.register", device: { ...device, host: "h2" } });
+    expect(broadcasts.length).toBe(before + 1);
+  });
+
   it("deletes a device and a site, broadcasting a fresh snapshot", async () => {
     const { repo, router, uid, broadcast, broadcasts } = setup();
     const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast);

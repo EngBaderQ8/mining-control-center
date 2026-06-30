@@ -29,14 +29,20 @@ export class ConnectionHub {
         this.router.attachAgent(msg.agentId, (exec) => this.send(exec));
         break;
       case "site.register":
-        this.repo.upsertSite({ ...msg.site, userId: this.userId });
+        // Push a live snapshot to the user's viewers when a NEW/renamed site
+        // arrives, so it appears without restarting the app. Identical
+        // re-registers (every agent reconnect) report no change → no broadcast.
+        if (this.repo.upsertSite({ ...msg.site, userId: this.userId })) this.broadcastSnapshot();
         break;
       case "device.register":
-        this.repo.upsertDevice({
-          ...msg.device,
-          userId: this.userId,
-          agentId: this.agentId ?? "",
-        });
+        if (
+          this.repo.upsertDevice({
+            ...msg.device,
+            userId: this.userId,
+            agentId: this.agentId ?? "",
+          })
+        )
+          this.broadcastSnapshot();
         break;
       case "status.update": {
         // Only accept status for devices that actually belong to this user —

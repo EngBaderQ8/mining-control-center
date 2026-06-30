@@ -138,16 +138,34 @@ export class ServerRepo {
     tx(userId);
   }
 
-  upsertSite(s: SiteRow): void {
+  /** Returns true if the row was newly inserted or its name actually changed —
+   *  lets the caller broadcast live only on a real change (not on an agent's
+   *  identical re-register every reconnect). */
+  upsertSite(s: SiteRow): boolean {
+    const prev = this.db.prepare(`SELECT name FROM sites WHERE id=?`).get(s.id) as
+      | { name: string }
+      | undefined;
     this.db
       .prepare(
         `INSERT INTO sites(id,userId,name) VALUES(@id,@userId,@name)
          ON CONFLICT(id) DO UPDATE SET name=@name`,
       )
       .run(s);
+    return !prev || prev.name !== s.name;
   }
 
-  upsertDevice(d: DeviceRow): void {
+  /** Returns true if the device was newly inserted or any field actually changed. */
+  upsertDevice(d: DeviceRow): boolean {
+    const prev = this.db
+      .prepare(
+        `SELECT siteId,agentId,name,model,firmware,host,apiPort,controlPort FROM devices WHERE id=?`,
+      )
+      .get(d.id) as
+      | Pick<
+          DeviceRow,
+          "siteId" | "agentId" | "name" | "model" | "firmware" | "host" | "apiPort" | "controlPort"
+        >
+      | undefined;
     this.db
       .prepare(
         `INSERT INTO devices(id,userId,siteId,agentId,name,model,firmware,host,apiPort,controlPort)
@@ -156,6 +174,17 @@ export class ServerRepo {
            firmware=@firmware,host=@host,apiPort=@apiPort,controlPort=@controlPort`,
       )
       .run(d);
+    return (
+      !prev ||
+      prev.siteId !== d.siteId ||
+      prev.agentId !== d.agentId ||
+      prev.name !== d.name ||
+      prev.model !== d.model ||
+      prev.firmware !== d.firmware ||
+      prev.host !== d.host ||
+      prev.apiPort !== d.apiPort ||
+      prev.controlPort !== d.controlPort
+    );
   }
 
   listSites(userId: string): Site[] {
