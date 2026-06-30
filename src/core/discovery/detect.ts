@@ -53,3 +53,18 @@ export function detectFromVersion(raw: string): Detected | null {
 
   return { firmware, model };
 }
+
+/**
+ * Extract a stable hardware identity (MAC address) from any raw miner reply. Done by
+ * REGEX over the whole text — not a fixed field name — so it works regardless of which
+ * command/firmware exposed it (Whatsminer get_miner_info, an Antminer field, etc.).
+ * Returns a normalised lowercase colon MAC, or null. Ignores the all-zero/broadcast
+ * placeholders so we never treat "no MAC" as a real identity.
+ */
+export function extractMac(raw: string): string | null {
+  const m = /(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}/.exec(raw.replace(/\0/g, ""));
+  if (!m) return null;
+  const mac = m[0].replace(/-/g, ":").toLowerCase();
+  if (mac === "00:00:00:00:00:00" || mac === "ff:ff:ff:ff:ff:ff") return null;
+  return mac;
+}

@@ -1,5 +1,5 @@
 import type { Transport } from "../drivers/types";
-import type { Firmware } from "../model/device";
+import type { Firmware, Device } from "../model/device";
 import { buildRequest } from "../cgminer/protocol";
 import { detectFromVersion } from "./detect";
 
@@ -7,6 +7,43 @@ export interface DiscoveredDevice {
   host: string;
   firmware: Firmware;
   model: string;
+  hwId?: string; // stable MAC, when the miner exposed one
+}
+
+export interface RescanPlan {
+  /** A known device that moved to a new IP — update its host in place (no duplicate). */
+  relocate: Array<{ deviceId: string; host: string }>;
+  /** Genuinely new miners to add to the site. */
+  add: DiscoveredDevice[];
+}
+
+/**
+ * Decide what an auto-discovery sweep should do with the miners it found, WITHOUT
+ * ever creating a phantom: a found miner whose MAC matches an existing device is the
+ * SAME box on a new IP → relocate (update host); only a truly-new miner is added. A
+ * found host that already maps to a device is skipped. Pure + unit-tested.
+ */
+export function planRescan(found: DiscoveredDevice[], siteDevices: Device[]): RescanPlan {
+  const byHwId = new Map(siteDevices.filter((d) => d.hwId).map((d) => [d.hwId!, d]));
+  const usedHosts = new Set(siteDevices.map((d) => d.host));
+  const relocate: RescanPlan["relocate"] = [];
+  const add: DiscoveredDevice[] = [];
+  for (const f of found) {
+    if (usedHosts.has(f.host)) continue; // a device already lives on this IP
+    const existing = f.hwId ? byHwId.get(f.hwId) : undefined;
+    if (existing) {
+      if (existing.host !== f.host) {
+        relocate.push({ deviceId: existing.id, host: f.host });
+        byHwId.delete(f.hwId!); // one relocation per device per sweep
+        usedHosts.add(f.host);
+      }
+      // same hwId + same host = already correct → nothing to do
+    } else {
+      add.push(f);
+      usedHosts.add(f.host);
+    }
+  }
+  return { relocate, add };
 }
 
 /**

@@ -1,6 +1,6 @@
 import { randomUUID, verify as cryptoVerify } from "node:crypto";
 import { get as httpsGet } from "node:https";
-import type { Device, Site, DeviceStatus } from "../../core/model/device";
+import type { Device, Site, DeviceStatus, Firmware } from "../../core/model/device";
 import type { ControlCommand, Transport, FlashTransport } from "../../core/drivers/types";
 import type { CommandOutcome } from "../../core/model/result";
 import type { Alert } from "../../core/alerts/rules";
@@ -13,9 +13,9 @@ import type { DeviceRepo } from "../db/repo";
 import { ConnectionConfig } from "./config";
 import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
-import { subnetHosts, type DiscoveredDevice } from "../../core/discovery/scan";
+import { subnetHosts, planRescan, type DiscoveredDevice } from "../../core/discovery/scan";
 import { hostsToRescan } from "../../core/discovery/rescan";
-import { detectFromVersion } from "../../core/discovery/detect";
+import { detectFromVersion, extractMac } from "../../core/discovery/detect";
 import { pollDevice } from "../../core/monitor/poller";
 import { parseDeviceHealth, type DeviceHealth } from "../../core/diagnose/parse";
 import { localPrivateBases, localIpv4s } from "../discovery/localSubnet";
@@ -313,6 +313,7 @@ export class ServerBridge {
         let conn = false;
         let det: ReturnType<typeof detectFromVersion> = null;
         let gotData = false;
+        let rawAll = "";
         // Antminer answers `version`; some Whatsminer firmware only answers
         // `get_version`, and a few only reveal themselves via `summary`. 2.8s
         // timeout for Whatsminer's slower handshake.
@@ -320,6 +321,7 @@ export class ServerBridge {
         for (let p = 0; p < cmds.length; p++) {
           const d = await diagnoseHost(host, 4028, 2800, cmds[p]!);
           if (d.connected) conn = true;
+          if (d.raw) rawAll += d.raw;
           if (d.gotData) {
             gotData = true;
             det = detectFromVersion(d.raw);
@@ -329,7 +331,12 @@ export class ServerBridge {
         }
         if (conn) connected++;
         if (gotData) responded++;
-        if (det) found.push({ host, firmware: det.firmware, model: det.model });
+        if (det) {
+          // Capture a stable MAC so a later IP change is recognised as the same box.
+          let hwId = extractMac(rawAll);
+          if (!hwId) hwId = (await this.probeIdentity(host, det.firmware)).mac;
+          found.push({ host, firmware: det.firmware, model: det.model, ...(hwId ? { hwId } : {}) });
+        }
       }
     };
     // Lower concurrency (was 64): Whatsminer/cheap routers drop probes under a
@@ -372,6 +379,7 @@ export class ServerBridge {
         host: d.host,
         apiPort: 4028,
         controlPort,
+        ...(d.hwId ? { hwId: d.hwId } : {}),
       };
       // Store the password the user typed once (applies to the whole fleet). If
       // empty, store nothing — control falls back to the firmware's built-in
@@ -385,21 +393,26 @@ export class ServerBridge {
 
   /**
    * Auto-discovery sweep: for every known site, probe the UNREGISTERED IPs in its
-   * subnet(s) and add any newly-online miners to that site. Skips IPs that already
-   * have a device, so it never disturbs a working miner (and uses a low scan
-   * concurrency to stay gentle on the site network). Runs on a 10-minute timer.
+   * subnet(s). A found miner whose MAC matches an existing device is the SAME box on a
+   * new IP → its host is updated IN PLACE (keeping its name/password) rather than added
+   * as a phantom duplicate; only a genuinely-new miner is added. Existing offline
+   * devices are NEVER removed. Runs on a 10-minute timer at low concurrency.
    */
-  async rescanKnownSites(): Promise<{ added: number }> {
+  async rescanKnownSites(): Promise<{ added: number; relocated: number }> {
     // Never overlap a still-running sweep (with several sites a sweep can take
     // minutes; the 10-min timer firing again would double the network load).
-    if (this.rescanning) return { added: 0 };
+    if (this.rescanning) return { added: 0, relocated: 0 };
     this.rescanning = true;
     try {
       const sites = this.deps.repo.listSites();
+      if (sites.length === 0 || this.deps.repo.listDevices().length === 0)
+        return { added: 0, relocated: 0 };
+      // Backfill stable MACs for known devices first, so a moved miner can be matched
+      // to its existing entry (instead of being added as a new/phantom device).
+      await this.backfillHwIds();
       const devices = this.deps.repo.listDevices();
-      if (sites.length === 0 || devices.length === 0) return { added: 0 };
-      const known = new Set(devices.map((d) => d.host));
       let added = 0;
+      let relocated = 0;
       for (const site of sites) {
         const hosts = hostsToRescan(site.id, devices, subnetHosts);
         if (hosts.length === 0) continue;
@@ -408,9 +421,19 @@ export class ServerBridge {
         const sib = devices.find((x) => x.siteId === site.id && this.deps.repo.getSecret(x.id));
         const secret = sib ? this.deps.decrypt(this.deps.repo.getSecret(sib.id)!) : undefined;
         const { found } = await this.scanDetailed(hosts, 8);
-        for (const d of found) {
-          if (known.has(d.host)) continue; // a device on this IP already exists
-          known.add(d.host);
+        const siteDevices = devices.filter((d) => d.siteId === site.id);
+        const plan = planRescan(found, siteDevices);
+        // A miner that changed IP: update the SAME device's host (no phantom, keeps
+        // its custom name + saved password).
+        for (const r of plan.relocate) {
+          const existing = this.deps.repo.listDevices().find((d) => d.id === r.deviceId);
+          if (!existing) continue;
+          const moved = { ...existing, host: r.host };
+          this.deps.repo.upsertDevice(moved);
+          this.agent?.registerDevice(moved);
+          relocated++;
+        }
+        for (const d of plan.add) {
           const last = d.host.split(".").pop() ?? "";
           const controlPort = d.firmware === "stock" || d.firmware === "vnish" ? 80 : 4028;
           const device: Device = {
@@ -422,20 +445,66 @@ export class ServerBridge {
             host: d.host,
             apiPort: 4028,
             controlPort,
+            ...(d.hwId ? { hwId: d.hwId } : {}),
           };
           this.service.addDevice(device, secret);
           this.agent?.registerDevice(device);
           added++;
         }
       }
-      if (added > 0) {
-        this.deps.notify(`🔍 اكتشاف تلقائي: تمت إضافة ${added} جهاز جديد`);
+      if (added > 0 || relocated > 0) {
+        if (added > 0) this.deps.notify(`🔍 اكتشاف تلقائي: تمت إضافة ${added} جهاز جديد`);
         this.requestSnapshot();
       }
-      return { added };
+      return { added, relocated };
     } finally {
       this.rescanning = false;
     }
+  }
+
+  /** Probe a host for its stable MAC (field-name-agnostic) AND detected firmware.
+   *  Whatsminer keeps the MAC in get_miner_info; others may surface it in version/stats. */
+  private async probeIdentity(
+    host: string,
+    firmware: Firmware,
+  ): Promise<{ mac: string | null; firmware: Firmware | null }> {
+    const cmds =
+      firmware === "whatsminer"
+        ? ["get_miner_info", "summary", "version"]
+        : ["version", "stats", "get_miner_info"];
+    let mac: string | null = null;
+    let fw: Firmware | null = null;
+    for (const cmd of cmds) {
+      const d = await diagnoseHost(host, 4028, 2800, cmd);
+      if (!mac) mac = extractMac(d.raw);
+      if (!fw) {
+        const det = detectFromVersion(d.raw);
+        if (det) fw = det.firmware;
+      }
+      if (mac && fw) break;
+    }
+    return { mac, firmware: fw };
+  }
+
+  /** One-time backfill of MACs for registered devices that don't have one yet, so the
+   *  rescan can recognise an IP change. Offline devices simply don't respond (retried a
+   *  later sweep). Bounded concurrency to stay gentle on the site network. */
+  private async backfillHwIds(): Promise<void> {
+    const missing = this.deps.repo.listDevices().filter((d) => !d.hwId);
+    if (missing.length === 0) return;
+    let i = 0;
+    const worker = async (): Promise<void> => {
+      while (i < missing.length) {
+        const d = missing[i++]!;
+        const id = await this.probeIdentity(d.host, d.firmware);
+        // Adopt the MAC ONLY if the host still hosts the SAME firmware family — guards
+        // against grabbing a different miner's MAC if this IP was reassigned (DHCP).
+        if (!id.mac || (id.firmware && id.firmware !== d.firmware)) continue;
+        const cur = this.deps.repo.listDevices().find((x) => x.id === d.id);
+        if (cur && !cur.hwId) this.deps.repo.upsertDevice({ ...cur, hwId: id.mac });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
   }
 
   async sendCommand(
