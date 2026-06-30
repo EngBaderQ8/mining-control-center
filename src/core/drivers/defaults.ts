@@ -12,6 +12,7 @@ const FIRMWARE_DEFAULT_SECRET: Record<Firmware, string> = {
   braiins: "", // Braiins OS+ — cgminer-style API, no static auth on LAN
   vnish: "admin", // Vnish web API default unlock password
   luxos: "", // LuxOS — session via the `logon` API command, no static password
+  whatsminer: "", // Whatsminer reads are plaintext; control needs the encrypted token API
 };
 
 /** The factory-default control secret for a firmware (used when none is set). */

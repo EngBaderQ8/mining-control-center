@@ -31,13 +31,17 @@ export async function probeHost(
   port: number,
   t: Transport,
 ): Promise<DiscoveredDevice | null> {
-  try {
-    const raw = await t.tcp4028(host, port, buildRequest("version"));
-    const d = detectFromVersion(raw);
-    return d ? { host, firmware: d.firmware, model: d.model } : null;
-  } catch {
-    return null;
-  }
+  const probe = async (cmd: string): Promise<DiscoveredDevice | null> => {
+    try {
+      const d = detectFromVersion(await t.tcp4028(host, port, buildRequest(cmd)));
+      return d ? { host, firmware: d.firmware, model: d.model } : null;
+    } catch {
+      return null;
+    }
+  };
+  // Antminer answers `version`; some Whatsminer firmware answers `get_version`,
+  // and a few only reveal themselves via `summary` (MHS/Whatsminer markers).
+  return (await probe("version")) ?? (await probe("get_version")) ?? (await probe("summary"));
 }
 
 /** Probe many hosts concurrently (capped) and return the miners found. */

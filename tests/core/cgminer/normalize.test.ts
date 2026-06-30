@@ -5,6 +5,29 @@ const summary = { "GHS 5s": 95200, "GHS av": 94800, "Device Hardware%": 0.21, "E
 const stats = { temp2_1: 64, temp2_2: 81, temp2_3: 70, fan1: 4200, fan2: 0 };
 const pools = { URL: "stratum+tcp://pool:3333", "User": "acct.rig02", "Stratum Active": true };
 
+describe("Whatsminer (MicroBT) summary", () => {
+  // Real-device shape: MHS only (no GHS, no MHS 5s), data nested in Msg,
+  // Temperature + Fan Speed In/Out, stats command unsupported (error).
+  const wmSummary =
+    '{"STATUS":"S","Code":131,"Msg":{"Elapsed":11367,"MHS av":122942400,"MHS 1m":123107336,' +
+    '"MHS 15m":122913336,"HS RT":123107336,"Temperature":80.00,"Env Temp":32.00,' +
+    '"Chip Temp Max":101.25,"Fan Speed In":4530,"Fan Speed Out":4540}}';
+  const wmStatsErr = '{"STATUS":"E","Code":14,"Msg":"invalid cmd"}';
+
+  it("reads hashrate from MHS (no GHS/5s) → online, correct TH/s", () => {
+    const s = extractStatusFromRaw("wm", wmSummary, wmStatsErr, "{}", Date.now());
+    expect(s.state).toBe("online");
+    expect(s.hashrateTHs).toBeCloseTo(123.1, 0); // HS RT / MHS 1m ÷ 1e6
+    expect(s.avgHashrateTHs).toBeCloseTo(122.9, 0); // MHS av ÷ 1e6
+  });
+
+  it("reads Temperature + Fan Speed from the summary (not from the bad stats)", () => {
+    const s = extractStatusFromRaw("wm", wmSummary, wmStatsErr, "{}", Date.now());
+    expect(s.maxTempC).toBe(80); // "Temperature" (board), not Chip Temp Max
+    expect(s.fanRpm).toBeGreaterThan(4000); // "Fan Speed In"
+  });
+});
+
 describe("normalizeStatus", () => {
   it("converts GH/s to TH/s and picks hottest temp + active fan", () => {
     const s = normalizeStatus("dev1", { summary, stats, pools }, Date.now());

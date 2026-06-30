@@ -17,7 +17,8 @@ const num = (v: unknown): number => (typeof v === "number" ? v : Number(v) || 0)
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function one(raw: string, key: string): number {
-  const m = new RegExp(`"${esc(key)}"\\s*:\\s*"?(-?[\\d.]+)`, "i").exec(raw);
+  // Accept scientific notation too — Whatsminer MH values can be large/exponent.
+  const m = new RegExp(`"${esc(key)}"\\s*:\\s*"?(-?[\\d.]+(?:[eE][+-]?\\d+)?)`, "i").exec(raw);
   return m ? Number(m[1]) || 0 : 0;
 }
 function many(raw: string, src: string): number[] {
@@ -33,8 +34,14 @@ function many(raw: string, src: string): number[] {
  * report MHS/THS, Vnish/Braiins use rate_*). Returns the first non-zero match.
  */
 function hashTHs(raw: string, which: "5s" | "av"): number {
-  const ghsKeys = which === "5s" ? ["GHS 5s", "GHS 30m", "GHS 1m"] : ["GHS av", "GHS 5m"];
-  const mhsKeys = which === "5s" ? ["MHS 5s", "MHS 30m"] : ["MHS av"];
+  const ghsKeys = which === "5s" ? ["GHS 5s", "GHS 1m", "GHS 5m", "GHS 30m"] : ["GHS av", "GHS 5m"];
+  // Whatsminer reports MHS only (5s/1m/5m/15m/av) + "HS RT" (also MH/s) and has
+  // NO GHS key — so the current-hashrate path must fall back through these or a
+  // live Whatsminer reads 0 and is wrongly marked offline.
+  const mhsKeys =
+    which === "5s"
+      ? ["MHS 5s", "MHS 1m", "HS RT", "MHS 5m", "MHS 15m", "MHS 30m"]
+      : ["MHS av", "MHS 15m", "MHS 5m", "HS RT", "MHS 1m"];
   const thsKeys = which === "5s" ? ["THS 5s"] : ["THS av"];
   const rateKeys = which === "5s" ? ["rate_5s", "rate_30m"] : ["rate_avg", "rate_ideal"];
   for (const k of ghsKeys) if (one(raw, k)) return one(raw, k) / 1000;
@@ -60,8 +67,12 @@ export function extractStatusFromRaw(
 ): DeviceStatus {
   const hash5 = hashTHs(sumRaw, "5s") || hashTHs(statRaw, "5s");
   const hashAv = hashTHs(sumRaw, "av") || hashTHs(statRaw, "av");
-  const temps = many(statRaw, '"temp[^"]*"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
-  const fans = many(statRaw, '"fan[_ ]?\\d+"\\s*:\\s*"?(\\d+)').filter((f) => f > 0);
+  // Search stats AND summary: Antminer puts temp*/fan* in stats; Whatsminer puts
+  // "Temperature"/"Fan Speed In|Out" in summary (its `stats` cmd is unsupported).
+  const hwRaw = `${statRaw} ${sumRaw}`;
+  const temps = many(hwRaw, '"temp[^"]*"\\s*:\\s*"?(-?[\\d.]+)').filter((x) => x > 0 && x < 200);
+  // Broadened to catch "Fan Speed In/Out"; >100 excludes count fields like fan_num.
+  const fans = many(hwRaw, '"fan[^"]*"\\s*:\\s*"?(\\d+)').filter((f) => f > 100);
   const userM = /"User"\s*:\s*"([^"]+)"/i.exec(poolRaw);
   const user = userM ? userM[1]! : "";
   const worker = user.includes(".") ? user.slice(user.indexOf(".") + 1) : user;

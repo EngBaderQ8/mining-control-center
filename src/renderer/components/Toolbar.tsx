@@ -52,6 +52,7 @@ export function Toolbar({
         <option value="braiins">Braiins</option>
         <option value="vnish">Vnish</option>
         <option value="luxos">LuxOS</option>
+        <option value="whatsminer">Whatsminer</option>
       </select>
       <span className="spacer" style={{ marginInlineStart: "auto" }} />
       <button className="btn primary" onClick={onScan}>

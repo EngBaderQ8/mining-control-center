@@ -24,22 +24,32 @@ export function detectFromVersion(raw: string): Detected | null {
   }
 
   // A miner if we got a VERSION row, or the raw text carries a known miner marker.
+  // Whatsminer markers added: it answers cgminer `version` (Type "WhatsMiner …")
+  // or new-style `get_version` (platform H6OS/M6OS, api_ver/fw_ver), and reports
+  // hashrate in MHS (never GHS) — none of the Antminer markers apply.
+  const isWhatsminer = /whatsminer|microbt|btminer|"api_ver"|"fw_ver"|H6OS|M6OS/i.test(text);
   const isMiner =
     versionRow !== null ||
-    /BMMiner|CGMiner|BOSminer|LUXminer|VNish|Antminer|"VERSION"|"STATUS"|GHS/i.test(text);
+    isWhatsminer ||
+    /BMMiner|CGMiner|BOSminer|LUXminer|VNish|Antminer|"VERSION"|"STATUS"|GHS|MHS/i.test(text);
   if (!isMiner) return null;
 
   let firmware: Firmware = "stock";
-  if (/lux(miner|os)/i.test(text)) firmware = "luxos";
+  if (isWhatsminer) firmware = "whatsminer";
+  else if (/lux(miner|os)/i.test(text)) firmware = "luxos";
   else if (/bos(miner)?|braiins/i.test(text)) firmware = "braiins";
   else if (/vnish/i.test(text)) firmware = "vnish";
 
   let model = "ASIC";
   if (versionRow && typeof versionRow["Type"] === "string") model = String(versionRow["Type"]);
   else {
-    const m = /"Type"\s*:\s*"([^"]+)"/i.exec(text);
+    const m =
+      /"Type"\s*:\s*"([^"]+)"/i.exec(text) ?? /"(?:platform|fw_ver)"\s*:\s*"([^"]+)"/i.exec(text);
     if (m && m[1]) model = m[1];
   }
+  // A bare cgminer `version` on Whatsminer may not carry "Type" — make the label
+  // explicit so the UI + catalog identify it as a Whatsminer.
+  if (firmware === "whatsminer" && model === "ASIC") model = "Whatsminer";
 
   return { firmware, model };
 }

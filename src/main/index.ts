@@ -225,8 +225,10 @@ function buildBridge(): ServerBridge {
   recoveryConfig = new RecoveryConfig(join(userData, "recovery.json"));
   const transport: Transport = { tcp4028, http: httpRequest };
   // Short-timeout transport for fast LAN scanning (don't wait 5s per dead host).
+  // 2.5s — long enough for Whatsminer's slower API handshake, short enough to
+  // sweep a /24 quickly.
   const scanTransport: Transport = {
-    tcp4028: (h, p, c) => tcp4028(h, p, c, 1200),
+    tcp4028: (h, p, c) => tcp4028(h, p, c, 2500),
     http: httpRequest,
   };
 

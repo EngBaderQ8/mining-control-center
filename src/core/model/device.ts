@@ -1,4 +1,4 @@
-export type Firmware = "stock" | "braiins" | "vnish" | "luxos";
+export type Firmware = "stock" | "braiins" | "vnish" | "luxos" | "whatsminer";
 
 export interface Device {
   id: string;
