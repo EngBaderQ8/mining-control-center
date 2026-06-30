@@ -272,6 +272,12 @@ export const EN: Record<string, string> = {
   "احتياطي ٢ (اختياري)": "Backup 2 (optional)",
   "عنوان البول (URL) — stratum+tcp://...": "Pool address (URL) — stratum+tcp://...",
   "الوركر / الحساب": "Worker / account",
+  "الحساب / المحفظة (بدون وركر)": "Account / wallet (no worker)",
+  "البرنامج يسمّي الوركر تلقائياً (آخر رقم الآي بي)": "The app names the worker automatically (IP's last number)",
+  "تكتب الحساب فقط، والبرنامج يضيف وركر مميّز لكل جهاز من آخر رقم آي بيه.":
+    "Type just the account; the app adds a unique worker per device from its IP's last number.",
+  "الناتج:": "Result:",
+  "(101 = آخر رقم آي بي الجهاز)": "(101 = the device IP's last number)",
   "تمييز الوركر بآخر رقم الآي بي": "Tag the worker with the IP's last number",
   "يضيف نقطة + آخر رقم آي بي الجهاز لاسم الوركر (مثال: الجهاز 192.168.0.101 ← الوركر يصير «حسابك.101») — مفيد لتمييز كل جهاز في البول.":
     "Adds a dot + the device IP's last number to the worker name (e.g. device 192.168.0.101 → worker becomes «youraccount.101») — handy to tell each miner apart in the pool.",

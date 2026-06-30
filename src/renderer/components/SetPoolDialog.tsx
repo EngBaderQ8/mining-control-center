@@ -21,7 +21,9 @@ const EMPTY: PoolRow = { url: "", user: "", pass: "x" };
 
 export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactElement {
   const [pools, setPools] = useState<PoolRow[]>([{ ...EMPTY }, { ...EMPTY }, { ...EMPTY }]);
-  const [appendIp, setAppendIp] = useState(false);
+  // Default ON: the user types the ACCOUNT, and the app builds the worker name
+  // (account.<ip-last-number>) for each device automatically.
+  const [appendIp, setAppendIp] = useState(true);
 
   const upd = (i: number, field: keyof PoolRow, val: string): void =>
     setPools((ps) => ps.map((p, j) => (j === i ? { ...p, [field]: val } : p)));
@@ -69,7 +71,7 @@ export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactE
               <input
                 className="input"
                 style={{ flex: 2 }}
-                placeholder={t("الوركر / الحساب")}
+                placeholder={t("الحساب / المحفظة (بدون وركر)")}
                 value={p.user}
                 onChange={(e) => upd(i, "user", e.target.value)}
               />
@@ -87,10 +89,16 @@ export function SetPoolDialog({ count, onClose, onSubmit }: Props): React.ReactE
         <label style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, cursor: "pointer", margin: "4px 2px 2px" }}>
           <input type="checkbox" checked={appendIp} onChange={(e) => setAppendIp(e.target.checked)} style={{ width: 17, height: 17, marginTop: 1 }} />
           <span>
-            <b>{t("تمييز الوركر بآخر رقم الآي بي")}</b>
+            <b>{t("البرنامج يسمّي الوركر تلقائياً (آخر رقم الآي بي)")}</b>
             <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
-              {t("يضيف نقطة + آخر رقم آي بي الجهاز لاسم الوركر (مثال: الجهاز 192.168.0.101 ← الوركر يصير «حسابك.101») — مفيد لتمييز كل جهاز في البول.")}
+              {t("تكتب الحساب فقط، والبرنامج يضيف وركر مميّز لكل جهاز من آخر رقم آي بيه.")}
             </div>
+            {appendIp && (
+              <div style={{ fontSize: 12.5, color: "var(--accent)", marginTop: 4, direction: "ltr", textAlign: "right" }}>
+                {t("الناتج:")} <b style={{ fontFamily: "monospace" }}>{(pools[0]!.user.trim() || "account")}.101</b>{" "}
+                <span style={{ color: "var(--muted)" }}>{t("(101 = آخر رقم آي بي الجهاز)")}</span>
+              </div>
+            )}
           </span>
         </label>
 
