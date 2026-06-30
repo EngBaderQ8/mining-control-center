@@ -21,4 +21,16 @@ describe("multipartBody", () => {
     // The exact raw file bytes survive intact (binary-safe, not mangled as a string).
     expect(body.includes(fileData)).toBe(true);
   });
+
+  it("sanitizes CRLF and quotes so a crafted filename/field/value can't inject extra parts", () => {
+    const body = multipartBody(
+      "BB",
+      { keep: "1\r\nX-Injected: y" },
+      [{ field: 'fld"', filename: 'evil"\r\n--BB\r\nContent-Disposition: x', data: Buffer.from("D") }],
+    );
+    const text = body.toString("latin1");
+    expect(text).not.toContain("\r\n--BB\r\nContent-Disposition: x"); // injected part neutralized
+    expect(text).not.toContain("1\r\nX-Injected"); // CRLF stripped from the field value
+    expect(text).toContain('name="fld_"'); // field name quote sanitized
+  });
 });

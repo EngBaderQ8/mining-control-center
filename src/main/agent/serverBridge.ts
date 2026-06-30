@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, verify as cryptoVerify } from "node:crypto";
 import { get as httpsGet } from "node:https";
 import type { Device, Site, DeviceStatus } from "../../core/model/device";
 import type { ControlCommand, Transport, FlashTransport } from "../../core/drivers/types";
@@ -7,6 +7,7 @@ import type { Alert } from "../../core/alerts/rules";
 import type { ServerMessage, FlashExec } from "../../shared/protocol";
 import { httpUpload } from "../transport/http";
 import { runFlash } from "./flashRunner";
+import { UPDATE_PUBLIC_KEY } from "../updateKey";
 import { MiningService, type Snapshot } from "../service";
 import type { DeviceRepo } from "../db/repo";
 import { ConnectionConfig } from "./config";
@@ -60,6 +61,7 @@ export class ServerBridge {
   private rescanTimer: ReturnType<typeof setInterval> | null = null;
   private initialRescan: ReturnType<typeof setTimeout> | null = null;
   private rescanning = false;
+  private flashing = new Set<string>(); // deviceIds currently being flashed (per-device lock)
 
   constructor(private deps: BridgeDeps) {
     this.client = new ServerClient(deps.config);
@@ -503,6 +505,19 @@ export class ServerBridge {
    * runFlash; this just wires it to this agent's transport, repo and socket.
    */
   private async handleFlash(msg: FlashExec): Promise<void> {
+    // Per-device lock: never run two concurrent flashes against the same physical miner
+    // (e.g. if two batches both dispatched it). A second flash.exec is refused, not run.
+    if (this.flashing.has(msg.deviceId)) {
+      this.client.send({
+        type: "flash.result",
+        jobId: msg.jobId,
+        deviceId: msg.deviceId,
+        state: "refused",
+        error: "يوجد فلاش جارٍ بالفعل لنفس الجهاز",
+      });
+      return;
+    }
+    this.flashing.add(msg.deviceId);
     // Compose a FlashTransport: reuse the agent's tcp/http, add binary upload.
     const ft: FlashTransport = {
       tcp4028: (h, p, c) => this.deps.transport.tcp4028(h, p, c),
@@ -517,9 +532,16 @@ export class ServerBridge {
           const enc = this.deps.repo.getSecret(id);
           return enc ? this.deps.decrypt(enc) : undefined;
         },
-        download: (path) => this.downloadToBuffer(path),
+        download: (path) => this.downloadToBuffer(path, msg.size),
         readVersion: (d) =>
           this.deps.transport.tcp4028(d.host, d.apiPort, JSON.stringify({ command: "version" })),
+        verifySig: (payload, sigB64) => {
+          try {
+            return cryptoVerify(null, Buffer.from(payload), UPDATE_PUBLIC_KEY, Buffer.from(sigB64, "base64"));
+          } catch {
+            return false;
+          }
+        },
         send: (m) => this.client.send(m),
       });
     } catch (e) {
@@ -531,15 +553,20 @@ export class ServerBridge {
         state: "failed",
         error: (e as Error).message,
       });
+    } finally {
+      this.flashing.delete(msg.deviceId);
     }
   }
 
-  /** Download a server-hosted firmware file into a Buffer. Trust is the SHA-256 in
-   *  the (authenticated, cert-pinned) flash job — not this TLS connection — so an
-   *  unpinned download is fine; runFlash verifies the hash before flashing. */
-  private downloadToBuffer(path: string): Promise<Buffer> {
+  /** Download a server-hosted firmware file into a Buffer, capped at the signed `size`
+   *  (hard-limited to 600MB) so a hostile/MITM responder can't OOM the agent. Trust in
+   *  the bytes is the Ed25519 signature + SHA-256 (verified in runFlash), not this
+   *  unpinned TLS connection. */
+  private downloadToBuffer(path: string, expectedSize: number): Promise<Buffer> {
     const base = this.serverBase();
     if (!base || !path) return Promise.resolve(Buffer.alloc(0));
+    const HARD_CAP = 600 * 1024 * 1024;
+    const cap = Math.min(expectedSize > 0 ? expectedSize : HARD_CAP, HARD_CAP);
     const url = `${base}${path}`;
     return new Promise((resolve) => {
       try {
@@ -549,8 +576,23 @@ export class ServerBridge {
             resolve(Buffer.alloc(0));
             return;
           }
+          const len = Number(res.headers["content-length"] ?? 0);
+          if (len > cap) {
+            res.destroy();
+            resolve(Buffer.alloc(0));
+            return;
+          }
           const chunks: Buffer[] = [];
-          res.on("data", (c) => chunks.push(c as Buffer));
+          let received = 0;
+          res.on("data", (c) => {
+            received += (c as Buffer).length;
+            if (received > cap) {
+              res.destroy();
+              resolve(Buffer.alloc(0));
+              return;
+            }
+            chunks.push(c as Buffer);
+          });
           res.on("end", () => resolve(Buffer.concat(chunks)));
           res.on("error", () => resolve(Buffer.alloc(0)));
         });

@@ -165,6 +165,43 @@ describe("ConnectionHub", () => {
     expect(sent.find((m) => m.type === "snapshot")).toBeTruthy();
   });
 
+  it("isolates flashing by tenant: agentId binding + userId-scoped flash.result", async () => {
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
+    // Owner u1 registers agent ag1 and has a job j1 currently mid-flash.
+    const owner = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);
+    await owner.handleMessage({ type: "agent.hello", agentId: "ag1", name: "site1" });
+    expect(repo.agentOwner("ag1")).toBe(uid);
+    repo.createFlashJobs([
+      { jobId: "j1", batchId: "bb", userId: uid, deviceId: "d1", agentId: "ag1", firmwareId: "fw" },
+    ]);
+    repo.claimQueuedJob("j1"); // -> flashing
+
+    // Attacker u2 (own valid session) cannot claim u1's agentId...
+    const u2 = repo.createUser("evil@x.com", "h");
+    const attacker = new ConnectionHub(u2, () => {}, repo, router, broadcast, flashSequencer);
+    await attacker.handleMessage({ type: "agent.hello", agentId: "ag1", name: "spoof" });
+    expect(repo.agentOwner("ag1")).toBe(uid); // binding held — still u1's agent
+    // ...and cannot post a terminal result for u1's job.
+    await attacker.handleMessage({
+      type: "flash.result",
+      jobId: "j1",
+      deviceId: "d1",
+      state: "success",
+      newVersion: "evil",
+    });
+    expect(repo.getFlashJob("j1")!.state).toBe("flashing"); // spoof blocked
+
+    // The legitimate owner's own result IS applied.
+    await owner.handleMessage({
+      type: "flash.result",
+      jobId: "j1",
+      deviceId: "d1",
+      state: "success",
+      newVersion: "v2",
+    });
+    expect(repo.getFlashJob("j1")!.state).toBe("success");
+  });
+
   it("ignores status for a device not owned by the user (no spoofing)", async () => {
     const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
     const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);

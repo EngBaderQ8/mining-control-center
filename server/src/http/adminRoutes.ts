@@ -514,9 +514,13 @@ export async function handleAdmin(
       }
       const dir = join(deps.dataDir, "firmware");
       mkdirSync(dir, { recursive: true });
-      const dest = join(dir, name);
+      // Unique, immutable on-disk name (id-prefixed) so re-uploading the same filename
+      // never overwrites an image an in-flight job already references (TOCTOU-safe).
+      const id = randomUUID();
+      const storedName = `${id}-${name}`;
+      const dest = join(dir, storedName);
       const part = `${dest}.part`;
-      if (resolve(dest) !== join(resolve(dir), name)) {
+      if (resolve(dest) !== join(resolve(dir), storedName)) {
         send(res, 400, { error: "bad name" });
         return true;
       }
@@ -553,15 +557,14 @@ export async function handleAdmin(
       }
       const sha256 = hash.digest("hex");
       const uploadedAt = Date.now();
-      const id = randomUUID();
-      const sig = deps.signManifest(`${family}:${model}:${version}:${sha256}:${size}:${uploadedAt}:${name}`);
+      const sig = deps.signManifest(`${family}:${model}:${version}:${sha256}:${size}:${uploadedAt}:${storedName}`);
       if (!sig) {
         rmSync(part, { force: true });
         send(res, 500, { error: "signing failed" });
         return true;
       }
       renameSync(part, dest);
-      appendCatalog(deps.dataDir, { id, family, model, version, file: name, sha256, size, sig, uploadedAt });
+      appendCatalog(deps.dataDir, { id, family, model, version, file: storedName, sha256, size, sig, uploadedAt });
       audit(req, uid, "firmware-upload", `${family}/${model} ${version} sha=${sha256.slice(0, 12)}`);
       send(res, 200, { ok: true, id, sha256, size });
       return true;
@@ -589,11 +592,18 @@ export async function handleAdmin(
         send(res, 400, { error: "bad target" });
         return true;
       }
-      const autoContinue = !!b["autoContinue"];
+      // The owner chose GRADUAL + dashboard confirmation: ALWAYS pause after each
+      // device and ignore any client-supplied autoContinue, so the server is
+      // default-safe (the type-to-confirm UI gate is not the only enforcement).
+      const autoContinue = false;
+      void b["autoContinue"];
+      const active = repo.activeFlashDeviceIds(); // devices already mid/awaiting a flash
       const matched: Array<{ id: string; userId: string; agentId: string }> = [];
       const skipped: Array<{ deviceId: string; reason: string }> = [];
       for (const d of repo.flashTargets(scope)) {
-        if (d.firmware !== fw.family) {
+        if (active.has(d.id)) {
+          skipped.push({ deviceId: d.id, reason: "flash already active" });
+        } else if (d.firmware !== fw.family) {
           skipped.push({ deviceId: d.id, reason: `firmware ${d.firmware}≠${fw.family}` });
         } else if (!modelMatches(d.model, fw.model)) {
           skipped.push({ deviceId: d.id, reason: `model "${d.model}"≠"${fw.model}"` });

@@ -52,8 +52,20 @@ export class FlashSequencer {
     const job = this.repo.getFlashJob(jobId);
     if (!job) return;
     this.clearWatchdog(jobId);
-    this.repo.setFlashState(jobId, state, { newVersion, error });
-    if (state === "success") {
+    // Defense-in-depth: a "success" with no version read-back proof is NOT a success
+    // (a buggy/old agent must not be able to claim success without evidence).
+    let effState: "success" | "failed" | "refused" = state;
+    let effError = error;
+    if (state === "success" && !(newVersion && newVersion.trim())) {
+      effState = "failed";
+      effError = error ?? "no version read-back proof";
+    }
+    // Terminal one-way: setFlashState refuses to overwrite an already-terminal row and
+    // reports whether THIS call landed. A late/duplicate/watchdog-raced result that
+    // finds the job already terminal is ignored — no relabel, no re-dispatch.
+    const changed = this.repo.setFlashState(jobId, effState, { newVersion, error: effError });
+    if (!changed) return;
+    if (effState === "success") {
       if (this.autoContinue.get(job.batchId)) this.dispatchNext(job.batchId);
       // else: pause — wait for continueBatch() from the dashboard.
     } else {
@@ -63,15 +75,21 @@ export class FlashSequencer {
   }
 
   private dispatchNext(batchId: string): void {
+    // Global one-at-a-time: never start a device while ANY device (this batch or any
+    // other) is mid-flash. Caps the fleet brick blast radius even across batches and
+    // makes continueBatch idempotent (a double-Continue can't start a second device).
+    if (this.repo.anyFlashActive()) return;
     const job = this.repo.nextQueuedJob(batchId);
     if (!job) return; // batch complete (or paused with nothing queued)
+    // Atomically claim queued -> flashing; if a concurrent dispatch already claimed it,
+    // bail so two callers can never both start the same device.
+    if (!this.repo.claimQueuedJob(job.jobId)) return;
     const fw = firmwareById(this.dataDir, job.firmwareId);
     if (!fw) {
       this.repo.setFlashState(job.jobId, "failed", { error: "firmware image not found" });
       this.repo.stopQueuedJobs(batchId);
       return;
     }
-    this.repo.setFlashState(job.jobId, "flashing");
     const isLux = fw.family === "luxos"; // LuxOS pulls its own signed image — no byte push
     const ok = this.router.sendToAgent(job.agentId, {
       type: "flash.exec",
@@ -81,6 +99,10 @@ export class FlashSequencer {
       model: fw.model,
       url: isLux ? "" : `/firmware/${fw.file}`,
       sha256: isLux ? "" : fw.sha256,
+      size: fw.size,
+      version: fw.version,
+      uploadedAt: fw.uploadedAt,
+      sig: fw.sig,
       keepSettings: true,
     });
     if (!ok) {

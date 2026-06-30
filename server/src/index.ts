@@ -23,6 +23,11 @@ import { handleDownload } from "./http/downloadRoute";
 import { loadOrCreateTls } from "./tls";
 import { isClientMessage, type ServerMessage } from "./protocol/messages";
 
+// Never let a single malformed request (or any stray async error) take down the
+// multi-tenant server: log and keep serving instead of the Node-default crash.
+process.on("unhandledRejection", (e) => console.error("[server] unhandledRejection:", e));
+process.on("uncaughtException", (e) => console.error("[server] uncaughtException:", e));
+
 const PORT = Number(process.env["PORT"] ?? 8443);
 const DATA_DIR = process.env["DATA_DIR"] ?? join(__dirname, "..", "..", "server", "data");
 const JWT_SECRET = process.env["JWT_SECRET"] ?? "";
@@ -62,6 +67,10 @@ async function main(): Promise<void> {
   const db = new Database(join(DATA_DIR, "app.db"));
   applySchema(db);
   const repo = new ServerRepo(db);
+  // A crash/restart can leave a flash job pinned mid-flight (its in-memory watchdog is
+  // gone). Fail those and stop their batches so nothing dangles and no half-finished
+  // flash silently resumes.
+  repo.reconcileInterruptedFlashJobs();
   const auth = new AuthService(repo, JWT_SECRET);
   const router = new CommandRouter();
   const flashSequencer = new FlashSequencer(repo, router, DATA_DIR);
@@ -142,7 +151,19 @@ async function main(): Promise<void> {
       if (await handleAuth(req, res, auth)) return;
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "not found" }));
-    })();
+    })().catch((e) => {
+      // A handler threw (e.g. malformed input): log, return 500 if we still can, and
+      // NEVER let it bubble to an unhandled rejection that could kill the process.
+      console.error("[server] request handler error:", e);
+      try {
+        if (!res.headersSent) {
+          res.writeHead(500, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "internal error" }));
+        }
+      } catch {
+        /* ignore */
+      }
+    });
   });
 
   const wss = new WebSocketServer({ server });

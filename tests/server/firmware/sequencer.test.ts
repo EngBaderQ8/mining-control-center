@@ -57,7 +57,7 @@ describe("FlashSequencer", () => {
     seq.startBatch("b2", false);
     expect(sent).toHaveLength(1);
 
-    seq.onResult("j1", "success");
+    seq.onResult("j1", "success", "v2");
     expect(sent).toHaveLength(1); // paused — device 2 NOT auto-dispatched
     expect(repo.getFlashJob("j2")!.state).toBe("queued");
 
@@ -81,6 +81,40 @@ describe("FlashSequencer", () => {
     seq.startBatch("b4", true);
     seq.onResult("j1", "refused", undefined, "model mismatch");
     expect(repo.getFlashJob("j1")!.state).toBe("refused");
+    expect(repo.getFlashJob("j2")!.state).toBe("stopped");
+  });
+
+  it("does NOT start a second device while one is still mid-flash (continueBatch is in-flight-safe)", () => {
+    const { repo, seq, sent, job } = setup();
+    repo.createFlashJobs([job("j1", "b5", "d1"), job("j2", "b5", "d2")]);
+    seq.startBatch("b5", false);
+    expect(sent).toHaveLength(1); // j1 dispatched, now 'flashing'
+    // A premature Continue (or a double-click) must NOT dispatch j2 while j1 is mid-flash.
+    seq.continueBatch("b5");
+    seq.continueBatch("b5");
+    expect(sent).toHaveLength(1);
+    expect(repo.getFlashJob("j2")!.state).toBe("queued");
+  });
+
+  it("ignores a late/duplicate result for an already-terminal job (no relabel, no re-dispatch)", () => {
+    const { repo, seq, sent, job } = setup();
+    repo.createFlashJobs([job("j1", "b6", "d1"), job("j2", "b6", "d2")]);
+    seq.startBatch("b6", true);
+    seq.onResult("j1", "failed", undefined, "timeout — possible brick"); // terminal -> stops batch
+    expect(repo.getFlashJob("j1")!.state).toBe("failed");
+    expect(repo.getFlashJob("j2")!.state).toBe("stopped");
+    // A late 'success' for j1 must NOT overwrite the brick label nor re-dispatch.
+    seq.onResult("j1", "success", "v9");
+    expect(repo.getFlashJob("j1")!.state).toBe("failed");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("treats a 'success' with no version read-back proof as a failure (stops the batch)", () => {
+    const { repo, seq, job } = setup();
+    repo.createFlashJobs([job("j1", "b7", "d1"), job("j2", "b7", "d2")]);
+    seq.startBatch("b7", true);
+    seq.onResult("j1", "success"); // no newVersion -> not a real success
+    expect(repo.getFlashJob("j1")!.state).toBe("failed");
     expect(repo.getFlashJob("j2")!.state).toBe("stopped");
   });
 });

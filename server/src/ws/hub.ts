@@ -26,9 +26,13 @@ export class ConnectionHub {
   async handleMessage(msg: ClientMessage): Promise<void> {
     switch (msg.type) {
       case "agent.hello":
-        this.agentId = msg.agentId;
-        this.repo.touchAgent(msg.agentId, this.userId, msg.name, msg.version);
-        this.router.attachAgent(msg.agentId, (exec) => this.send(exec));
+        // Bind agentId to this authenticated user. If the agentId is already owned by a
+        // DIFFERENT tenant, refuse — one user must never claim another's agent (which
+        // would hijack its router slot and let them answer for its flash jobs).
+        if (this.repo.touchAgent(msg.agentId, this.userId, msg.name, msg.version)) {
+          this.agentId = msg.agentId;
+          this.router.attachAgent(msg.agentId, (exec) => this.send(exec));
+        }
         break;
       case "site.register":
         // Push a live snapshot to the user's viewers when a NEW/renamed site
@@ -58,14 +62,17 @@ export class ConnectionHub {
         this.router.resolveResult(msg.commandId, msg.outcome);
         break;
       case "flash.progress": {
-        // Only the agent that OWNS the job may report on it (no cross-agent spoofing).
-        const job = this.repo.getFlashJob(msg.jobId);
-        if (job && job.agentId === this.agentId) this.flashSequencer.onProgress(msg.jobId, msg.phase);
+        // Authoritative tenant boundary is the JWT-derived userId (agentId is
+        // client-asserted/spoofable); also require the report to be for the exact
+        // device the server dispatched to this job.
+        const job = this.repo.getFlashJobForUser(this.userId, msg.jobId);
+        if (job && job.agentId === this.agentId && job.deviceId === msg.deviceId)
+          this.flashSequencer.onProgress(msg.jobId, msg.phase);
         break;
       }
       case "flash.result": {
-        const job = this.repo.getFlashJob(msg.jobId);
-        if (job && job.agentId === this.agentId)
+        const job = this.repo.getFlashJobForUser(this.userId, msg.jobId);
+        if (job && job.agentId === this.agentId && job.deviceId === msg.deviceId)
           this.flashSequencer.onResult(msg.jobId, msg.state, msg.newVersion, msg.error);
         break;
       }

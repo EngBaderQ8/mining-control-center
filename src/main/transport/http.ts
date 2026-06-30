@@ -90,6 +90,12 @@ export async function httpRequest(req: HttpRequest): Promise<HttpResponse> {
 
 const CRLF = "\r\n";
 
+// Strip CR/LF/quote from header tokens (name/filename/content-type) and CR/LF from
+// field values, so a crafted filename/field can never forge extra multipart parts or
+// break framing (header/part injection). The builder is byte-exact but self-defending.
+const hsan = (s: string): string => s.replace(/[\r\n"]/g, "_");
+const vsan = (s: string): string => s.replace(/[\r\n]/g, "");
+
 /** Build a multipart/form-data body Buffer (text fields first, then binary files).
  *  Exported for unit testing — the structure must be byte-exact for picky CGIs. */
 export function multipartBody(
@@ -101,16 +107,16 @@ export function multipartBody(
   for (const [name, value] of Object.entries(fields)) {
     parts.push(
       Buffer.from(
-        `--${boundary}${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}${value}${CRLF}`,
+        `--${boundary}${CRLF}Content-Disposition: form-data; name="${hsan(name)}"${CRLF}${CRLF}${vsan(value)}${CRLF}`,
       ),
     );
   }
   for (const f of files) {
-    const ct = f.contentType ?? "application/octet-stream";
+    const ct = hsan(f.contentType ?? "application/octet-stream");
     parts.push(
       Buffer.from(
-        `--${boundary}${CRLF}Content-Disposition: form-data; name="${f.field}"; ` +
-          `filename="${f.filename}"${CRLF}Content-Type: ${ct}${CRLF}${CRLF}`,
+        `--${boundary}${CRLF}Content-Disposition: form-data; name="${hsan(f.field)}"; ` +
+          `filename="${hsan(f.filename)}"${CRLF}Content-Type: ${ct}${CRLF}${CRLF}`,
       ),
     );
     parts.push(f.data);
@@ -171,8 +177,11 @@ export async function httpUpload(req: HttpUploadRequest): Promise<HttpResponse> 
       );
       return sendBuffer(url, { ...baseH, authorization: authHeader }, body, timeout);
     }
-    // No auth required (or an unexpected status) — just POST the body.
-    return sendBuffer(url, baseH, body, timeout);
+    // Primer did NOT return a digest challenge. Do not upload the (large) firmware body
+    // unauthenticated — that would push bytes to a device/endpoint that may be answering
+    // unexpectedly (MITM / rogue device). Surface the status so the caller maps it to a
+    // refused/failed flash instead.
+    return { status: primer.statusCode, body: "", headers: {} };
   }
 
   const headers = { ...baseH };

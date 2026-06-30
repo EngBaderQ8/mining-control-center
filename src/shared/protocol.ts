@@ -96,6 +96,13 @@ export interface FlashExec {
   model: string; // expected target model — agent REFUSES on a mismatch
   url: string; // server-hosted firmware file (empty for luxos: it pulls its own image)
   sha256: string; // empty for luxos (no byte push)
+  size: number; // signed byte size — the agent caps the download at this (anti-OOM)
+  version: string; // catalog version (part of the signed tuple)
+  uploadedAt: number; // catalog timestamp (part of the signed tuple)
+  // Ed25519 signature over `family:model:version:sha256:size:uploadedAt:file`. The
+  // agent verifies it with the embedded public key BEFORE flashing (byte-push
+  // families) so a tampered catalog/sha256 can't be trusted even with the WS channel.
+  sig: string;
   keepSettings: boolean;
 }
 export interface FlashProgress {

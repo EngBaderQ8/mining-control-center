@@ -1,6 +1,17 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
+import { readCatalog } from "../firmware/catalog";
+
+/** Decode a URL path segment, returning null on malformed percent-encoding instead of
+ *  throwing — an unguarded decodeURIComponent on a public route is a one-request DoS. */
+function safeDecode(s: string): string | null {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Public serving of the owner's self-hosted update feed:
@@ -27,7 +38,13 @@ export function handleUpdatePublic(req: IncomingMessage, res: ServerResponse, da
   }
 
   if (path.startsWith("/updates/")) {
-    const name = basename(decodeURIComponent(path.slice("/updates/".length)));
+    const decoded = safeDecode(path.slice("/updates/".length));
+    if (decoded === null) {
+      res.writeHead(404);
+      res.end();
+      return true;
+    }
+    const name = basename(decoded);
     const f = join(updatesDir, name);
     if (!name || name === "manifest.json" || !existsSync(f) || !statSync(f).isFile()) {
       res.writeHead(404);
@@ -42,13 +59,21 @@ export function handleUpdatePublic(req: IncomingMessage, res: ServerResponse, da
     return true;
   }
 
-  // Hosted ASIC firmware images. The agent verifies sha256 (from the signed catalog)
-  // before flashing, so public GET is fine; basename() blocks traversal, and the
-  // signed catalog.json (with the bot/secret-free metadata) is NOT served.
+  // Hosted ASIC firmware images. The agent verifies the Ed25519 signature + sha256
+  // before flashing, so public GET is fine. We serve ONLY files referenced by the
+  // catalog (an allow-list) — never catalog.json, in-progress *.part uploads, *.tmp
+  // sidecars, or anything else under the dir.
   if (path.startsWith("/firmware/")) {
-    const name = basename(decodeURIComponent(path.slice("/firmware/".length)));
+    const decoded = safeDecode(path.slice("/firmware/".length));
+    if (decoded === null) {
+      res.writeHead(404);
+      res.end();
+      return true;
+    }
+    const name = basename(decoded);
+    const published = new Set(readCatalog(dataDir).map((e) => e.file));
     const f = join(dataDir, "firmware", name);
-    if (!name || name === "catalog.json" || !existsSync(f) || !statSync(f).isFile()) {
+    if (!name || !published.has(name) || !existsSync(f) || !statSync(f).isFile()) {
       res.writeHead(404);
       res.end();
       return true;

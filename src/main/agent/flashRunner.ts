@@ -15,6 +15,10 @@ export interface FlashRunnerDeps {
   download: (url: string) => Promise<Buffer>;
   /** Read the live `version` reply over tcp4028 (rejects/throws when the device is down). */
   readVersion: (device: Device) => Promise<string>;
+  /** Verify the owner's Ed25519 signature over the signed catalog tuple (payload) with
+   *  the public key embedded in the app. The agent does NOT trust a server-supplied
+   *  sha256 blindly — the signature is the load-bearing proof of owner intent. */
+  verifySig: (payload: string, sigB64: string) => boolean;
   send: (m: FlashProgress | FlashResult) => void;
   /** Override the post-reboot wait (tests inject a no-op). */
   delay?: (ms: number) => Promise<void>;
@@ -79,6 +83,13 @@ export async function runFlash(msg: FlashExec, deps: FlashRunnerDeps): Promise<v
       progress("verifying");
       if (sha256Hex(bytes).toLowerCase() !== (msg.sha256 || "").toLowerCase())
         return result("failed", { error: "تجزئة SHA-256 لا تطابق — أُلغيت العملية" });
+      // Ed25519 signature over the signed catalog tuple — proves the OWNER authorised
+      // exactly these bytes (file+hash+size), so a tampered catalog/sha256 is rejected
+      // even though the byte download itself is unpinned.
+      const file = msg.url.split("/").pop() || "";
+      const payload = `${msg.family}:${msg.model}:${msg.version}:${msg.sha256}:${msg.size}:${msg.uploadedAt}:${file}`;
+      if (!deps.verifySig(payload, msg.sig))
+        return result("failed", { error: "توقيع الفِرموير غير صالح — أُلغيت العملية" });
     }
 
     // 3) Match: the LIVE device must still be the expected firmware + model. Capture

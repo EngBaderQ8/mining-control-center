@@ -31,6 +31,10 @@ const job = (over: Partial<FlashExec> = {}): FlashExec => ({
   model: "S19",
   url: "/firmware/S19-2.0.tar.gz",
   sha256: FW_SHA,
+  size: FW.length,
+  version: "2.0",
+  uploadedAt: 1,
+  sig: "sig",
   keepSettings: true,
   ...over,
 });
@@ -69,6 +73,7 @@ function harness(over: Partial<FlashRunnerDeps> = {}): {
     getSecret: () => "root:root",
     download: async () => FW,
     readVersion: versionSeq([verOf("1.0"), verOf("2.0")]),
+    verifySig: () => true,
     delay: async () => {},
     send: (m: FlashProgress | FlashResult) => {
       if (m.type === "flash.result") results.push(m);
@@ -99,6 +104,14 @@ describe("runFlash", () => {
     const { deps, results, phases } = harness();
     await runFlash(job({ sha256: "00".repeat(32) }), deps);
     expect(results[0]?.state).toBe("failed");
+    expect(phases).not.toContain("flashing");
+  });
+
+  it("FAILS on a bad Ed25519 signature — never flashes (signature is load-bearing)", async () => {
+    const { deps, results, phases } = harness({ verifySig: () => false });
+    await runFlash(job(), deps);
+    expect(results[0]?.state).toBe("failed");
+    expect(results[0]?.error).toContain("توقيع");
     expect(phases).not.toContain("flashing");
   });
 
