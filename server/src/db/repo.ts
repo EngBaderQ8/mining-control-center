@@ -89,6 +89,7 @@ export class ServerRepo {
   /** All devices joined with their owner email + current status — for fleet
    *  analytics and the global device search. */
   devicesForAdmin(): Array<{
+    id: string;
     userId: string;
     email: string;
     name: string;
@@ -103,7 +104,7 @@ export class ServerRepo {
   }> {
     return this.db
       .prepare(
-        `SELECT d.userId, u.email, d.name, d.model, d.firmware, d.host,
+        `SELECT d.id, d.userId, u.email, d.name, d.model, d.firmware, d.host,
                 s.state, s.hashrateTHs, s.maxTempC, s.pool, s.worker
          FROM devices d
          LEFT JOIN users u ON u.id = d.userId
@@ -217,6 +218,23 @@ export class ServerRepo {
       | { agentId: string }
       | undefined;
     return r?.agentId ?? null;
+  }
+
+  /** Owner (user + agent) of a device, regardless of account — for admin remote
+   *  control across all customers. */
+  deviceOwner(deviceId: string): { userId: string; agentId: string } | null {
+    const r = this.db.prepare(`SELECT userId, agentId FROM devices WHERE id=?`).get(deviceId) as
+      | { userId: string; agentId: string }
+      | undefined;
+    return r ?? null;
+  }
+
+  /** All of a user's devices with their owning agent — for account-wide actions
+   *  (kill switch). */
+  devicesWithAgent(userId: string): Array<{ id: string; agentId: string }> {
+    return this.db
+      .prepare(`SELECT id, agentId FROM devices WHERE userId=?`)
+      .all(userId) as Array<{ id: string; agentId: string }>;
   }
 
   upsertStatus(userId: string, s: DeviceStatus): void {

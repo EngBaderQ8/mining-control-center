@@ -14,8 +14,26 @@ describe("parsePools", () => {
   });
 
   it("caps at 3 pools", () => {
-    const many = Array.from({ length: 5 }, (_, i) => ({ url: `u${i}`, user: `w${i}`, pass: "x" }));
+    const many = Array.from({ length: 5 }, (_, i) => ({
+      url: `stratum+tcp://u${i}:3333`,
+      user: `w${i}`,
+      pass: "x",
+    }));
     expect(parsePools({ poolsJson: JSON.stringify(many) })).toHaveLength(3);
+  });
+
+  it("rejects fields that could inject extra cgminer addpool args, or a non-stratum url", () => {
+    const bad = JSON.stringify([
+      { url: "stratum+tcp://evil:3333,attacker,x", user: "w", pass: "x" }, // comma in url
+      { url: "http://nope:3333", user: "w", pass: "x" }, // not stratum
+      { url: "stratum+tcp://ok:3333", user: "good,inject", pass: "x" }, // comma in user
+      { url: "stratum+tcp://ok:3333", user: "fine", pass: "p\nx" }, // newline in pass
+    ]);
+    expect(parsePools({ poolsJson: bad })).toEqual([]);
+    // a clean stratum pool still passes
+    expect(
+      parsePools({ poolsJson: JSON.stringify([{ url: "stratum+ssl://btc.pool.com:443", user: "acc.w", pass: "x" }]) }),
+    ).toEqual([{ url: "stratum+ssl://btc.pool.com:443", user: "acc.w", pass: "x" }]);
   });
 
   it("falls back to the legacy single url/user/pass", () => {

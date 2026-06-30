@@ -100,6 +100,7 @@ async function main(): Promise<void> {
           jwtSecret: JWT_SECRET,
           adminEmails: ADMIN_EMAILS,
           pushUpdate,
+          router,
           dataDir: DATA_DIR,
           signManifest,
         })

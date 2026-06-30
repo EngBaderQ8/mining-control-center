@@ -1,19 +1,34 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createWriteStream, mkdirSync, writeFileSync, renameSync, rmSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { join, basename, resolve } from "node:path";
 import type { ServerRepo } from "../db/repo";
+import type { CommandRouter } from "../router/commandRouter";
 import { verifyToken } from "../auth/jwt";
 import { hashPassword } from "../auth/password";
 import { getNetworkStats } from "../profit/networkStats";
 import { btcPerDay, powerKwFromHashrate } from "../../../src/core/profit/calc";
 import { lookupSpec } from "../../../src/core/devices/catalog";
+import type { ControlCommand } from "../../../src/core/drivers/types";
+import type { CommandOutcome } from "../../../src/core/model/result";
+
+/** Control ops the admin may route to any account's miners (whitelist). */
+const ADMIN_COMMANDS: ControlCommand[] = [
+  "restartMining",
+  "stopMining",
+  "startMining",
+  "reboot",
+  "setPool",
+  "setProfile",
+  "diagnose",
+];
 
 export interface AdminDeps {
   repo: ServerRepo;
   jwtSecret: string;
   adminEmails: Set<string>; // lowercased
   pushUpdate: (userId?: string) => number; // tell clients to update now
+  router: CommandRouter; // route control commands to the owning agent (remote control)
   dataDir: string;
   signManifest?: (payload: string) => string | null; // Ed25519 sign (needs UPDATE_PRIVATE_KEY)
 }
@@ -278,6 +293,91 @@ export async function handleAdmin(
       }
       return true;
     }
+    if (path === "/admin/api/control" && req.method === "POST") {
+      const b = await readBody(req);
+      const deviceId = typeof b["deviceId"] === "string" ? b["deviceId"] : "";
+      const command = (typeof b["command"] === "string" ? b["command"] : "") as ControlCommand;
+      if (!deviceId || !ADMIN_COMMANDS.includes(command)) {
+        send(res, 400, { error: "bad request" });
+        return true;
+      }
+      const owner = repo.deviceOwner(deviceId);
+      if (!owner) {
+        send(res, 404, { error: "device not found" });
+        return true;
+      }
+      // Coerce every param VALUE to a string so a crafted nested object can't reach
+      // the agent/driver (e.g. setPool url/user/pass).
+      let params: Record<string, string> | undefined;
+      const rawParams = b["params"];
+      if (rawParams && typeof rawParams === "object" && !Array.isArray(rawParams)) {
+        params = {};
+        for (const [k, v] of Object.entries(rawParams as Record<string, unknown>)) {
+          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+            params[k] = String(v);
+        }
+      }
+      audit(req, uid, `control:${command}`, deviceId); // log intent before acting
+      try {
+        const outcome = await deps.router.routeCommand(owner.agentId, {
+          type: "command.exec",
+          commandId: randomUUID(),
+          deviceId,
+          command,
+          ...(params ? { params } : {}),
+        });
+        audit(req, uid, `control:${command}:${outcome.ok ? "ok" : "fail"}`, deviceId);
+        send(res, 200, outcome);
+      } catch (e) {
+        audit(req, uid, `control:${command}:error`, deviceId);
+        send(res, 200, { deviceId, ok: false, error: (e as Error).message });
+      }
+      return true;
+    }
+    if (path === "/admin/api/killswitch" && req.method === "POST") {
+      // Stop (or start) EVERY miner a customer owns — e.g. to cut off a non-payer.
+      const b = await readBody(req);
+      const userId = typeof b["userId"] === "string" ? b["userId"] : "";
+      const command: ControlCommand = b["action"] === "start" ? "startMining" : "stopMining";
+      if (!userId || !repo.findUserById(userId)) {
+        send(res, 400, { error: "bad request" });
+        return true;
+      }
+      const all = repo.devicesWithAgent(userId);
+      const devices = all.filter((d) => d.agentId); // skip rows with no agent yet
+      audit(req, uid, `killswitch:${command}`, `${userId} (${all.length} devices)`);
+      // Fan out in bounded batches (not all at once) so a large account doesn't
+      // flood the agent socket / pin a flood of pending command timers.
+      const BATCH = 10;
+      let ok = 0;
+      let failed = 0;
+      for (let i = 0; i < devices.length; i += BATCH) {
+        const results = await Promise.allSettled(
+          devices.slice(i, i + BATCH).map((d) =>
+            deps.router.routeCommand(d.agentId, {
+              type: "command.exec",
+              commandId: randomUUID(),
+              deviceId: d.id,
+              command,
+            }),
+          ),
+        );
+        for (const r of results) {
+          if (r.status === "fulfilled" && (r.value as CommandOutcome).ok) ok++;
+          else failed++;
+        }
+      }
+      // `unreachable` = devices we couldn't even attempt (offline/unregistered agent)
+      // so the operator knows those miners were NOT actually stopped.
+      send(res, 200, {
+        total: all.length,
+        ok,
+        failed,
+        unreachable: all.length - devices.length,
+        action: command,
+      });
+      return true;
+    }
     if (path === "/admin/api/upload-update" && req.method === "POST") {
       const q = new URL(req.url ?? "", "http://local");
       const version = (q.searchParams.get("version") ?? "").trim();
@@ -529,18 +629,26 @@ function renderAccts(){var q=(document.getElementById('acsearch').value||'').toL
       '<button class="btn sm" onclick="susp(\\''+a.id+'\\','+(a.suspended?0:1)+')">'+(a.suspended?'تفعيل':'إيقاف')+'</button>'+
       '<button class="btn sm" onclick="resetpw(\\''+a.id+'\\')">باسورد</button>'+
       '<button class="btn sm" onclick="pushUser(\\''+a.id+'\\')">🚀 تحديث</button>'+
+      '<button class="btn sm danger" onclick="killsw(\\''+a.id+'\\',\\'stop\\')" title="إيقاف تعدين كل أجهزة هذا الحساب">⛔ أطفِ</button>'+
+      '<button class="btn sm" onclick="killsw(\\''+a.id+'\\',\\'start\\')" title="تشغيل تعدين كل أجهزة هذا الحساب">▶️ شغّل</button>'+
       '<button class="btn sm danger" onclick="del(\\''+a.id+'\\')">حذف</button></div></td></tr>';}).join('');
   document.getElementById('accounts').innerHTML='<table><thead><tr>'+thh('email','البريد')+thh('sites','المواقع')+thh('devices','الأجهزة')+thh('online','أونلاين')+thh('hashrate','الهاش')+thh('health','الصحة')+thh('lastSeen','آخر ظهور')+thh('suspended','الحالة')+'<th>إجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="9" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
 function devices(){api('/admin/api/devices').then(function(r){return r.json();}).then(function(d){DEVS=d.devices||[];renderDevices();});}
 function renderDevices(){var q=(document.getElementById('dvsearch').value||'').toLowerCase();if(!q){document.getElementById('devices').innerHTML='<div class="muted" style="font-size:12.5px">اكتب للبحث في كل أجهزة العملاء…</div>';return;}
   var list=DEVS.filter(function(d){return ((d.name||'')+(d.host||'')+(d.worker||'')+(d.email||'')+(d.firmware||'')).toLowerCase().indexOf(q)>=0;}).slice(0,200);
   var rows=list.map(function(d){var s=d.state==='online'?'<span class="pill on">أونلاين</span>':(d.state==='warning'?'<span class="pill wn">تحذير</span>':'<span class="pill off">'+esc(d.state||'—')+'</span>');
-    return '<tr><td>'+esc(d.name)+'</td><td class="muted">'+esc(d.email)+'</td><td class="muted">'+esc(d.host)+'</td><td>'+esc(d.firmware)+'</td><td>'+s+'</td><td>'+(d.hashrateTHs?n1(d.hashrateTHs)+' TH':'—')+'</td><td>'+(d.maxTempC?Math.round(d.maxTempC)+'°':'—')+'</td></tr>';}).join('');
-  document.getElementById('devices').innerHTML='<table><thead><tr><th>الجهاز</th><th>العميل</th><th>العنوان</th><th>الفرمور</th><th>الحالة</th><th>الهاش</th><th>الحرارة</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
+    var ctl='<div class="row">'+
+      '<button class="btn sm" onclick="ctrl(\\''+d.id+'\\',\\'startMining\\')" title="تشغيل">▶</button>'+
+      '<button class="btn sm danger" onclick="ctrl(\\''+d.id+'\\',\\'stopMining\\')" title="إيقاف">⏸</button>'+
+      '<button class="btn sm" onclick="ctrl(\\''+d.id+'\\',\\'reboot\\')" title="إعادة تشغيل">↻</button></div>';
+    return '<tr><td>'+esc(d.name)+'</td><td class="muted">'+esc(d.email)+'</td><td class="muted">'+esc(d.host)+'</td><td>'+esc(d.firmware)+'</td><td>'+s+'</td><td>'+(d.hashrateTHs?n1(d.hashrateTHs)+' TH':'—')+'</td><td>'+(d.maxTempC?Math.round(d.maxTempC)+'°':'—')+'</td><td>'+ctl+'</td></tr>';}).join('');
+  document.getElementById('devices').innerHTML='<table><thead><tr><th>الجهاز</th><th>العميل</th><th>العنوان</th><th>الفرمور</th><th>الحالة</th><th>الهاش</th><th>الحرارة</th><th>تحكّم</th></tr></thead><tbody>'+(rows||'<tr><td colspan="8" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
 function agents(){api('/admin/api/agents').then(function(r){return r.json();}).then(function(d){var rows=(d.agents||[]).map(function(a){var fresh=a.lastSeenAt&&(Date.now()-a.lastSeenAt)<120000;return '<tr><td>'+esc(a.name)+'</td><td><span class="pill" style="background:rgba(91,124,250,.15);color:var(--acc)">'+esc(a.version||'؟')+'</span></td><td>'+(fresh?'<span class="pill on">متصل</span>':'<span class="pill off">منقطع</span>')+'</td><td class="muted">'+ago(a.lastSeenAt)+'</td></tr>';}).join('');document.getElementById('agents').innerHTML='<table><thead><tr><th>اسم الوكيل</th><th>النسخة</th><th>الحالة</th><th>آخر ظهور</th></tr></thead><tbody>'+(rows||'<tr><td colspan="4" class="muted">لا وكلاء</td></tr>')+'</tbody></table>';});}
 function pushAll(){if(!confirm('إرسال أمر تحديث فوري لكل الأجهزة المتصلة؟'))return;api('/admin/api/push-update',{method:'POST',body:JSON.stringify({})}).then(function(r){return r.json();}).then(function(j){alert('تم إرسال أمر التحديث لـ '+(j.notified||0)+' جهاز متصل.');});}
 function pushUser(id){var a=acctById(id),email=a?a.email:'';if(!confirm('إرسال أمر تحديث لأجهزة «'+email+'»؟'))return;api('/admin/api/push-update',{method:'POST',body:JSON.stringify({userId:id})}).then(function(r){return r.json();}).then(function(j){alert('تم الإرسال لـ '+(j.notified||0)+' جهاز.');});}
 function acctById(id){for(var i=0;i<ACCTS.length;i++)if(ACCTS[i].id===id)return ACCTS[i];return null;}
+function ctrl(id,cmd){var lbl=cmd==='stopMining'?'إيقاف':cmd==='startMining'?'تشغيل':'إعادة تشغيل';if(!confirm(lbl+' هذا الجهاز عن بُعد؟'))return;api('/admin/api/control',{method:'POST',body:JSON.stringify({deviceId:id,command:cmd})}).then(function(r){return r.json();}).then(function(o){alert(o&&o.ok?('تم: '+lbl):('فشل: '+((o&&o.error)||'؟')));}).catch(function(){alert('تعذّر الإرسال');});}
+function killsw(id,action){var a=acctById(id),email=a?a.email:'';var lbl=action==='stop'?'إيقاف تعدين':'تشغيل تعدين';if(!confirm('⛔ '+lbl+' كل أجهزة «'+email+'»؟\\n(إجراء خطير — يؤثّر على كل أجهزة الحساب)'))return;api('/admin/api/killswitch',{method:'POST',body:JSON.stringify({userId:id,action:action})}).then(function(r){return r.json();}).then(function(j){var msg='«'+lbl+'»: نجح '+(j.ok||0)+'/'+(j.total||0)+' جهاز';if(j.unreachable)msg+='\\n⚠️ '+j.unreachable+' غير قابل للوصول (وكيله غير متصل — لم يُوقَف!)';if(j.failed)msg+='\\n❌ فشل '+j.failed;alert(msg);}).catch(function(){alert('تعذّر الإرسال');});}
 function detail(id){var a=acctById(id),email=a?a.email:'';api('/admin/api/account?userId='+encodeURIComponent(id)).then(function(r){return r.json();}).then(function(d){var byId={};(d.statuses||[]).forEach(function(s){byId[s.deviceId]=s;});
   var rows=(d.devices||[]).map(function(dv){var s=byId[dv.id]||{};return '<tr><td>'+esc(dv.name)+'</td><td class="muted">'+esc(dv.host)+'</td><td>'+esc(dv.firmware)+'</td><td>'+(s.state==='online'?'<span class="pill on">أونلاين</span>':'<span class="pill off">'+esc(s.state||'—')+'</span>')+'</td><td>'+(s.hashrateTHs?n1(s.hashrateTHs)+' TH':'—')+'</td><td>'+(s.maxTempC?Math.round(s.maxTempC)+'°':'—')+'</td><td class="muted">'+esc(s.worker||'—')+'</td></tr>';}).join('');
   document.getElementById('detail').innerHTML='<div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">📋 '+esc(email)+' — '+(d.sites||[]).length+' موقع · '+(d.devices||[]).length+' جهاز</h2><button class="btn sm" onclick="document.getElementById(\\'detail\\').innerHTML=\\'\\'">إغلاق ✕</button></div><div class="scroll"><table><thead><tr><th>الجهاز</th><th>العنوان</th><th>الفرمور</th><th>الحالة</th><th>الهاش</th><th>الحرارة</th><th>الوركر</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="muted">لا أجهزة</td></tr>')+'</tbody></table></div></div>';
