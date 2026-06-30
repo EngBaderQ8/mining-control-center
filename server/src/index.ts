@@ -7,6 +7,12 @@ import { ServerRepo } from "./db/repo";
 import { AuthService } from "./auth/service";
 import { verifyToken } from "./auth/jwt";
 import { CommandRouter } from "./router/commandRouter";
+import {
+  detectIncidents,
+  readOwnerConfig,
+  sendOwnerTelegram,
+  type IncidentState,
+} from "./monitor/ownerAlerts";
 import { ConnectionHub } from "./ws/hub";
 import { createPrivateKey, sign as edSign, type KeyObject } from "node:crypto";
 import { handleAuth } from "./http/authRoutes";
@@ -65,6 +71,30 @@ async function main(): Promise<void> {
   };
   snapshotMetrics();
   setInterval(snapshotMetrics, 10 * 60 * 1000);
+
+  // Owner incident monitor: every 2 min, compare each account to the previous run
+  // and Telegram the owner on a mass-offline / hashrate-crash. First run just sets
+  // the baseline (no prev state → no alerts), so it never fires on startup.
+  let incidentState: IncidentState = {};
+  const monitorIncidents = async (): Promise<void> => {
+    try {
+      const accts = repo.accountSummaries().map((a) => ({
+        id: a.id,
+        email: a.email,
+        devices: a.devices,
+        online: a.online,
+        hashrate: a.hashrate,
+      }));
+      const { incidents, state } = detectIncidents(accts, incidentState, Date.now());
+      incidentState = state;
+      const cfg = readOwnerConfig(DATA_DIR);
+      if (cfg.enabled && cfg.token && cfg.chatId)
+        for (const inc of incidents) await sendOwnerTelegram(cfg.token, cfg.chatId, inc.message);
+    } catch (e) {
+      console.error("[owner-alerts] monitor run failed:", (e as Error).message);
+    }
+  };
+  setInterval(() => void monitorIncidents(), 2 * 60 * 1000);
 
   // Sockets grouped by user, for broadcasting status updates.
   const userSockets = new Map<string, Set<WebSocket>>();

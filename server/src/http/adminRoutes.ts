@@ -11,6 +11,7 @@ import { btcPerDay, powerKwFromHashrate } from "../../../src/core/profit/calc";
 import { lookupSpec } from "../../../src/core/devices/catalog";
 import type { ControlCommand } from "../../../src/core/drivers/types";
 import type { CommandOutcome } from "../../../src/core/model/result";
+import { readOwnerConfig, writeOwnerConfig, sendOwnerTelegram } from "../monitor/ownerAlerts";
 
 /** Control ops the admin may route to any account's miners (whitelist). */
 const ADMIN_COMMANDS: ControlCommand[] = [
@@ -378,6 +379,41 @@ export async function handleAdmin(
       });
       return true;
     }
+    if (path === "/admin/api/owner-alerts" && req.method === "GET") {
+      const c = readOwnerConfig(deps.dataDir);
+      // Never return the bot token — only whether one is set.
+      send(res, 200, { configured: !!c.token, chatId: c.chatId, enabled: c.enabled });
+      return true;
+    }
+    if (path === "/admin/api/owner-alerts" && req.method === "POST") {
+      const b = await readBody(req);
+      const token = typeof b["token"] === "string" ? b["token"].trim() : "";
+      const chatId = typeof b["chatId"] === "string" ? b["chatId"].trim() : "";
+      const enabled = !!b["enabled"];
+      const cur = readOwnerConfig(deps.dataDir);
+      // Keep the saved token/chatId when the field is left blank (don't wipe on edit).
+      const finalToken = token || cur.token;
+      const finalChat = chatId || cur.chatId;
+      writeOwnerConfig(deps.dataDir, {
+        token: finalToken,
+        chatId: finalChat,
+        // Can't be "enabled" without a token+chatId (avoid a misleading on-state).
+        enabled: enabled && !!finalToken && !!finalChat,
+      });
+      audit(req, uid, "owner-alerts:save", `enabled=${enabled}`);
+      send(res, 200, { ok: true });
+      return true;
+    }
+    if (path === "/admin/api/owner-alerts/test" && req.method === "POST") {
+      const c = readOwnerConfig(deps.dataDir);
+      const ok = await sendOwnerTelegram(
+        c.token,
+        c.chatId,
+        "✅ اختبار تنبيهات المالك — التنبيهات تعمل!",
+      );
+      send(res, 200, { ok });
+      return true;
+    }
     if (path === "/admin/api/upload-update" && req.method === "POST") {
       const q = new URL(req.url ?? "", "http://local");
       const version = (q.searchParams.get("version") ?? "").trim();
@@ -525,11 +561,23 @@ tr:last-child td{border-bottom:0}
     <span id="price" class="muted" style="font-size:12px"></span>
     <button class="btn sm" style="border-color:var(--acc);color:var(--acc)" onclick="pushAll()">🚀 حدّث الكل الآن</button>
     <button class="btn sm" onclick="loadAll()">🔄 تحديث</button>
+    <span id="live" class="muted" style="font-size:12px"></span>
     <button class="btn sm" onclick="logout()">خروج</button>
   </div>
   <div id="cards" class="cards"></div>
   <div id="cards2" class="cards"></div>
   <div class="panel" style="border-color:#3a2530"><h2>🚨 مركز العمليات — مشاكل حيّة عبر كل العملاء</h2><div class="scroll"><div id="ops"></div></div></div>
+  <div class="panel"><h2>🔔 تنبيهات المالك (تيليجرام)</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:8px">يصلك تنبيه فوري لمّا أسطول أي عميل يهبط (offline جماعي أو هبوط هاش حاد) — بدون ما تراقب اللوحة.</div>
+    <div class="row" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <input id="oaToken" type="password" placeholder="Bot Token" style="min-width:280px;background:#0d1117;border:1px solid #2a2f3a;color:var(--tx);padding:7px 9px;border-radius:7px">
+      <input id="oaChat" placeholder="Chat ID" style="min-width:150px;background:#0d1117;border:1px solid #2a2f3a;color:var(--tx);padding:7px 9px;border-radius:7px">
+      <label class="muted" style="font-size:13px"><input type="checkbox" id="oaEnabled"> مفعّل</label>
+      <button class="btn sm" style="border-color:var(--acc);color:var(--acc)" onclick="saveOA()">حفظ</button>
+      <button class="btn sm" onclick="testOA()">اختبار</button>
+      <span id="oaStatus" class="muted" style="font-size:12px"></span>
+    </div>
+  </div>
   <div class="grid2">
     <div class="panel"><h2>📈 الهاش الكلي (آخر ٧ أيام)</h2><div id="chart"></div></div>
     <div class="panel"><h2>🏭 تركيبة الأسطول</h2><div id="fleet"></div></div>
@@ -573,7 +621,12 @@ function doLogin(){var em=document.getElementById('em').value.trim(),pw=document
   fetch('/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:em,password:pw})}).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});}).then(function(x){if(!x.ok){document.getElementById('le').textContent=x.j.error||'فشل الدخول';return;}TOKEN=x.j.token;localStorage.setItem('mcc_admin_token',TOKEN);start();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
 function logout(){TOKEN='';localStorage.removeItem('mcc_admin_token');location.reload();}
 function start(){api('/admin/api/overview').then(function(r){if(r.status===403){document.getElementById('le').textContent='هذا الحساب ليس مديراً.';logout();return;}document.getElementById('login').classList.add('hide');document.getElementById('dash').classList.remove('hide');loadAll();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
-function loadAll(){ov();ops();chart();accounts();devices();agents();loadManifest();}
+var AUTO=null;
+function loadAll(){ov();ops();chart();accounts();devices();agents();loadManifest();loadOA();startAuto();}
+function startAuto(){if(AUTO)return;AUTO=setInterval(function(){ov();ops();accounts();agents();var d=new Date();document.getElementById('live').textContent='🔴 مباشر · '+d.toLocaleTimeString('ar-SA');},15000);}
+function loadOA(){api('/admin/api/owner-alerts').then(function(r){return r.json();}).then(function(c){document.getElementById('oaChat').value=c.chatId||'';document.getElementById('oaEnabled').checked=!!c.enabled;document.getElementById('oaToken').placeholder=c.configured?'(توكن محفوظ — اتركه فاضي للإبقاء عليه)':'Bot Token';}).catch(function(){});}
+function saveOA(){var body={token:document.getElementById('oaToken').value,chatId:document.getElementById('oaChat').value,enabled:document.getElementById('oaEnabled').checked};api('/admin/api/owner-alerts',{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(){document.getElementById('oaStatus').textContent='✅ حُفظ';document.getElementById('oaToken').value='';loadOA();}).catch(function(){document.getElementById('oaStatus').textContent='❌ فشل الحفظ';});}
+function testOA(){document.getElementById('oaStatus').textContent='… جاري الإرسال';api('/admin/api/owner-alerts/test',{method:'POST',body:'{}'}).then(function(r){return r.json();}).then(function(j){document.getElementById('oaStatus').textContent=j.ok?'✅ وصلتك رسالة الاختبار على تيليجرام':'❌ فشل — تأكد من التوكن و Chat ID والتفعيل';}).catch(function(){document.getElementById('oaStatus').textContent='❌ تعذّر الإرسال';});}
 function loadManifest(){fetch('/update-manifest').then(function(r){return r.json();}).then(function(m){document.getElementById('updcur').innerHTML=(m&&m.version)?('النسخة المستضافة حالياً: <b style="color:var(--acc)">'+esc(m.version)+'</b> · '+esc(m.file||'')):'لا توجد نسخة مرفوعة بعد.';}).catch(function(){});}
 function uploadUpd(){var f=document.getElementById('updfile').files[0],v=document.getElementById('updver').value.trim(),st=document.getElementById('updstatus');
   if(!f){st.innerHTML='<span class="amb">اختر ملف .exe أول</span>';return;}
