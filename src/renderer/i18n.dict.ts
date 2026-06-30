@@ -224,6 +224,8 @@ export const EN: Record<string, string> = {
   "⚠ ما لقيت أي شبكة محلية على هذا الجهاز.": "⚠ No local network found on this machine.",
   "ما لقيت أجهزة تعدين. {diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.": "No mining devices found. {diag}. Paste this line to the developer to pinpoint the cause.",
   "✓ تمت إضافة الموقع «{name}» مع {found} جهاز {diag}.": "✓ Site «{name}» added with {found} device(s) {diag}.",
+  "✓ تمت إضافة الموقع «{name}» مع {found} جهاز — يتم الإغلاق…":
+    "✓ Site «{name}» added with {found} device(s) — closing…",
   "⚠ تعذّر الفحص: ": "⚠ Scan failed: ",
   "❌ ما قدر يتصل بـ {ip} على المنفذ 4028. ({error})": "❌ Could not connect to {ip} on port 4028. ({error})",
   "✓ اتصل وردّ · الفرمور: {firmware} · المراقبة: {state} · هاش: {hash} TH · حرارة: {temp}\nعيّنة summary: {sample}": "✓ Connected and replied · Firmware: {firmware} · Monitoring: {state} · Hashrate: {hash} TH · Temp: {temp}\nsummary sample: {sample}",

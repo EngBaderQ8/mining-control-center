@@ -53,14 +53,16 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
       if (!r.reachable) setResult(t("⚠ ما لقيت أي شبكة محلية على هذا الجهاز."));
       else if (r.found === 0)
         setResult(t("ما لقيت أجهزة تعدين. {diag}. الصق هذا السطر للمطوّر لمعرفة السبب بدقة.", { diag }));
-      else
+      else {
+        // Devices found and added — confirm briefly, then close automatically.
         setResult(
-          t("✓ تمت إضافة الموقع «{name}» مع {found} جهاز {diag}.", {
+          t("✓ تمت إضافة الموقع «{name}» مع {found} جهاز — يتم الإغلاق…", {
             name: siteName.trim(),
             found: r.found,
-            diag,
           }),
         );
+        setTimeout(onClose, 1500);
+      }
     } catch (err) {
       setResult(t("⚠ تعذّر الفحص: ") + String(err));
     } finally {
