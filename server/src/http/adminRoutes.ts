@@ -109,6 +109,86 @@ async function overview(repo: ServerRepo): Promise<unknown> {
   };
 }
 
+interface Incident {
+  email: string;
+  name: string;
+  host: string;
+  type: "offline" | "hot" | "under";
+  detail: string;
+}
+
+/**
+ * Intelligent operations report across ALL customers — unique features:
+ *  - Underperformance: each device's live hashrate vs its model's RATED hashrate
+ *    (from the device knowledge base) → flags miners running below 85%.
+ *  - Live incident feed: offline / overheating / underperforming, fleet-wide.
+ *  - Per-customer health score (0–100) for instant triage.
+ *  - Fleet efficiency % (actual vs rated) and estimated lost hashrate.
+ */
+function opsReport(repo: ServerRepo): unknown {
+  const devs = repo.devicesForAdmin();
+  const incidents: Incident[] = [];
+  const perUser: Record<string, { total: number; online: number; hot: number; under: number }> = {};
+  let ratedTotal = 0;
+  let actualTotal = 0;
+  let underCount = 0;
+  let lost = 0;
+  for (const d of devs) {
+    const u = (perUser[d.userId] ??= { total: 0, online: 0, hot: 0, under: 0 });
+    u.total++;
+    const hr = d.hashrateTHs ?? 0;
+    const online = d.state === "online";
+    if (online) u.online++;
+    if ((d.maxTempC ?? 0) >= 80) {
+      u.hot++;
+      incidents.push({ email: d.email, name: d.name, host: d.host, type: "hot", detail: `${Math.round(d.maxTempC ?? 0)}°` });
+    }
+    if (d.state === "offline") {
+      incidents.push({ email: d.email, name: d.name, host: d.host, type: "offline", detail: "غير متصل" });
+    }
+    const spec = lookupSpec(d.model) ?? lookupSpec(d.name);
+    const rated = spec?.nominalTHs ?? 0;
+    if (rated > 0 && online) {
+      ratedTotal += rated;
+      actualTotal += hr;
+      if (hr < rated * 0.85) {
+        u.under++;
+        underCount++;
+        lost += rated - hr;
+        incidents.push({
+          email: d.email,
+          name: d.name,
+          host: d.host,
+          type: "under",
+          detail: `${Math.round(hr)}/${rated} TH (${Math.round((hr / rated) * 100)}%)`,
+        });
+      }
+    }
+  }
+  const health: Record<string, { score: number; under: number; hot: number; online: number; total: number }> = {};
+  for (const uid of Object.keys(perUser)) {
+    const u = perUser[uid]!;
+    let score = 100;
+    score -= (1 - (u.total ? u.online / u.total : 1)) * 50;
+    score -= Math.min(20, u.hot * 5);
+    score -= Math.min(20, u.under * 3);
+    health[uid] = { score: Math.max(0, Math.round(score)), under: u.under, hot: u.hot, online: u.online, total: u.total };
+  }
+  const order = { offline: 0, hot: 1, under: 2 } as const;
+  incidents.sort((a, b) => order[a.type] - order[b.type]);
+  return {
+    fleet: {
+      ratedTotal: Math.round(ratedTotal),
+      actualTotal: Math.round(actualTotal),
+      efficiencyPct: ratedTotal > 0 ? Math.round((actualTotal / ratedTotal) * 100) : null,
+      underCount,
+      lost: Math.round(lost),
+    },
+    incidents: incidents.slice(0, 60),
+    health,
+  };
+}
+
 /** Owner admin dashboard: serves the page and the cross-account API. */
 export async function handleAdmin(
   req: IncomingMessage,
@@ -148,6 +228,10 @@ export async function handleAdmin(
     }
     if (path === "/admin/api/agents" && req.method === "GET") {
       send(res, 200, { agents: repo.listAllAgents() });
+      return true;
+    }
+    if (path === "/admin/api/ops" && req.method === "GET") {
+      send(res, 200, opsReport(repo));
       return true;
     }
     if (path === "/admin/api/devices" && req.method === "GET") {
@@ -266,6 +350,8 @@ tr:last-child td{border-bottom:0}
     <button class="btn sm" onclick="logout()">خروج</button>
   </div>
   <div id="cards" class="cards"></div>
+  <div id="cards2" class="cards"></div>
+  <div class="panel" style="border-color:#3a2530"><h2>🚨 مركز العمليات — مشاكل حيّة عبر كل العملاء</h2><div class="scroll"><div id="ops"></div></div></div>
   <div class="grid2">
     <div class="panel"><h2>📈 الهاش الكلي (آخر ٧ أيام)</h2><div id="chart"></div></div>
     <div class="panel"><h2>🏭 تركيبة الأسطول</h2><div id="fleet"></div></div>
@@ -289,7 +375,7 @@ tr:last-child td{border-bottom:0}
 </div>
 <script>
 var TOKEN=localStorage.getItem('mcc_admin_token')||'';
-var ACCTS=[],DEVS=[],SORT={k:'hashrate',d:-1};
+var ACCTS=[],DEVS=[],SORT={k:'hashrate',d:-1},OPS_HEALTH={};
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function n(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
 function n1(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:1});}
@@ -299,7 +385,18 @@ function doLogin(){var em=document.getElementById('em').value.trim(),pw=document
   fetch('/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:em,password:pw})}).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});}).then(function(x){if(!x.ok){document.getElementById('le').textContent=x.j.error||'فشل الدخول';return;}TOKEN=x.j.token;localStorage.setItem('mcc_admin_token',TOKEN);start();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
 function logout(){TOKEN='';localStorage.removeItem('mcc_admin_token');location.reload();}
 function start(){api('/admin/api/overview').then(function(r){if(r.status===403){document.getElementById('le').textContent='هذا الحساب ليس مديراً.';logout();return;}document.getElementById('login').classList.add('hide');document.getElementById('dash').classList.remove('hide');loadAll();}).catch(function(){document.getElementById('le').textContent='تعذّر الاتصال';});}
-function loadAll(){ov();chart();accounts();devices();agents();}
+function loadAll(){ov();ops();chart();accounts();devices();agents();}
+function ops(){api('/admin/api/ops').then(function(r){return r.json();}).then(function(o){var f=o.fleet||{};OPS_HEALTH=o.health||{};
+  document.getElementById('cards2').innerHTML=
+    card((f.efficiencyPct!=null?f.efficiencyPct+'%':'—'),'كفاءة الأسطول (الفعلي/الاسمي)',(f.efficiencyPct!=null&&f.efficiencyPct<85)?'var(--amb)':'var(--grn)')+
+    card(n(f.underCount),'أجهزة دون الأداء','var(--amb)')+
+    card(n(f.lost)+' TH','هاش مفقود تقديري','var(--red)')+
+    card(n(f.ratedTotal)+' TH','الطاقة الاسمية الكلية','var(--mut)');
+  var lab={offline:'🔴 غير متصل',hot:'🌡️ سخونة',under:'📉 دون الأداء'};
+  var rows=(o.incidents||[]).map(function(i){return '<tr><td>'+lab[i.type]+'</td><td>'+esc(i.name)+'</td><td class="muted">'+esc(i.host)+'</td><td class="muted">'+esc(i.email)+'</td><td>'+esc(i.detail)+'</td></tr>';}).join('');
+  document.getElementById('ops').innerHTML='<table><thead><tr><th>النوع</th><th>الجهاز</th><th>العنوان</th><th>العميل</th><th>التفاصيل</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5" class="grn">✅ ما فيه مشاكل — كل الأجهزة بخير</td></tr>')+'</tbody></table>';
+  renderAccts();
+});}
 function card(v,l,c){return '<div class="card"><div class="n" style="color:'+(c||'var(--tx)')+'">'+v+'</div><div class="l">'+l+'</div><div class="bar" style="background:'+(c||'var(--acc)')+'"></div></div>';}
 function ov(){api('/admin/api/overview').then(function(r){return r.json();}).then(function(o){
   document.getElementById('price').textContent=o.priceUsd?('BTC ≈ $'+n(o.priceUsd)):'';
@@ -325,16 +422,19 @@ function sortBy(k){if(SORT.k===k)SORT.d=-SORT.d;else{SORT.k=k;SORT.d=-1;}renderA
 function accounts(){api('/admin/api/accounts').then(function(r){return r.json();}).then(function(d){ACCTS=d.accounts||[];renderAccts();});}
 function renderAccts(){var q=(document.getElementById('acsearch').value||'').toLowerCase(),f=document.getElementById('acfilter').value;
   var list=ACCTS.filter(function(a){if(f==='active'&&a.suspended)return false;if(f==='suspended'&&!a.suspended)return false;return (a.email||'').toLowerCase().indexOf(q)>=0;});
-  list.sort(function(a,b){var x=a[SORT.k],y=b[SORT.k];if(typeof x==='string'){x=(x||'').toLowerCase();y=(y||'').toLowerCase();}return (x>y?1:x<y?-1:0)*SORT.d;});
+  function gv(a,k){return k==='health'?((OPS_HEALTH[a.id]||{}).score==null?100:OPS_HEALTH[a.id].score):a[k];}
+  list.sort(function(a,b){var x=gv(a,SORT.k),y=gv(b,SORT.k);if(typeof x==='string'){x=(x||'').toLowerCase();y=(y||'').toLowerCase();}return (x>y?1:x<y?-1:0)*SORT.d;});
   function thh(k,t){return '<th onclick="sortBy(\\''+k+'\\')">'+t+(SORT.k===k?(SORT.d<0?' ▼':' ▲'):'')+'</th>';}
   var rows=list.map(function(a){var st=a.suspended?'<span class="pill off">موقوف</span>':'<span class="pill on">نشط</span>';
-    return '<tr><td>'+esc(a.email)+'</td><td>'+a.sites+'</td><td>'+a.devices+'</td><td class="grn">'+a.online+'</td><td>'+n(a.hashrate)+' TH</td><td class="muted">'+ago(a.lastSeen)+'</td><td>'+st+'</td><td><div class="row">'+
+    var h=OPS_HEALTH[a.id]||{},hs=(h.score==null?100:h.score),hc=hs>=85?'var(--grn)':(hs>=60?'var(--amb)':'var(--red)');
+    var hcell='<td><b style="color:'+hc+'">'+hs+'</b>'+(h.under?' <span class="muted" style="font-size:11px">📉'+h.under+'</span>':'')+(h.hot?' <span class="amb" style="font-size:11px">🌡️'+h.hot+'</span>':'')+'</td>';
+    return '<tr><td>'+esc(a.email)+'</td><td>'+a.sites+'</td><td>'+a.devices+'</td><td class="grn">'+a.online+'</td><td>'+n(a.hashrate)+' TH</td>'+hcell+'<td class="muted">'+ago(a.lastSeen)+'</td><td>'+st+'</td><td><div class="row">'+
       '<button class="btn sm" onclick="detail(\\''+a.id+'\\')">تفصيل</button>'+
       '<button class="btn sm" onclick="susp(\\''+a.id+'\\','+(a.suspended?0:1)+')">'+(a.suspended?'تفعيل':'إيقاف')+'</button>'+
       '<button class="btn sm" onclick="resetpw(\\''+a.id+'\\')">باسورد</button>'+
       '<button class="btn sm" onclick="pushUser(\\''+a.id+'\\')">🚀 تحديث</button>'+
       '<button class="btn sm danger" onclick="del(\\''+a.id+'\\')">حذف</button></div></td></tr>';}).join('');
-  document.getElementById('accounts').innerHTML='<table><thead><tr>'+thh('email','البريد')+thh('sites','المواقع')+thh('devices','الأجهزة')+thh('online','أونلاين')+thh('hashrate','الهاش')+thh('lastSeen','آخر ظهور')+thh('suspended','الحالة')+'<th>إجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="8" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
+  document.getElementById('accounts').innerHTML='<table><thead><tr>'+thh('email','البريد')+thh('sites','المواقع')+thh('devices','الأجهزة')+thh('online','أونلاين')+thh('hashrate','الهاش')+thh('health','الصحة')+thh('lastSeen','آخر ظهور')+thh('suspended','الحالة')+'<th>إجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="9" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
 function devices(){api('/admin/api/devices').then(function(r){return r.json();}).then(function(d){DEVS=d.devices||[];renderDevices();});}
 function renderDevices(){var q=(document.getElementById('dvsearch').value||'').toLowerCase();if(!q){document.getElementById('devices').innerHTML='<div class="muted" style="font-size:12.5px">اكتب للبحث في كل أجهزة العملاء…</div>';return;}
   var list=DEVS.filter(function(d){return ((d.name||'')+(d.host||'')+(d.worker||'')+(d.email||'')+(d.firmware||'')).toLowerCase().indexOf(q)>=0;}).slice(0,200);
@@ -353,5 +453,5 @@ function susp(id,s){api('/admin/api/suspend',{method:'POST',body:JSON.stringify(
 function resetpw(id){var a=acctById(id),email=a?a.email:'';var pw=prompt('باسورد جديد للحساب «'+email+'» (٦ أحرف فأكثر):');if(!pw)return;if(pw.length<6){alert('قصير جداً');return;}api('/admin/api/reset-password',{method:'POST',body:JSON.stringify({userId:id,password:pw})}).then(function(r){return r.json();}).then(function(j){alert(j.ok?'تم تغيير الباسورد':(j.error||'فشل'));});}
 function del(id){var a=acctById(id),email=a?a.email:'';if(!confirm('حذف الحساب «'+email+'» وكل بياناته نهائياً؟'))return;api('/admin/api/delete',{method:'POST',body:JSON.stringify({userId:id})}).then(function(){accounts();});}
 if(TOKEN)start();
-setInterval(function(){if(TOKEN&&!document.getElementById('dash').classList.contains('hide')){ov();accounts();devices();agents();}},30000);
+setInterval(function(){if(TOKEN&&!document.getElementById('dash').classList.contains('hide')){ov();ops();accounts();devices();agents();}},30000);
 </script></body></html>`;
