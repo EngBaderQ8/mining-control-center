@@ -384,6 +384,7 @@ export const EN: Record<string, string> = {
   "اختر لابتوب المزرعة اللي يفحص شبكته — يشتغل من هنا بدون ما تدخل عليه.":
     "Pick the farm laptop to scan its network — runs from here without logging into it.",
   "لابتوب المزرعة (يفحص شبكته)": "Farm laptop (scans its network)",
+  "💻 هذا الجهاز (شبكتي المحلية)": "💻 This computer (my local network)",
   "✓ {ip}: متصل · فرمور {fw} · {state} · {hash} TH · حرارة {temp}° · لوحات {boards}":
     "✓ {ip}: connected · firmware {fw} · {state} · {hash} TH · temp {temp}° · boards {boards}",
   "❌ {ip}: ما فيه ماينر يردّ على 4028. {err}": "❌ {ip}: no miner answering on 4028. {err}",

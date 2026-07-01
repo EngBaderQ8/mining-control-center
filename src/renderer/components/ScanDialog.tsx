@@ -24,8 +24,10 @@ export function ScanDialog({ agents, onClose, onScan }: Props): React.ReactEleme
   const [siteName, setSiteName] = useState("");
   const [base, setBase] = useState("");
   const [secret, setSecret] = useState("");
-  // Which farm laptop runs the scan. Default to the first one; empty = this machine.
-  const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
+  // Which machine runs the scan. Default to THIS computer (empty) — the network we
+  // auto-detect and show is this machine's, so scanning it via a remote farm laptop (on a
+  // different subnet) would find nothing. The user can still pick a remote agent below.
+  const [agentId, setAgentId] = useState("");
   const [detectedIps, setDetectedIps] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function ScanDialog({ agents, onClose, onScan }: Props): React.ReactEleme
               disabled={busy}
               onChange={(e) => setAgentId(e.target.value)}
             >
+              <option value="">{t("💻 هذا الجهاز (شبكتي المحلية)")}</option>
               {agents.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
