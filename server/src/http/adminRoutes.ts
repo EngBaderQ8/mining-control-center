@@ -804,7 +804,7 @@ tr:last-child td{border-bottom:0}
 <script>
 var TOKEN=localStorage.getItem('mcc_admin_token')||'';
 var ACCTS=[],DEVS=[],SORT={k:'hashrate',d:-1},OPS_HEALTH={};
-var FWMAP={},FWBATCH=null,FWPOLL=null,FWID='',FWMODEL='';
+var FWMAP={},FWBATCH=null,FWPOLL=null,FWID='',FWMODEL='',FWDEV='',FWDEVMODEL='';
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function n(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
 function n1(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:1});}
@@ -886,7 +886,8 @@ function renderDevices(){var q=(document.getElementById('dvsearch').value||'').t
     var ctl='<div class="row">'+
       '<button class="btn sm" onclick="ctrl(\\''+d.id+'\\',\\'startMining\\')" title="تشغيل">▶</button>'+
       '<button class="btn sm danger" onclick="ctrl(\\''+d.id+'\\',\\'stopMining\\')" title="إيقاف">⏸</button>'+
-      '<button class="btn sm" onclick="ctrl(\\''+d.id+'\\',\\'reboot\\')" title="إعادة تشغيل">↻</button></div>';
+      '<button class="btn sm" onclick="ctrl(\\''+d.id+'\\',\\'reboot\\')" title="إعادة تشغيل">↻</button>'+
+      '<button class="btn sm" style="border-color:var(--acc);color:var(--acc)" onclick="flashDevice(\\''+d.id+'\\')" title="فلاش فِرموير لهذا الجهاز">🔩</button></div>';
     return '<tr><td>'+esc(d.name)+'</td><td class="muted">'+esc(d.email)+'</td><td class="muted">'+esc(d.host)+'</td><td>'+esc(d.firmware)+'</td><td>'+s+'</td><td>'+(d.hashrateTHs?n1(d.hashrateTHs)+' TH':'—')+'</td><td>'+(d.maxTempC?Math.round(d.maxTempC)+'°':'—')+'</td><td>'+ctl+'</td></tr>';}).join('');
   document.getElementById('devices').innerHTML='<table><thead><tr><th>الجهاز</th><th>العميل</th><th>العنوان</th><th>الفرمور</th><th>الحالة</th><th>الهاش</th><th>الحرارة</th><th>تحكّم</th></tr></thead><tbody>'+(rows||'<tr><td colspan="8" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
 function agents(){api('/admin/api/agents').then(function(r){return r.json();}).then(function(d){var rows=(d.agents||[]).map(function(a){var fresh=a.lastSeenAt&&(Date.now()-a.lastSeenAt)<120000;return '<tr><td>'+esc(a.name)+'</td><td><span class="pill" style="background:rgba(91,124,250,.15);color:var(--acc)">'+esc(a.version||'؟')+'</span></td><td>'+(fresh?'<span class="pill on">متصل</span>':'<span class="pill off">منقطع</span>')+'</td><td class="muted">'+ago(a.lastSeenAt)+'</td></tr>';}).join('');document.getElementById('agents').innerHTML='<table><thead><tr><th>اسم الوكيل</th><th>النسخة</th><th>الحالة</th><th>آخر ظهور</th></tr></thead><tbody>'+(rows||'<tr><td colspan="4" class="muted">لا وكلاء</td></tr>')+'</tbody></table>';});}
@@ -931,6 +932,30 @@ function flashOpen(id){var f=FWMAP[id];if(!f)return;FWID=id;FWMODEL=f.model;
   document.getElementById('fwFlash').scrollIntoView({behavior:'smooth'});}
 function fwConfirmCheck(){document.getElementById('fwGo').disabled=(document.getElementById('fwConfirm').value.trim()!==FWMODEL);}
 function flashClose(){document.getElementById('fwFlash').innerHTML='';if(FWPOLL){clearInterval(FWPOLL);FWPOLL=null;}FWBATCH=null;}
+function flashDevice(deviceId){var dev=null;for(var i=0;i<DEVS.length;i++){if(DEVS[i].id===deviceId){dev=DEVS[i];break;}}
+  if(!dev){alert('ابحث عن الجهاز أولاً ثم افلِشه');return;}
+  var box=document.getElementById('fwFlash');
+  var imgs=[];for(var k in FWMAP){if(FWMAP[k].family===dev.firmware)imgs.push(FWMAP[k]);}
+  if(!imgs.length){box.innerHTML='<div class="panel" style="border-color:#3a2530;background:#171019;margin-top:10px"><div class="row" style="justify-content:space-between"><h2 style="margin:0">🔩 فلاش الجهاز: '+esc(dev.name)+'</h2><button class="btn sm" onclick="flashClose()">إغلاق ✕</button></div><div class="amb" style="font-size:12.5px;margin-top:8px">ما فيه صورة فِرموير مرفوعة تطابق فِرمور هذا الجهاز («'+esc(dev.firmware)+'»). ارفع صورة من قسم «🔩 فلاش فِرموير» فوق أول.</div></div>';box.scrollIntoView({behavior:'smooth'});return;}
+  var cw=dev.model||dev.name||'flash';FWDEV=deviceId;FWDEVMODEL=cw;
+  var opts=imgs.map(function(f){return '<option value="'+esc(f.id)+'">'+esc(f.model)+' · نسخة '+esc(f.version)+'</option>';}).join('');
+  box.innerHTML='<div class="panel" style="border-color:#3a2530;background:#171019;margin-top:10px">'+
+   '<div class="row" style="justify-content:space-between"><h2 style="margin:0">🔩 فلاش الجهاز: '+esc(dev.name)+' <span class="muted" style="font-size:12px">('+esc(dev.firmware)+' · '+esc(dev.model||'؟')+' · '+esc(dev.email)+')</span></h2><button class="btn sm" onclick="flashClose()">إغلاق ✕</button></div>'+
+   '<div class="muted" style="font-size:12px;margin:8px 0">اختر صورة الفِرموير. الوكيل يتحقق من التوقيع + مطابقة الموديل + تغيّر النسخة قبل ما يعتبره ناجحاً — وأي فشل ما يمسّ غير هذا الجهاز.</div>'+
+   '<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><span class="muted" style="font-size:12.5px">الفِرموير:</span><select id="fwDevImg" class="in" style="font-size:12.5px">'+opts+'</select></div>'+
+   '<div class="row" style="gap:8px;align-items:center">للتأكيد اكتب «<b>'+esc(cw)+'</b>»: <input id="fwDevConfirm" class="in" style="font-size:12.5px;width:170px" oninput="fwDevConfirmCheck()"><button id="fwDevGo" class="btn danger" disabled onclick="flashDeviceStart()">🔩 افلِش هذا الجهاز</button></div>'+
+   '<div id="fwFlashStatus" style="font-size:12.5px;margin-top:8px"></div>'+
+   '<div id="fwJobs" style="margin-top:10px"></div></div>';
+  box.scrollIntoView({behavior:'smooth'});}
+function fwDevConfirmCheck(){document.getElementById('fwDevGo').disabled=(document.getElementById('fwDevConfirm').value.trim()!==FWDEVMODEL);}
+function flashDeviceStart(){var go=document.getElementById('fwDevGo');if(go.disabled)return;go.disabled=true;
+  var fwId=document.getElementById('fwDevImg').value;
+  document.getElementById('fwFlashStatus').innerHTML='… جاري بدء الفلاش';
+  api('/admin/api/firmware/flash',{method:'POST',body:JSON.stringify({firmwareId:fwId,target:{deviceId:FWDEV},autoContinue:false})}).then(function(r){return r.json();}).then(function(j){
+    if(j.error){document.getElementById('fwFlashStatus').innerHTML='<span class="amb">'+esc(j.error)+'</span>';go.disabled=false;return;}
+    if(!j.batchId){document.getElementById('fwFlashStatus').innerHTML='<span class="amb">الجهاز غير مطابق للصورة (موديل/فِرمور مختلف) — لم يُفلَش.</span>';go.disabled=false;return;}
+    FWBATCH=j.batchId;document.getElementById('fwFlashStatus').innerHTML='<span class="grn">بدأ الفلاش — يُفلَش الآن…</span>';fwJobsPoll();
+  }).catch(function(){document.getElementById('fwFlashStatus').innerHTML='<span class="amb">تعذّر بدء الفلاش</span>';go.disabled=false;});}
 function flashStart(){var go=document.getElementById('fwGo');if(go.disabled)return;go.disabled=true;
   var target=document.getElementById('fwTarget').value,tgt=(target==='ALL')?'ALL':{userId:target};
   document.getElementById('fwFlashStatus').innerHTML='… جاري بدء الدفعة';
