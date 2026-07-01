@@ -273,19 +273,27 @@ export function App(): React.ReactElement {
     };
   }, [authed, reload, showToast]);
 
+  // Heartbeat so status STALENESS (a device goes offline when its laptop stops reporting)
+  // re-evaluates even when no new data is arriving — otherwise a dead site would stay
+  // "online" forever on its last poll.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const groups = useMemo(
-    () => groupBySite(sites, devices, statusById, filter),
-    [sites, devices, statusById, filter],
+    () => groupBySite(sites, devices, statusById, filter, now),
+    [sites, devices, statusById, filter, now],
   );
   // UNFILTERED grouping — profit must always reflect the WHOLE fleet, never the current
   // search/filter (otherwise the ⚙ profit total drops to just the filtered devices).
   const allGroups = useMemo(
-    () => groupBySite(sites, devices, statusById, EMPTY_FILTER),
-    [sites, devices, statusById],
+    () => groupBySite(sites, devices, statusById, EMPTY_FILTER, now),
+    [sites, devices, statusById, now],
   );
   const summary = useMemo(
-    () => computeSummary(sites, devices, statusById),
-    [sites, devices, statusById],
+    () => computeSummary(sites, devices, statusById, now),
+    [sites, devices, statusById, now],
   );
 
   // Record one fleet snapshot per minute for the historical charts (persisted).

@@ -4,6 +4,8 @@ import {
   matchesFilter,
   groupBySite,
   sortViews,
+  agedStatus,
+  STATUS_STALE_MS,
   EMPTY_FILTER,
   type DeviceView,
 } from "../../src/renderer/state/store";
@@ -42,9 +44,31 @@ describe("store helpers", () => {
       ["b", st("b", "warning", 100)],
       // c has no status -> counted offline
     ]);
-    const s = computeSummary([site], devices, map);
+    const s = computeSummary([site], devices, map, 1);
     expect(s).toMatchObject({ siteCount: 1, total: 3, online: 1, warning: 1, offline: 1 });
     expect(s.totalTHs).toBeCloseTo(195, 0);
+  });
+
+  it("ages a stale device to OFFLINE — a laptop that stopped reporting isn't 'online'", () => {
+    const devices = [mk("a"), mk("b")];
+    const map = new Map([
+      ["a", st("a", "online", 95)], // lastSeen: 1
+      ["b", st("b", "online", 100)],
+    ]);
+    // 'now' far past lastSeen ⇒ both stale ⇒ offline, and their hashrate drops out of the total.
+    const s = computeSummary([site], devices, map, STATUS_STALE_MS + 1000);
+    expect(s).toMatchObject({ online: 0, offline: 2, warning: 0 });
+    expect(s.totalTHs).toBe(0);
+  });
+
+  it("agedStatus: fresh stays, stale becomes offline with zeroed live metrics", () => {
+    const fresh = st("a", "online", 95); // lastSeen: 1
+    expect(agedStatus(fresh, 1)).toBe(fresh); // within window → same object
+    const aged = agedStatus(fresh, STATUS_STALE_MS + 2);
+    expect(aged?.state).toBe("offline");
+    expect(aged?.hashrateTHs).toBe(0);
+    expect(aged?.maxTempC).toBe(0);
+    expect(agedStatus(undefined, 999)).toBeUndefined();
   });
 
   it("filters by text, state, and firmware", () => {
@@ -64,10 +88,13 @@ describe("store helpers", () => {
     expect(matchesFilter(d, s, { ...EMPTY_FILTER, text: "الرياض" })).toBe(false);
     expect(matchesFilter(d, s, { ...EMPTY_FILTER, text: "الرياض" }, "الرياض — المستودع")).toBe(true);
     // groupBySite threads site.name through, so filtering by site name keeps it.
-    const groups = groupBySite([site], [d], new Map([["rig-01", s]]), {
-      ...EMPTY_FILTER,
-      text: "الرياض",
-    });
+    const groups = groupBySite(
+      [site],
+      [d],
+      new Map([["rig-01", s]]),
+      { ...EMPTY_FILTER, text: "الرياض" },
+      1,
+    );
     expect(groups).toHaveLength(1);
   });
 
@@ -94,7 +121,7 @@ describe("store helpers", () => {
   it("groups by site and drops empty sites after filtering", () => {
     const devices = [mk("a"), mk("b")];
     const map = new Map([["a", st("a", "online", 95)]]);
-    const groups = groupBySite([site], devices, map, { ...EMPTY_FILTER, state: "online" });
+    const groups = groupBySite([site], devices, map, { ...EMPTY_FILTER, state: "online" }, 1);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.views).toHaveLength(1);
     expect(groups[0]?.views[0]?.device.id).toBe("a");

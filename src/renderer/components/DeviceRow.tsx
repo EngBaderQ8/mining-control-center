@@ -38,7 +38,7 @@ export function DeviceRow({ view, selected, onToggle, onCommand, onDelete, onDia
         <span className="fw">{device.firmware}</span>
       </td>
       <td className={state === "offline" ? "red" : "green"}>
-        {status ? `${status.hashrateTHs.toFixed(1)} TH` : "—"}
+        {status && state !== "offline" ? `${status.hashrateTHs.toFixed(1)} TH` : "—"}
       </td>
       <td className={warnTemp ? "amber" : ""}>
         {status && status.maxTempC > 0 ? `${status.maxTempC}°C${warnTemp ? " ⚠" : ""}` : "—"}

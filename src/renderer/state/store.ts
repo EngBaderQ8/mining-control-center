@@ -7,6 +7,21 @@ export interface DeviceView {
   status: DeviceStatus | undefined;
 }
 
+/** A status is STALE if no fresh poll has arrived in this long: the site's farm laptop
+ *  (agent) stopped reporting, so its devices are really OFFLINE (we've lost sight of them)
+ *  — NOT the frozen "online" from their last poll. Poll is ~10s, so ~2.5 min tolerates a
+ *  slow cycle / brief blip while still catching a powered-off laptop. */
+export const STATUS_STALE_MS = 150_000;
+
+/** Age a raw status: fresh → unchanged; stale → offline with no live metrics (hashrate/
+ *  temp/fan zeroed) so counts, totals and the table stop showing a dead laptop's devices
+ *  as working. Undefined status stays undefined (never reported). */
+export function agedStatus(s: DeviceStatus | undefined, now: number): DeviceStatus | undefined {
+  if (!s) return undefined;
+  if (now - s.lastSeen <= STATUS_STALE_MS) return s;
+  return { ...s, state: "offline", hashrateTHs: 0, maxTempC: 0, fanRpm: 0 };
+}
+
 /** Total power (kW) of a set of devices, computed PER DEVICE from its model's rated
  *  efficiency (unknown models fall back to the user's global J/TH) — so a site with
  *  mixed models gets an accurate power/electricity figure, not one blanket efficiency. */
@@ -39,6 +54,7 @@ export function computeSummary(
   sites: Site[],
   devices: Device[],
   statusById: Map<string, DeviceStatus>,
+  now: number,
 ): Summary {
   let online = 0,
     offline = 0,
@@ -47,7 +63,7 @@ export function computeSummary(
     tempSum = 0,
     tempCount = 0;
   for (const d of devices) {
-    const s = statusById.get(d.id);
+    const s = agedStatus(statusById.get(d.id), now);
     if (!s || s.state === "offline") offline++;
     else if (s.state === "warning") warning++;
     else online++;
@@ -165,13 +181,14 @@ export function groupBySite(
   devices: Device[],
   statusById: Map<string, DeviceStatus>,
   filter: Filter,
+  now: number,
 ): SiteGroup[] {
   return sites
     .map((site) => ({
       site,
       views: devices
         .filter((d) => d.siteId === site.id)
-        .map((device) => ({ device, status: statusById.get(device.id) }))
+        .map((device) => ({ device, status: agedStatus(statusById.get(device.id), now) }))
         .filter((v) => matchesFilter(v.device, v.status, filter, site.name)),
     }))
     .filter((g) => g.views.length > 0);
