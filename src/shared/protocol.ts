@@ -83,6 +83,40 @@ export interface UpdateNow {
   type: "update.now";
 }
 
+// ——— Remote agent operations (viewer triggers, the OWNING agent executes) ———
+// A viewer (e.g. the office computer, not on the miners' LAN) runs a site-scoped
+// management op — remove-absent, rescan — on the agent that owns the site. The server
+// routes it by site→agent and relays the result back, so everything is doable remotely
+// without logging into the farm laptop. No secrets travel this channel.
+export interface AgentOpSend {
+  type: "agentop.send";
+  opId: string;
+  siteId: string; // routes to the agent that owns this site
+  op: "removeAbsent" | "rescan";
+  params?: Record<string, string>;
+}
+export interface AgentOpExec {
+  type: "agentop.exec";
+  opId: string;
+  siteId: string;
+  op: "removeAbsent" | "rescan";
+  params?: Record<string, string>;
+}
+export interface AgentOpResult {
+  type: "agentop.result";
+  opId: string;
+  ok: boolean;
+  data?: string; // JSON result payload
+  error?: string;
+}
+export interface AgentOpAck {
+  type: "agentop.ack";
+  opId: string;
+  ok: boolean;
+  data?: string;
+  error?: string;
+}
+
 // ——— Firmware flashing (Server -> Agent job; Agent -> Server progress/result) ———
 // A flash is a long-running JOB, NOT a 15s request/response command: the server
 // dispatches one device at a time and the agent reports progress + a terminal result
@@ -128,8 +162,15 @@ export type AgentMessage =
   | StatusUpdate
   | CommandResult
   | FlashProgress
-  | FlashResult;
-export type ViewerMessage = SnapshotRequest | CommandSend | DeviceDelete | SiteDelete | SiteRename;
+  | FlashResult
+  | AgentOpResult;
+export type ViewerMessage =
+  | SnapshotRequest
+  | CommandSend
+  | DeviceDelete
+  | SiteDelete
+  | SiteRename
+  | AgentOpSend;
 export type ClientMessage = AgentMessage | ViewerMessage;
 export type ServerMessage =
   | SnapshotMsg
@@ -138,7 +179,9 @@ export type ServerMessage =
   | StatusUpdate
   | UpdateNow
   | SiteRename
-  | FlashExec;
+  | FlashExec
+  | AgentOpExec
+  | AgentOpAck;
 
 const CLIENT_TYPES = new Set<string>([
   "agent.hello",
@@ -153,6 +196,8 @@ const CLIENT_TYPES = new Set<string>([
   "site.rename",
   "flash.progress",
   "flash.result",
+  "agentop.send",
+  "agentop.result",
 ]);
 
 export function isClientMessage(v: unknown): v is ClientMessage {

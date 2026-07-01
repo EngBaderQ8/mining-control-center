@@ -76,6 +76,40 @@ describe("ConnectionHub", () => {
     expect(sent[0]).toMatchObject({ type: "command.ack", outcome: { ok: false } });
   });
 
+  it("routes a viewer's site op (agentop) to the OWNING agent and relays the result back", async () => {
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
+    const agentSent: ServerMessage[] = [];
+    const agentHub = new ConnectionHub(uid, (m) => agentSent.push(m), repo, router, broadcast, flashSequencer);
+    await agentHub.handleMessage({ type: "agent.hello", agentId: "ag1", name: "farm" });
+    repo.upsertDevice({
+      id: "d1", userId: uid, siteId: "s1", agentId: "ag1", name: "n", model: "S19",
+      firmware: "stock", host: "h", apiPort: 4028, controlPort: 80,
+    });
+
+    const viewerSent: ServerMessage[] = [];
+    const viewerHub = new ConnectionHub(uid, (m) => viewerSent.push(m), repo, router, broadcast, flashSequencer);
+    const done = viewerHub.handleMessage({ type: "agentop.send", opId: "op1", siteId: "s1", op: "removeAbsent" });
+
+    expect(agentSent.find((m) => m.type === "agentop.exec")).toMatchObject({
+      type: "agentop.exec", opId: "op1", siteId: "s1", op: "removeAbsent",
+    });
+    await agentHub.handleMessage({
+      type: "agentop.result", opId: "op1", ok: true, data: '{"removed":3,"kept":10,"siteUnreachable":false}',
+    });
+    await done;
+    expect(viewerSent.find((m) => m.type === "agentop.ack")).toMatchObject({
+      type: "agentop.ack", opId: "op1", ok: true, data: '{"removed":3,"kept":10,"siteUnreachable":false}',
+    });
+  });
+
+  it("acks failure for a site op when no agent owns the site", async () => {
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
+    const sent: ServerMessage[] = [];
+    const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast, flashSequencer);
+    await hub.handleMessage({ type: "agentop.send", opId: "x", siteId: "ghost", op: "removeAbsent" });
+    expect(sent[0]).toMatchObject({ type: "agentop.ack", opId: "x", ok: false });
+  });
+
   it("broadcasts a live snapshot when a NEW site/device registers, but stays silent on identical reconnect re-register", async () => {
     const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
     const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);

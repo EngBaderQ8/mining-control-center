@@ -61,6 +61,31 @@ export class ConnectionHub {
       case "command.result":
         this.router.resolveResult(msg.commandId, msg.outcome);
         break;
+      case "agentop.result":
+        // The owning agent finished a routed site op — resolve the viewer's waiter.
+        this.router.resolveAgentOp(msg.opId, { ok: msg.ok, data: msg.data, error: msg.error });
+        break;
+      case "agentop.send": {
+        // A viewer runs a site-scoped op on the agent that owns the site.
+        const agentId = this.repo.siteAgent(this.userId, msg.siteId);
+        if (!agentId) {
+          this.send({ type: "agentop.ack", opId: msg.opId, ok: false, error: "no agent for this site" });
+          break;
+        }
+        try {
+          const r = await this.router.routeAgentOp(agentId, {
+            type: "agentop.exec",
+            opId: msg.opId,
+            siteId: msg.siteId,
+            op: msg.op,
+            ...(msg.params ? { params: msg.params } : {}),
+          });
+          this.send({ type: "agentop.ack", opId: msg.opId, ok: r.ok, ...(r.data ? { data: r.data } : {}), ...(r.error ? { error: r.error } : {}) });
+        } catch (e) {
+          this.send({ type: "agentop.ack", opId: msg.opId, ok: false, error: (e as Error).message });
+        }
+        break;
+      }
       case "flash.progress": {
         // Authoritative tenant boundary is the JWT-derived userId (agentId is
         // client-asserted/spoofable); also require the report to be for the exact

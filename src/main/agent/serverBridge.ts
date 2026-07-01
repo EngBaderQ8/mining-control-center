@@ -4,7 +4,7 @@ import type { Device, Site, DeviceStatus, Firmware } from "../../core/model/devi
 import type { ControlCommand, Transport, FlashTransport } from "../../core/drivers/types";
 import type { CommandOutcome } from "../../core/model/result";
 import type { Alert } from "../../core/alerts/rules";
-import type { ServerMessage, FlashExec } from "../../shared/protocol";
+import type { ServerMessage, FlashExec, AgentOpExec } from "../../shared/protocol";
 import { httpUpload } from "../transport/http";
 import { runFlash } from "./flashRunner";
 import { UPDATE_PUBLIC_KEY } from "../updateKey";
@@ -58,6 +58,7 @@ export class ServerBridge {
   private connected = false;
   private snapshot: Snapshot = { sites: [], devices: [], statuses: [] };
   private pending = new Map<string, (o: CommandOutcome) => void>();
+  private pendingOps = new Map<string, (r: { ok: boolean; data?: string; error?: string }) => void>();
   private rescanTimer: ReturnType<typeof setInterval> | null = null;
   private initialRescan: ReturnType<typeof setTimeout> | null = null;
   private rescanning = false;
@@ -305,14 +306,39 @@ export class ServerBridge {
     return false;
   }
 
+  /** True if THIS machine is the agent that owns the site (its devices are in our local
+   *  repo). A pure viewer (e.g. the office computer) has none → it must route ops to the
+   *  owning farm laptop. */
+  private ownsSite(siteId: string): boolean {
+    return this.deps.repo.listDevices().some((d) => d.siteId === siteId);
+  }
+
+  /**
+   * Remove absent devices in a site. Runs LOCALLY if this machine owns the site;
+   * otherwise ROUTES the op to the owning agent (so the office computer can clean a
+   * remote farm without logging into its laptop) and returns that agent's result.
+   */
+  async removeAbsentDevices(
+    siteId: string,
+  ): Promise<{ removed: number; kept: number; siteUnreachable: boolean }> {
+    if (this.ownsSite(siteId)) return this.removeAbsentLocal(siteId);
+    const r = await this.sendAgentOp(siteId, "removeAbsent");
+    if (!r.ok || !r.data) return { removed: 0, kept: 0, siteUnreachable: true };
+    try {
+      return JSON.parse(r.data) as { removed: number; kept: number; siteUnreachable: boolean };
+    } catch {
+      return { removed: 0, kept: 0, siteUnreachable: true };
+    }
+  }
+
   /**
    * Probe every device in a site and remove ONLY those whose IP has NO miner responding
    * (genuine phantoms — e.g. an old IP left behind by a DHCP change). Miners that respond
    * are kept (present hardware, even if not hashing). If NOTHING in the site answers it's
    * treated as a network/agent outage and nothing is removed — so a temporary outage can
-   * never wipe a whole site. User-initiated (the safe complement to MAC auto-recognition).
+   * never wipe a whole site. Runs on the agent that's on the miners' LAN.
    */
-  async removeAbsentDevices(
+  private async removeAbsentLocal(
     siteId: string,
   ): Promise<{ removed: number; kept: number; siteUnreachable: boolean }> {
     const devices = this.deps.repo.listDevices().filter((d) => d.siteId === siteId);
@@ -594,6 +620,45 @@ export class ServerBridge {
     return Promise.all(deviceIds.map((id) => this.sendCommand(id, command, params)));
   }
 
+  /** Viewer side: run a site-scoped op on the OWNING agent via the server, awaiting its
+   *  result. Long timeout — probing a whole subnet can take tens of seconds. */
+  private sendAgentOp(
+    siteId: string,
+    op: "removeAbsent" | "rescan",
+    params?: Record<string, string>,
+  ): Promise<{ ok: boolean; data?: string; error?: string }> {
+    if (!this.connected) return Promise.resolve({ ok: false, error: "غير متصل بالخادم" });
+    const opId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingOps.delete(opId);
+        resolve({ ok: false, error: "انتهت المهلة" });
+      }, 130000);
+      this.pendingOps.set(opId, (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      });
+      this.client.send({ type: "agentop.send", opId, siteId, op, ...(params ? { params } : {}) });
+    });
+  }
+
+  /** Agent side: the server routed a site op here (we own the site) — run it and
+   *  report the result back over the same channel. */
+  private async handleAgentOp(m: AgentOpExec): Promise<void> {
+    try {
+      let data = "{}";
+      if (m.op === "removeAbsent") data = JSON.stringify(await this.removeAbsentLocal(m.siteId));
+      else if (m.op === "rescan") data = JSON.stringify(await this.rescanKnownSites());
+      else {
+        this.client.send({ type: "agentop.result", opId: m.opId, ok: false, error: "عملية غير معروفة" });
+        return;
+      }
+      this.client.send({ type: "agentop.result", opId: m.opId, ok: true, data });
+    } catch (e) {
+      this.client.send({ type: "agentop.result", opId: m.opId, ok: false, error: (e as Error).message });
+    }
+  }
+
   private onConnected(): void {
     // Build the agent runtime ONCE (so its message handler subscribes once for the
     // bridge's lifetime); on later reconnects just re-announce. Otherwise every
@@ -770,6 +835,19 @@ export class ServerBridge {
         // progress + a terminal result asynchronously (not the 15s command channel).
         void this.handleFlash(m);
         break;
+      case "agentop.exec":
+        // A viewer (e.g. office computer) asked us — the owning agent — to run a
+        // site management op locally and report back.
+        void this.handleAgentOp(m);
+        break;
+      case "agentop.ack": {
+        const resolve = this.pendingOps.get(m.opId);
+        if (resolve) {
+          this.pendingOps.delete(m.opId);
+          resolve({ ok: m.ok, ...(m.data ? { data: m.data } : {}), ...(m.error ? { error: m.error } : {}) });
+        }
+        break;
+      }
       case "update.now": {
         // The owner triggered a fleet-wide update from the admin dashboard —
         // check both the GitHub channel and the owner's self-hosted channel.

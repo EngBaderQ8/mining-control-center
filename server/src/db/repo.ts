@@ -235,6 +235,14 @@ export class ServerRepo {
     return r?.agentId ?? null;
   }
 
+  /** The agent that owns a site (any device in it), for routing remote site ops. */
+  siteAgent(userId: string, siteId: string): string | null {
+    const r = this.db
+      .prepare(`SELECT agentId FROM devices WHERE userId=? AND siteId=? AND agentId<>'' LIMIT 1`)
+      .get(userId, siteId) as { agentId: string } | undefined;
+    return r?.agentId ?? null;
+  }
+
   /** Owner (user + agent) of a device, regardless of account — for admin remote
    *  control across all customers. */
   deviceOwner(deviceId: string): { userId: string; agentId: string } | null {
