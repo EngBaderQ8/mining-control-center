@@ -507,7 +507,7 @@ export async function handleAdmin(
         !FIRMWARE_FAMILIES.includes(family) ||
         !model ||
         !version ||
-        !/^[A-Za-z0-9._-]+\.(tar\.gz|tgz|bin|swu)$/.test(name)
+        !/^[A-Za-z0-9._-]+\.(bmu|tar\.gz|tgz|bin|swu)$/.test(name)
       ) {
         send(res, 400, { error: "bad request (family/model/version/name)" });
         return true;
@@ -790,7 +790,7 @@ tr:last-child td{border-bottom:0}
       <select id="fwFam" class="in" style="font-size:12.5px" onchange="fwFamChange()"><option value="stock">Antminer (ستوك)</option><option value="braiins">Braiins OS+</option><option value="luxos">LuxOS</option></select>
       <input id="fwModel" class="in" placeholder="الموديل (مثل S19 Pro)" style="font-size:12.5px;width:150px">
       <input id="fwVer" class="in" placeholder="النسخة" style="font-size:12.5px;width:110px">
-      <input type="file" id="fwFile" accept=".tar.gz,.tgz,.bin,.swu" class="in" style="font-size:12px">
+      <input type="file" id="fwFile" accept=".bmu,.tar.gz,.tgz,.bin,.swu" class="in" style="font-size:12px" onchange="fwPick()">
       <button class="btn primary" onclick="uploadFw()">رفع وتوقيع</button>
     </div>
     <div id="fwLuxHint" class="muted hide" style="font-size:11.5px;margin-bottom:8px">ℹ️ LuxOS يسحب صورته الموقّعة بنفسه من خوادم Luxor — الملف المرفوع مجرد علامة للنسخة (ارفع أي ملف صغير).</div>
@@ -907,6 +907,9 @@ function susp(id,s){api('/admin/api/suspend',{method:'POST',body:JSON.stringify(
 function resetpw(id){var a=acctById(id),email=a?a.email:'';var pw=prompt('باسورد جديد للحساب «'+email+'» (٦ أحرف فأكثر):');if(!pw)return;if(pw.length<6){alert('قصير جداً');return;}api('/admin/api/reset-password',{method:'POST',body:JSON.stringify({userId:id,password:pw})}).then(function(r){return r.json();}).then(function(j){alert(j.ok?'تم تغيير الباسورد':(j.error||'فشل'));});}
 function del(id){var a=acctById(id),email=a?a.email:'';if(!confirm('حذف الحساب «'+email+'» وكل بياناته نهائياً؟'))return;api('/admin/api/delete',{method:'POST',body:JSON.stringify({userId:id})}).then(function(){accounts();});}
 function fwFamChange(){document.getElementById('fwLuxHint').classList.toggle('hide',document.getElementById('fwFam').value!=='luxos');}
+function fwPick(){var f=document.getElementById('fwFile').files[0];if(!f)return;var b=f.name.replace(/\\.(bmu|tar\\.gz|tgz|bin|swu)$/i,'');
+  var vm=b.match(/(\\d{8,14})/);var vf=document.getElementById('fwVer');if(!vf.value.trim())vf.value=vm?vm[1]:b.slice(0,40);
+  var mm=b.match(/antminer[-_ ]+(.+?)[-_ ]+(?:merge|release|upgrade|\\d{6,})/i);var mf=document.getElementById('fwModel');if(!mf.value.trim()&&mm)mf.value=mm[1].replace(/[-_]/g,' ').trim();}
 function loadFw(){api('/admin/api/firmware/list').then(function(r){return r.json();}).then(function(d){var list=d.firmware||[];FWMAP={};list.forEach(function(f){FWMAP[f.id]=f;});
   if(!list.length){document.getElementById('fwCatalog').innerHTML='<div class="muted" style="font-size:12.5px">لا توجد صور فِرموير مرفوعة بعد.</div>';return;}
   var rows=list.map(function(f){return '<tr><td>'+esc(f.family)+'</td><td>'+esc(f.model)+'</td><td>'+esc(f.version)+'</td><td class="muted">'+(f.size?(Math.round(f.size/1048576)+'MB'):'—')+'</td><td class="muted" style="font-size:11px">'+esc((f.sha256||'').slice(0,10))+'</td><td><button class="btn sm" style="border-color:var(--acc);color:var(--acc)" onclick="flashOpen(\\''+f.id+'\\')">🔩 فلاش</button></td></tr>';}).join('');
@@ -916,7 +919,7 @@ function uploadFw(){var fam=document.getElementById('fwFam').value,model=documen
   if(!model){st.innerHTML='<span class="amb">اكتب الموديل</span>';return;}
   if(!ver){st.innerHTML='<span class="amb">اكتب النسخة</span>';return;}
   if(!f){st.innerHTML='<span class="amb">اختر ملف الفِرموير</span>';return;}
-  if(!/\\.(tar\\.gz|tgz|bin|swu)$/i.test(f.name)){st.innerHTML='<span class="amb">امتداد غير مدعوم (tar.gz / tgz / bin / swu)</span>';return;}
+  if(!/\\.(bmu|tar\\.gz|tgz|bin|swu)$/i.test(f.name)){st.innerHTML='<span class="amb">امتداد غير مدعوم (bmu / tar.gz / tgz / bin / swu)</span>';return;}
   var xhr=new XMLHttpRequest();xhr.open('POST','/admin/api/firmware/upload?family='+encodeURIComponent(fam)+'&model='+encodeURIComponent(model)+'&version='+encodeURIComponent(ver)+'&name='+encodeURIComponent(f.name));xhr.setRequestHeader('authorization','Bearer '+TOKEN);
   xhr.upload.onprogress=function(e){if(e.lengthComputable)st.innerHTML='⬆ جاري الرفع… '+Math.round(e.loaded/e.total*100)+'%';};
   xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);if(j.ok){st.innerHTML='<span class="grn">✅ تم رفع وتوقيع الصورة.</span>';document.getElementById('fwFile').value='';loadFw();}else{st.innerHTML='<span class="amb">'+esc(j.error||'فشل')+'</span>';}}catch(e){st.innerHTML='<span class="amb">فشل ('+xhr.status+')</span>';}};
