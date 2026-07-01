@@ -1,8 +1,20 @@
 import type { Device, DeviceStatus, DeviceState, Firmware, Site } from "../../core/model/device";
+import { powerKwFromHashrate } from "../../core/profit/calc";
+import { deviceJPerTh } from "../../core/devices/catalog";
 
 export interface DeviceView {
   device: Device;
   status: DeviceStatus | undefined;
+}
+
+/** Total power (kW) of a set of devices, computed PER DEVICE from its model's rated
+ *  efficiency (unknown models fall back to the user's global J/TH) — so a site with
+ *  mixed models gets an accurate power/electricity figure, not one blanket efficiency. */
+export function sitePowerKw(views: DeviceView[], fallbackJPerTh: number): number {
+  return views.reduce(
+    (sum, v) => sum + powerKwFromHashrate(v.status?.hashrateTHs ?? 0, deviceJPerTh(v.device.model, fallbackJPerTh)),
+    0,
+  );
 }
 
 export interface Filter {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lookupSpec } from "../../../src/core/devices/catalog";
+import { lookupSpec, deviceJPerTh } from "../../../src/core/devices/catalog";
 
 describe("lookupSpec", () => {
   it("identifies an S19 XP+ Hyd as a water-cooled Bitmain miner", () => {
@@ -26,5 +26,18 @@ describe("lookupSpec", () => {
   it("returns null for empty input", () => {
     expect(lookupSpec("")).toBeNull();
     expect(lookupSpec(undefined)).toBeNull();
+  });
+
+  it("gives each model its own rated efficiency (for accurate mixed-site power)", () => {
+    expect(lookupSpec("Antminer S19 XP Hyd")?.jPerTh).toBe(20.8);
+    expect(lookupSpec("Antminer S21 XP Hyd")?.jPerTh).toBe(12);
+    expect(lookupSpec("Whatsminer M60S")?.jPerTh).toBe(18.5);
+  });
+
+  it("deviceJPerTh uses the model's efficiency, else the provided fallback", () => {
+    expect(deviceJPerTh("Antminer S21 XP Hyd", 99)).toBe(12); // known → model's value
+    expect(deviceJPerTh("Antminer S19 XP Hyd", 99)).toBe(20.8);
+    expect(deviceJPerTh("TotallyUnknown 5000", 25)).toBe(25); // unknown → fallback
+    expect(deviceJPerTh("", 25)).toBe(25);
   });
 });

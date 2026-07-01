@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../ipc";
-import { computeProfit, powerKwFromHashrate, type NetworkStats, type ProfitResult } from "../../core/profit/calc";
-import type { SiteGroup } from "../state/store";
+import { computeProfit, type NetworkStats, type ProfitResult } from "../../core/profit/calc";
+import { sitePowerKw, type SiteGroup } from "../state/store";
 import type { Site } from "../../core/model/device";
 import {
   loadProfitSettings,
@@ -53,7 +53,7 @@ export function ProfitBar({ groups }: { groups: SiteGroup[] }): React.ReactEleme
   // Total = sum of per-site results so each site's own electricity price + rent apply.
   const r: ProfitResult = groups.reduce((acc, g) => {
     const ths = g.views.reduce((s, v) => s + (v.status?.hashrateTHs ?? 0), 0);
-    const powerKw = powerKwFromHashrate(ths, settings.jPerTh);
+    const powerKw = sitePowerKw(g.views, settings.jPerTh); // per-model efficiency
     const x = computeProfit(effectiveNet, {
       hashrateTHs: ths,
       powerKw,

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../ipc";
 import type { SiteGroup } from "../state/store";
-import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
+import { computeProfit, type NetworkStats } from "../../core/profit/calc";
+import { sitePowerKw } from "../state/store";
 import { loadProfitSettings, money, FALLBACK_DIFFICULTY, siteElectricity, siteRentMonthly } from "../state/profitSettings";
 
 export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactElement {
@@ -25,7 +26,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
     .map((g) => {
       const online = g.views.filter((v) => v.status?.state === "online").length;
       const ths = g.views.reduce((s, v) => s + (v.status?.hashrateTHs ?? 0), 0);
-      const powerKw = powerKwFromHashrate(ths, settings.jPerTh);
+      const powerKw = sitePowerKw(g.views, settings.jPerTh); // per-model efficiency
       const r = computeProfit(effNet, {
         hashrateTHs: ths,
         powerKw,
@@ -77,7 +78,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
               <td className="green">{x.online}</td>
               <td className="green">{x.ths.toLocaleString(undefined, { maximumFractionDigits: 0 })} TH/s</td>
               <td>{x.powerKw.toFixed(0)} kW</td>
-              <td>{settings.jPerTh} J/TH</td>
+              <td>{x.ths > 0 ? `${((x.powerKw * 1000) / x.ths).toFixed(1)} J/TH` : "—"}</td>
               <td className="amber">{money(x.r.costPerDay, cur)}</td>
               <td className="amber">{x.r.rentPerMonth > 0 ? money(x.r.rentPerMonth, cur) : "—"}</td>
               <td style={{ color: x.r.profitPerDay >= 0 ? "var(--green)" : "var(--red)", fontWeight: 700 }}>
