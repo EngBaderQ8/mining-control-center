@@ -3,7 +3,7 @@ import { t } from "../i18n";
 import { api } from "../ipc";
 import type { SiteGroup } from "../state/store";
 import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
-import { loadProfitSettings, money, FALLBACK_DIFFICULTY } from "../state/profitSettings";
+import { loadProfitSettings, money, FALLBACK_DIFFICULTY, siteElectricity, siteRentMonthly } from "../state/profitSettings";
 
 export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactElement {
   const [net, setNet] = useState<NetworkStats | null>(null);
@@ -29,8 +29,9 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
       const r = computeProfit(effNet, {
         hashrateTHs: ths,
         powerKw,
-        electricityPerKwh: settings.electricityPerKwh,
+        electricityPerKwh: siteElectricity(settings, g.site.id),
         usdRate: settings.usdRate,
+        rentPerDay: siteRentMonthly(settings, g.site.id) / 30,
       });
       return { site: g.site, devices: g.views.length, online, ths, powerKw, r };
     })
@@ -42,10 +43,11 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
       powerKw: a.powerKw + x.powerKw,
       profit: a.profit + x.r.profitPerDay,
       cost: a.cost + x.r.costPerDay,
+      rentMonth: a.rentMonth + x.r.rentPerMonth,
       devices: a.devices + x.devices,
       online: a.online + x.online,
     }),
-    { ths: 0, powerKw: 0, profit: 0, cost: 0, devices: 0, online: 0 },
+    { ths: 0, powerKw: 0, profit: 0, cost: 0, rentMonth: 0, devices: 0, online: 0 },
   );
 
   return (
@@ -60,6 +62,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
             <th>{t("الطاقة")}</th>
             <th>{t("الكفاءة")}</th>
             <th>{t("الكهرباء/يوم")}</th>
+            <th>{t("الإيجار/الشهر")}</th>
             <th>{t("صافي/يوم")}</th>
             <th>{t("صافي/شهر")}</th>
           </tr>
@@ -76,6 +79,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
               <td>{x.powerKw.toFixed(0)} kW</td>
               <td>{settings.jPerTh} J/TH</td>
               <td className="amber">{money(x.r.costPerDay, cur)}</td>
+              <td className="amber">{x.r.rentPerMonth > 0 ? money(x.r.rentPerMonth, cur) : "—"}</td>
               <td style={{ color: x.r.profitPerDay >= 0 ? "var(--green)" : "var(--red)", fontWeight: 700 }}>
                 {money(x.r.profitPerDay, cur)}
               </td>
@@ -94,6 +98,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
             <td>{tot.powerKw.toFixed(0)} kW</td>
             <td>—</td>
             <td className="amber">{money(tot.cost, cur)}</td>
+            <td className="amber">{tot.rentMonth > 0 ? money(tot.rentMonth, cur) : "—"}</td>
             <td style={{ color: tot.profit >= 0 ? "var(--green)" : "var(--red)" }}>{money(tot.profit, cur)}</td>
             <td style={{ color: tot.profit >= 0 ? "var(--green)" : "var(--red)" }}>{money(tot.profit * 30, cur)}</td>
           </tr>

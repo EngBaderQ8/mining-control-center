@@ -10,15 +10,18 @@ export interface ProfitInputs {
   powerKw: number; // total power draw (kW)
   electricityPerKwh: number; // electricity price per kWh (in the user's currency)
   usdRate: number; // how many of the user's currency units per 1 USD (1 => USD)
+  rentPerDay?: number; // fixed rent cost per day (monthly rent / 30), 0 if none
 }
 
 export interface ProfitResult {
   btcPerDay: number;
   revenuePerDay: number; // in the user's currency
-  costPerDay: number;
-  profitPerDay: number;
+  costPerDay: number; // electricity only
+  rentPerDay: number; // fixed rent
+  profitPerDay: number; // revenue − electricity − rent
   revenuePerMonth: number;
   costPerMonth: number;
+  rentPerMonth: number;
   profitPerMonth: number;
   marginPct: number; // profit / revenue, 0..100
 }
@@ -43,14 +46,17 @@ export function computeProfit(net: NetworkStats, inp: ProfitInputs): ProfitResul
   const btc = btcPerDay(inp.hashrateTHs, net);
   const revenuePerDay = btc * net.priceUsd * inp.usdRate;
   const costPerDay = inp.powerKw * 24 * inp.electricityPerKwh;
-  const profitPerDay = revenuePerDay - costPerDay;
+  const rentPerDay = Math.max(0, inp.rentPerDay ?? 0);
+  const profitPerDay = revenuePerDay - costPerDay - rentPerDay;
   return {
     btcPerDay: btc,
     revenuePerDay,
     costPerDay,
+    rentPerDay,
     profitPerDay,
     revenuePerMonth: revenuePerDay * 30,
     costPerMonth: costPerDay * 30,
+    rentPerMonth: rentPerDay * 30,
     profitPerMonth: profitPerDay * 30,
     marginPct: revenuePerDay > 0 ? (profitPerDay / revenuePerDay) * 100 : 0,
   };

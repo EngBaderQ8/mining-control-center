@@ -38,6 +38,18 @@ describe("profit calc", () => {
     expect(r.marginPct).toBeCloseTo(100, 3); // no electricity cost => 100% margin
   });
 
+  it("subtracts a fixed rent (per day) from profit, never treating it as negative", () => {
+    const base = { hashrateTHs: 17000, powerKw: 306, electricityPerKwh: 0.05, usdRate: 1 };
+    const noRent = computeProfit(NET, base);
+    const withRent = computeProfit(NET, { ...base, rentPerDay: 100 });
+    expect(withRent.rentPerDay).toBe(100);
+    expect(withRent.rentPerMonth).toBeCloseTo(3000, 6);
+    expect(withRent.profitPerDay).toBeCloseTo(noRent.profitPerDay - 100, 6);
+    expect(withRent.costPerDay).toBeCloseTo(noRent.costPerDay, 6); // electricity unchanged
+    // A negative rent is clamped to 0 (never adds income).
+    expect(computeProfit(NET, { ...base, rentPerDay: -50 }).rentPerDay).toBe(0);
+  });
+
   it("estimates power from hashrate × efficiency", () => {
     expect(powerKwFromHashrate(1000, 18.5)).toBeCloseTo(18.5, 6); // 18.5 J/TH × 1000 TH/s = 18.5 kW
     expect(powerKwFromHashrate(17000)).toBeCloseTo((17000 * 18.5) / 1000, 6);

@@ -511,7 +511,7 @@ export function App(): React.ReactElement {
         <span className="spacer" />
         <LanguageSwitcher />
       </header>
-      <ProfitBar hashrateTHs={summary.totalTHs} />
+      <ProfitBar groups={groups} />
       <div style={{ marginBottom: 14 }}>
         <ProfitGuard
           hashrateTHs={summary.totalTHs}

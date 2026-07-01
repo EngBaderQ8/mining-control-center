@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../ipc";
-import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
+import { computeProfit, powerKwFromHashrate, type NetworkStats, type ProfitResult } from "../../core/profit/calc";
+import type { SiteGroup } from "../state/store";
+import type { Site } from "../../core/model/device";
 import {
   loadProfitSettings,
   saveProfitSettings,
   money,
   FALLBACK_DIFFICULTY,
+  siteElectricity,
+  siteRentMonthly,
   type ProfitSettings,
 } from "../state/profitSettings";
 
 export type { ProfitSettings };
 
-export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.ReactElement {
+const ZERO: ProfitResult = {
+  btcPerDay: 0, revenuePerDay: 0, costPerDay: 0, rentPerDay: 0, profitPerDay: 0,
+  revenuePerMonth: 0, costPerMonth: 0, rentPerMonth: 0, profitPerMonth: 0, marginPct: 0,
+};
+
+export function ProfitBar({ groups }: { groups: SiteGroup[] }): React.ReactElement {
   const [net, setNet] = useState<NetworkStats | null>(null);
   const [settings, setSettings] = useState<ProfitSettings>(loadProfitSettings);
   const [open, setOpen] = useState(false);
@@ -22,8 +31,8 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
       void api.getNetworkStats().then(setNet);
     };
     fetchNet();
-    const t = setInterval(fetchNet, 10 * 60 * 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(fetchNet, 10 * 60 * 1000); // price + difficulty refresh
+    return () => clearInterval(timer);
   }, []);
 
   const save = (s: ProfitSettings): void => {
@@ -32,6 +41,7 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
   };
 
   const priceUsd = settings.manualPriceUsd > 0 ? settings.manualPriceUsd : (net?.priceUsd ?? 0);
+  const liveDifficulty = (net?.difficulty ?? 0) > 0;
   // Fall back to a recent network difficulty when the live fetch is unavailable,
   // so a manually-entered price still produces a number (escape hatch works offline).
   const effectiveNet: NetworkStats = {
@@ -39,16 +49,37 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
     difficulty: net?.difficulty || FALLBACK_DIFFICULTY,
     blockRewardBtc: net?.blockRewardBtc ?? 3.125,
   };
-  const powerKw = powerKwFromHashrate(hashrateTHs, settings.jPerTh);
-  const r = computeProfit(effectiveNet, {
-    hashrateTHs,
-    powerKw,
-    electricityPerKwh: settings.electricityPerKwh,
-    usdRate: settings.usdRate,
-  });
+
+  // Total = sum of per-site results so each site's own electricity price + rent apply.
+  const r: ProfitResult = groups.reduce((acc, g) => {
+    const ths = g.views.reduce((s, v) => s + (v.status?.hashrateTHs ?? 0), 0);
+    const powerKw = powerKwFromHashrate(ths, settings.jPerTh);
+    const x = computeProfit(effectiveNet, {
+      hashrateTHs: ths,
+      powerKw,
+      electricityPerKwh: siteElectricity(settings, g.site.id),
+      usdRate: settings.usdRate,
+      rentPerDay: siteRentMonthly(settings, g.site.id) / 30,
+    });
+    return {
+      btcPerDay: acc.btcPerDay + x.btcPerDay,
+      revenuePerDay: acc.revenuePerDay + x.revenuePerDay,
+      costPerDay: acc.costPerDay + x.costPerDay,
+      rentPerDay: acc.rentPerDay + x.rentPerDay,
+      profitPerDay: acc.profitPerDay + x.profitPerDay,
+      revenuePerMonth: acc.revenuePerMonth + x.revenuePerMonth,
+      costPerMonth: acc.costPerMonth + x.costPerMonth,
+      rentPerMonth: acc.rentPerMonth + x.rentPerMonth,
+      profitPerMonth: acc.profitPerMonth + x.profitPerMonth,
+      marginPct: 0,
+    };
+  }, { ...ZERO });
+  r.marginPct = r.revenuePerDay > 0 ? (r.profitPerDay / r.revenuePerDay) * 100 : 0;
+
   const ready = priceUsd > 0 && effectiveNet.difficulty > 0;
   const cur = settings.currency;
   const profitColor = r.profitPerDay >= 0 ? "var(--green)" : "var(--red)";
+  const diffT = (effectiveNet.difficulty / 1e12).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
   return (
     <div className="profitbar">
@@ -75,6 +106,12 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
             <b style={{ color: "var(--amber)" }}>{money(r.costPerDay, cur)}</b>
             <span>{t("الكهرباء/اليوم")}</span>
           </div>
+          {r.rentPerMonth > 0 && (
+            <div className="profit-stat">
+              <b style={{ color: "var(--amber)" }}>{money(r.rentPerMonth, cur)}</b>
+              <span>{t("الإيجار/الشهر")}</span>
+            </div>
+          )}
           <div className="profit-stat">
             <b style={{ color: profitColor }}>{money(r.profitPerMonth, cur)}</b>
             <span>{t("صافي / الشهر")}</span>
@@ -87,23 +124,36 @@ export function ProfitBar({ hashrateTHs }: { hashrateTHs: number }): React.React
             <b>₿ {r.btcPerDay.toFixed(5)}</b>
             <span>{t("BTC/يوم · ${price}", { price: priceUsd.toLocaleString() })}</span>
           </div>
+          <div className="profit-stat" title={liveDifficulty ? t("صعوبة الشبكة المباشرة") : t("قيمة تقديرية — تعذّر الجلب المباشر")}>
+            <b style={{ color: liveDifficulty ? "var(--green)" : "var(--amber)" }}>{diffT}T</b>
+            <span>{liveDifficulty ? t("صعوبة الشبكة 🟢") : t("صعوبة (تقديري)")}</span>
+          </div>
         </>
       )}
       <button className="btn" style={{ marginInlineStart: "auto" }} onClick={() => setOpen(true)}>
         {t("⚙ إعدادات الأرباح")}
       </button>
 
-      {open && <ProfitSettingsDialog settings={settings} onSave={save} onClose={() => setOpen(false)} />}
+      {open && (
+        <ProfitSettingsDialog
+          settings={settings}
+          sites={groups.map((g) => g.site)}
+          onSave={save}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 function ProfitSettingsDialog({
   settings,
+  sites,
   onSave,
   onClose,
 }: {
   settings: ProfitSettings;
+  sites: Site[];
   onSave: (s: ProfitSettings) => void;
   onClose: () => void;
 }): React.ReactElement {
@@ -112,9 +162,15 @@ function ProfitSettingsDialog({
     const n = parseFloat(v);
     return Number.isFinite(n) && n >= 0 ? n : prev; // reject negatives
   };
+  // Update one site's rent/electricity map entry (0/empty clears it).
+  const setSiteRent = (siteId: string, v: string): void =>
+    setS({ ...s, rentPerMonthBySite: { ...s.rentPerMonthBySite, [siteId]: num(v, s.rentPerMonthBySite?.[siteId] ?? 0) } });
+  const setSiteElec = (siteId: string, v: string): void =>
+    setS({ ...s, electricityBySite: { ...s.electricityBySite, [siteId]: num(v, s.electricityBySite?.[siteId] ?? 0) } });
+
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+      <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480, maxHeight: "88vh", overflow: "auto" }}>
         <h3>{t("إعدادات حساب الأرباح")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
           {t("عشان نحسب أرباحك بدقة، عبّي بيانات الكهرباء والعملة.")}
@@ -134,7 +190,7 @@ function ProfitSettingsDialog({
           />
         </div>
         <div className="field">
-          <label>{t("سعر الكهرباء لكل كيلوواط/ساعة (بعملتك)")}</label>
+          <label>{t("سعر الكهرباء الافتراضي لكل كيلوواط/ساعة (بعملتك)")}</label>
           <input
             className="input"
             type="number"
@@ -162,6 +218,53 @@ function ProfitSettingsDialog({
             onChange={(e) => setS({ ...s, manualPriceUsd: num(e.target.value, s.manualPriceUsd) })}
           />
         </div>
+
+        {sites.length > 0 && (
+          <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{t("لكل موقع: الإيجار + سعر الكهرباء")}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
+              {t("الإيجار شهري (0 لو ما فيه). سعر الكهرباء اتركه 0 عشان يستخدم الافتراضي فوق.")}
+            </div>
+            <table className="tbl" style={{ fontSize: 12.5 }}>
+              <thead>
+                <tr>
+                  <th>{t("الموقع")}</th>
+                  <th>{t("الإيجار/الشهر")}</th>
+                  <th>{t("الكهرباء/kWh")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sites.map((site) => (
+                  <tr key={site.id}>
+                    <td><b>{site.name}</b></td>
+                    <td>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        style={{ width: 110 }}
+                        value={s.rentPerMonthBySite?.[site.id] ?? 0}
+                        onChange={(e) => setSiteRent(site.id, e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        style={{ width: 110 }}
+                        placeholder={String(s.electricityPerKwh)}
+                        value={s.electricityBySite?.[site.id] ?? 0}
+                        onChange={(e) => setSiteElec(site.id, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="actions">
           <button
