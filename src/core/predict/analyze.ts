@@ -1,8 +1,18 @@
+/** One hashboard's vitals at a point in time — captured each poll from
+ *  status.health.boards so per-board degradation can be trended over days. */
+export interface BoardSnap {
+  b: number; // board/chain number
+  chips: number; // active chips on this chain
+  ghs: number; // this board's hashrate (GH/s)
+  hwErr: number; // CUMULATIVE lifetime HW errors (resets to 0 on reboot)
+}
+
 export interface DeviceSample {
   t: number; // epoch ms
   temp: number; // °C
   ths: number; // TH/s
   online: boolean;
+  boards?: BoardSnap[]; // per-board vitals when the poll carried health (optional)
 }
 
 export type RiskLevel = "warn" | "high";

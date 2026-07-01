@@ -26,11 +26,13 @@ export function recordSamples(
     const arr = next[s.deviceId] ?? [];
     const last = arr[arr.length - 1];
     if (last && now - last.t < opts.minIntervalMs) continue;
+    const boards = s.health?.boards?.map((h) => ({ b: h.board, chips: h.chips, ghs: h.rateGhs, hwErr: h.hwErrors }));
     const sample: DeviceSample = {
       t: now,
       temp: s.maxTempC,
       ths: s.hashrateTHs,
       online: s.state !== "offline",
+      ...(boards && boards.length > 0 ? { boards } : {}),
     };
     const appended = arr.concat(sample);
     next[s.deviceId] = appended.length > opts.maxPerDevice ? appended.slice(appended.length - opts.maxPerDevice) : appended;

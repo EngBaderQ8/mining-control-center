@@ -402,4 +402,14 @@ export const EN: Record<string, string> = {
   // —— Command labels (shown in confirmations/toasts via t(CMD_LABEL[cmd])) ——
   "إعادة تشغيل الجهاز (Reboot)": "Restart device (Reboot)",
   "تغيير وضع الطاقة": "Change power mode",
+  // —— Board degradation prediction ——
+  "يحلّل اتجاهات الحرارة والهاش وصحة اللوحات لكل جهاز ويحذّرك قبل العطل. يحتاج البرنامج يشتغل فترة لجمع البيانات.":
+    "Analyzes temperature, hashrate, and board-health trends per device and warns you before a failure. The app needs to run for a while to gather data.",
+  "لوحة {b}: توقّفت (كانت ~{from} شبّة)": "Board {b}: stopped (was ~{from} chips)",
+  "لوحة {b}: تفقد شبّات (من {from} إلى {to})": "Board {b}: losing chips ({from} → {to})",
+  "لوحة {b}: هاش اللوحة ينزل (من {from} إلى {to} GH)": "Board {b}: hashrate declining ({from} → {to} GH)",
+  "لوحة {b}: أخطاء الهاردوير تتصاعد (~{perDay}/يوم)": "Board {b}: HW errors climbing (~{perDay}/day)",
+  "لوحة {b}: تظهر وتختفي ({count} مرات)": "Board {b}: dropping in and out ({count} times)",
+  "↳ متوقّع تعطل اللوحة خلال ~{days} يوم": "↳ board likely to fail in ~{days} days",
+  "↳ اللوحة قد تتعطّل قريباً": "↳ board may fail soon",
 };
