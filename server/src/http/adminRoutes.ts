@@ -803,7 +803,7 @@ tr:last-child td{border-bottom:0}
 </div>
 <script>
 var TOKEN=localStorage.getItem('mcc_admin_token')||'';
-var ACCTS=[],DEVS=[],DDEVS=[],SORT={k:'hashrate',d:-1},OPS_HEALTH={};
+var ACCTS=[],DEVS=[],DDEVS=[],AGENTS=[],SORT={k:'hashrate',d:-1},OPS_HEALTH={};
 var FWMAP={},FWBATCH=null,FWPOLL=null,FWID='',FWMODEL='',FWDEV='',FWDEVMODEL='';
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function n(v){return (Number(v)||0).toLocaleString('en-US',{maximumFractionDigits:0});}
@@ -861,6 +861,8 @@ function chart(){api('/admin/api/history').then(function(r){return r.json();}).t
   el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:150px"><polyline fill="none" stroke="#5b7cfa" stroke-width="2" points="'+pts+'"/><polyline fill="rgba(91,124,250,.12)" stroke="none" points="'+pts+' '+(W-p)+','+(H-p)+' '+p+','+(H-p)+'"/></svg><div class="muted" style="font-size:11px;text-align:center">الأحدث ← '+n(ys[ys.length-1])+' TH/s</div>';
 });}
 function sortBy(k){if(SORT.k===k)SORT.d=-SORT.d;else{SORT.k=k;SORT.d=-1;}renderAccts();}
+function acctEmail(uid){for(var i=0;i<ACCTS.length;i++)if(ACCTS[i].id===uid)return ACCTS[i].email;return '؟';}
+function agentCount(uid){var c=0;for(var i=0;i<AGENTS.length;i++)if(AGENTS[i].userId===uid)c++;return c;}
 function accounts(){api('/admin/api/accounts').then(function(r){return r.json();}).then(function(d){ACCTS=d.accounts||[];renderAccts();});}
 function renderAccts(){var q=(document.getElementById('acsearch').value||'').toLowerCase(),f=document.getElementById('acfilter').value;
   var list=ACCTS.filter(function(a){if(f==='active'&&a.suspended)return false;if(f==='suspended'&&!a.suspended)return false;return (a.email||'').toLowerCase().indexOf(q)>=0;});
@@ -870,7 +872,7 @@ function renderAccts(){var q=(document.getElementById('acsearch').value||'').toL
   var rows=list.map(function(a){var st=a.suspended?'<span class="pill off">موقوف</span>':'<span class="pill on">نشط</span>';
     var h=OPS_HEALTH[a.id]||{},hs=(h.score==null?100:h.score),hc=hs>=85?'var(--grn)':(hs>=60?'var(--amb)':'var(--red)');
     var hcell='<td><b style="color:'+hc+'">'+hs+'</b>'+(h.under?' <span class="muted" style="font-size:11px">📉'+h.under+'</span>':'')+(h.hot?' <span class="amb" style="font-size:11px">🌡️'+h.hot+'</span>':'')+'</td>';
-    return '<tr><td>'+esc(a.email)+'</td><td>'+a.sites+'</td><td>'+a.devices+'</td><td class="grn">'+a.online+'</td><td>'+n(a.hashrate)+' TH</td>'+hcell+'<td class="muted">'+ago(a.lastSeen)+'</td><td>'+st+'</td><td><div class="row">'+
+    return '<tr><td>'+esc(a.email)+'</td><td>'+a.sites+'</td><td>'+a.devices+'</td><td class="grn">'+a.online+'</td><td>'+agentCount(a.id)+'</td><td>'+n(a.hashrate)+' TH</td>'+hcell+'<td class="muted">'+ago(a.lastSeen)+'</td><td>'+st+'</td><td><div class="row">'+
       '<button class="btn sm" onclick="detail(\\''+a.id+'\\')">تفصيل</button>'+
       '<button class="btn sm" onclick="susp(\\''+a.id+'\\','+(a.suspended?0:1)+')">'+(a.suspended?'تفعيل':'إيقاف')+'</button>'+
       '<button class="btn sm" onclick="resetpw(\\''+a.id+'\\')">باسورد</button>'+
@@ -878,7 +880,7 @@ function renderAccts(){var q=(document.getElementById('acsearch').value||'').toL
       '<button class="btn sm danger" onclick="killsw(\\''+a.id+'\\',\\'stop\\')" title="إيقاف تعدين كل أجهزة هذا الحساب">⛔ أطفِ</button>'+
       '<button class="btn sm" onclick="killsw(\\''+a.id+'\\',\\'start\\')" title="تشغيل تعدين كل أجهزة هذا الحساب">▶️ شغّل</button>'+
       '<button class="btn sm danger" onclick="del(\\''+a.id+'\\')">حذف</button></div></td></tr>';}).join('');
-  document.getElementById('accounts').innerHTML='<table><thead><tr>'+thh('email','البريد')+thh('sites','المواقع')+thh('devices','الأجهزة')+thh('online','أونلاين')+thh('hashrate','الهاش')+thh('health','الصحة')+thh('lastSeen','آخر ظهور')+thh('suspended','الحالة')+'<th>إجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="9" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
+  document.getElementById('accounts').innerHTML='<table><thead><tr>'+thh('email','البريد')+thh('sites','المواقع')+thh('devices','الأجهزة')+thh('online','أونلاين')+'<th>وكلاء</th>'+thh('hashrate','الهاش')+thh('health','الصحة')+thh('lastSeen','آخر ظهور')+thh('suspended','الحالة')+'<th>إجراءات</th></tr></thead><tbody>'+(rows||'<tr><td colspan="10" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
 function devices(){api('/admin/api/devices').then(function(r){return r.json();}).then(function(d){DEVS=d.devices||[];renderDevices();});}
 function renderDevices(){var q=(document.getElementById('dvsearch').value||'').toLowerCase();if(!q){document.getElementById('devices').innerHTML='<div class="muted" style="font-size:12.5px">اكتب للبحث في كل أجهزة العملاء…</div>';return;}
   var list=DEVS.filter(function(d){return ((d.name||'')+(d.host||'')+(d.worker||'')+(d.email||'')+(d.firmware||'')).toLowerCase().indexOf(q)>=0;}).slice(0,200);
@@ -890,7 +892,7 @@ function renderDevices(){var q=(document.getElementById('dvsearch').value||'').t
       '<button class="btn sm" style="border-color:var(--acc);color:var(--acc)" onclick="flashDevice(\\''+d.id+'\\')" title="فلاش فِرموير لهذا الجهاز">🔩</button></div>';
     return '<tr><td>'+esc(d.name)+'</td><td class="muted">'+esc(d.email)+'</td><td class="muted">'+esc(d.host)+'</td><td>'+esc(d.firmware)+'</td><td>'+s+'</td><td>'+(d.hashrateTHs?n1(d.hashrateTHs)+' TH':'—')+'</td><td>'+(d.maxTempC?Math.round(d.maxTempC)+'°':'—')+'</td><td>'+ctl+'</td></tr>';}).join('');
   document.getElementById('devices').innerHTML='<table><thead><tr><th>الجهاز</th><th>العميل</th><th>العنوان</th><th>الفرمور</th><th>الحالة</th><th>الهاش</th><th>الحرارة</th><th>تحكّم</th></tr></thead><tbody>'+(rows||'<tr><td colspan="8" class="muted">لا نتائج</td></tr>')+'</tbody></table>';}
-function agents(){api('/admin/api/agents').then(function(r){return r.json();}).then(function(d){var rows=(d.agents||[]).map(function(a){var fresh=a.lastSeenAt&&(Date.now()-a.lastSeenAt)<120000;return '<tr><td>'+esc(a.name)+'</td><td><span class="pill" style="background:rgba(91,124,250,.15);color:var(--acc)">'+esc(a.version||'؟')+'</span></td><td>'+(fresh?'<span class="pill on">متصل</span>':'<span class="pill off">منقطع</span>')+'</td><td class="muted">'+ago(a.lastSeenAt)+'</td></tr>';}).join('');document.getElementById('agents').innerHTML='<table><thead><tr><th>اسم الوكيل</th><th>النسخة</th><th>الحالة</th><th>آخر ظهور</th></tr></thead><tbody>'+(rows||'<tr><td colspan="4" class="muted">لا وكلاء</td></tr>')+'</tbody></table>';});}
+function agents(){api('/admin/api/agents').then(function(r){return r.json();}).then(function(d){AGENTS=d.agents||[];var rows=AGENTS.map(function(a){var fresh=a.lastSeenAt&&(Date.now()-a.lastSeenAt)<120000;return '<tr><td>'+esc(a.name)+'</td><td class="muted">'+esc(acctEmail(a.userId))+'</td><td><span class="pill" style="background:rgba(91,124,250,.15);color:var(--acc)">'+esc(a.version||'؟')+'</span></td><td>'+(fresh?'<span class="pill on">متصل</span>':'<span class="pill off">منقطع</span>')+'</td><td class="muted">'+ago(a.lastSeenAt)+'</td></tr>';}).join('');document.getElementById('agents').innerHTML='<table><thead><tr><th>اسم الوكيل</th><th>الحساب (البريد)</th><th>النسخة</th><th>الحالة</th><th>آخر ظهور</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5" class="muted">لا وكلاء</td></tr>')+'</tbody></table>';if(ACCTS.length)renderAccts();});}
 function pushAll(){if(!confirm('إرسال أمر تحديث فوري لكل الأجهزة المتصلة؟'))return;api('/admin/api/push-update',{method:'POST',body:JSON.stringify({})}).then(function(r){return r.json();}).then(function(j){alert('تم إرسال أمر التحديث لـ '+(j.notified||0)+' جهاز متصل.');});}
 function pushUser(id){var a=acctById(id),email=a?a.email:'';if(!confirm('إرسال أمر تحديث لأجهزة «'+email+'»؟'))return;api('/admin/api/push-update',{method:'POST',body:JSON.stringify({userId:id})}).then(function(r){return r.json();}).then(function(j){alert('تم الإرسال لـ '+(j.notified||0)+' جهاز.');});}
 function acctById(id){for(var i=0;i<ACCTS.length;i++)if(ACCTS[i].id===id)return ACCTS[i];return null;}
