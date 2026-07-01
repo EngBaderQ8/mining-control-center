@@ -11,6 +11,7 @@ export function LoginScreen({ onAuthed }: { onAuthed: () => void }): React.React
   const [busy, setBusy] = useState(false);
 
   async function submit(): Promise<void> {
+    if (busy) return;
     setError(null);
     if (!email.trim() || !password) {
       setError(t("عبّئ كل الحقول"));
@@ -36,11 +37,27 @@ export function LoginScreen({ onAuthed }: { onAuthed: () => void }): React.React
 
         <div className="field">
           <label>{t("البريد")}</label>
-          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input
+            className="input"
+            value={email}
+            autoFocus
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
+          />
         </div>
         <div className="field">
           <label>{t("كلمة المرور")}</label>
-          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            className="input"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
+          />
         </div>
 
         {error && <div style={{ color: "var(--red)", fontSize: 13, marginBottom: 8 }}>{error}</div>}
