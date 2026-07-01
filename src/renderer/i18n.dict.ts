@@ -408,7 +408,6 @@ export const EN: Record<string, string> = {
   "لوحة {b}: توقّفت (كانت ~{from} شبّة)": "Board {b}: stopped (was ~{from} chips)",
   "لوحة {b}: تفقد شبّات (من {from} إلى {to})": "Board {b}: losing chips ({from} → {to})",
   "لوحة {b}: هاش اللوحة ينزل (من {from} إلى {to} GH)": "Board {b}: hashrate declining ({from} → {to} GH)",
-  "لوحة {b}: أخطاء الهاردوير تتصاعد (~{perDay}/يوم)": "Board {b}: HW errors climbing (~{perDay}/day)",
   "لوحة {b}: تظهر وتختفي ({count} مرات)": "Board {b}: dropping in and out ({count} times)",
   "↳ متوقّع تعطل اللوحة خلال ~{days} يوم": "↳ board likely to fail in ~{days} days",
   "↳ اللوحة قد تتعطّل قريباً": "↳ board may fail soon",

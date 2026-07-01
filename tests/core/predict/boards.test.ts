@@ -54,17 +54,12 @@ describe("analyzeBoards", () => {
     expect(res[0]!.severity).toBe("warn"); // 15000 is above the 0.65×baseline "high" line
   });
 
-  it("flags an accelerating HW-error rate (ignoring reboot resets)", () => {
-    const hw = [100, 110, 120, 130, 140, 340, 640, 1000];
+  it("ignores raw HW-error counts entirely (steady chips+hashrate → healthy)", () => {
+    // Even a fast-climbing HW-error counter is NOT a fault: healthy high-TH miners log
+    // tens of thousands/day. Chips and hashrate are steady → no warning.
+    const hw = [1000, 12000, 24000, 40000, 60000, 90000, 130000, 180000];
     const res = analyzeBoards(mk(hw.map((e) => [b(0, 76, 20000, e)])));
-    expect(res).toHaveLength(1);
-    expect(res[0]!.reasons.some((r) => r.code === "hwErrorsClimbing")).toBe(true);
-  });
-
-  it("does not flag HW errors when a reboot resets the counter", () => {
-    const hw = [900, 1000, 1100, 1200, 5, 10, 15, 20]; // reset at index 4
-    const res = analyzeBoards(mk(hw.map((e) => [b(0, 76, 20000, e)])));
-    expect(res.some((p) => p.reasons.some((r) => r.code === "hwErrorsClimbing"))).toBe(false);
+    expect(res).toEqual([]);
   });
 
   it("flags a board that dropped out and stays gone (high)", () => {

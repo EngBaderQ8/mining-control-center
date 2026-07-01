@@ -24,8 +24,6 @@ function boardReasonText(r: BoardReason): string {
         : t("لوحة {b}: تفقد شبّات (من {from} إلى {to})", r.values);
     case "boardRateDecline":
       return t("لوحة {b}: هاش اللوحة ينزل (من {from} إلى {to} GH)", r.values);
-    case "hwErrorsClimbing":
-      return t("لوحة {b}: أخطاء الهاردوير تتصاعد (~{perDay}/يوم)", r.values);
     case "boardIntermittent":
       return t("لوحة {b}: تظهر وتختفي ({count} مرات)", r.values);
   }

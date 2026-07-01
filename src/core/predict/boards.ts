@@ -1,6 +1,6 @@
 import type { DeviceSample, BoardSnap, RiskLevel } from "./analyze";
 
-export type BoardReasonCode = "chipsLost" | "boardRateDecline" | "hwErrorsClimbing" | "boardIntermittent";
+export type BoardReasonCode = "chipsLost" | "boardRateDecline" | "boardIntermittent";
 
 export interface BoardReason {
   code: BoardReasonCode;
@@ -82,53 +82,36 @@ export function analyzeBoards(samples: DeviceSample[]): BoardPrediction[] {
       reasons.push({ code: "chipsLost", values: { b: bn, from: Math.round(baseChips), to: 0 } });
       high = true;
     } else {
-      const cur = present[present.length - 1]!.snap;
+      // Use a recent MEDIAN (not a single sample) as "current" so a one-off dip during a
+      // reboot or a missed poll doesn't masquerade as degradation.
+      const recent = present.slice(-Math.min(3, present.length));
+      const curChips = median(recent.map((p) => p.snap.chips));
+      const curGhs = median(recent.map((p) => p.snap.ghs));
 
-      // Chips silently dying off.
-      if (baseChips > 0 && cur.chips < baseChips) {
-        const lostFrac = (baseChips - cur.chips) / baseChips;
+      // Chips silently dying off — an unambiguous sign of a failing board.
+      if (baseChips > 0 && curChips < baseChips) {
+        const lostFrac = (baseChips - curChips) / baseChips;
         if (lostFrac >= 0.08) {
-          reasons.push({ code: "chipsLost", values: { b: bn, from: Math.round(baseChips), to: cur.chips } });
+          reasons.push({ code: "chipsLost", values: { b: bn, from: Math.round(baseChips), to: Math.round(curChips) } });
           if (lostFrac >= 0.25) high = true;
         }
       }
 
       // This board's hashrate sliding vs its own baseline (+ ETA to half-dead).
-      if (baseGhs > 0 && cur.ghs < baseGhs * 0.85) {
-        reasons.push({ code: "boardRateDecline", values: { b: bn, from: Math.round(baseGhs), to: Math.round(cur.ghs) } });
-        if (cur.ghs < baseGhs * 0.65) high = true;
+      if (baseGhs > 0 && curGhs < baseGhs * 0.85) {
+        reasons.push({ code: "boardRateDecline", values: { b: bn, from: Math.round(baseGhs), to: Math.round(curGhs) } });
+        if (curGhs < baseGhs * 0.65) high = true;
         const slope = slopePerHour(present.map((p) => ({ t: p.t, y: p.snap.ghs })));
         if (slope < 0) {
           const dead = baseGhs * 0.5;
-          etaDays = cur.ghs > dead ? Math.max(1, Math.round((cur.ghs - dead) / -slope / 24)) : 0;
+          etaDays = curGhs > dead ? Math.max(1, Math.round((curGhs - dead) / -slope / 24)) : 0;
         }
       }
 
-      // HW-error rate accelerating (cumulative counter; ignore reboot resets).
-      let accEarly = 0;
-      let hrsEarly = 0;
-      let accLate = 0;
-      let hrsLate = 0;
-      const mid = Math.floor(present.length / 2);
-      for (let i = 1; i < present.length; i++) {
-        const d = present[i]!.snap.hwErr - present[i - 1]!.snap.hwErr;
-        const dh = (present[i]!.t - present[i - 1]!.t) / 3_600_000;
-        if (d < 0 || dh <= 0) continue; // reboot reset or zero interval
-        if (i <= mid) {
-          accEarly += d;
-          hrsEarly += dh;
-        } else {
-          accLate += d;
-          hrsLate += dh;
-        }
-      }
-      const rateEarly = hrsEarly > 0 ? accEarly / hrsEarly : 0;
-      const rateLate = hrsLate > 0 ? accLate / hrsLate : 0;
-      const perDayLate = rateLate * 24;
-      if (perDayLate >= 500 && rateLate >= rateEarly * 2 && accLate >= 200) {
-        reasons.push({ code: "hwErrorsClimbing", values: { b: bn, perDay: Math.round(perDayLate) } });
-        if (perDayLate >= 5000) high = true;
-      }
+      // NOTE: raw HW-error counts are deliberately NOT a signal. Healthy high-hashrate
+      // miners normally log tens of thousands of HW errors/day; the only meaningful measure
+      // is the error RATE vs work done, which isn't available per board. Flagging the raw
+      // count produced false alarms, so we rely on chip-loss + hashrate-decline instead.
     }
 
     // Board that keeps appearing/disappearing (loose riser/PSU).
