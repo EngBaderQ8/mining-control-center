@@ -3,6 +3,13 @@ productName: Mining Control Center
 directories:
   output: release
   buildResources: build
+# Ship only the UI languages we use — drops ~46MB of unused Chromium locale .pak
+# files. Does NOT affect the app's own Arabic UI (that lives in the JS bundle).
+electronLanguages:
+  - en-US
+  - ar
+# Max LZMA compression on the installer (smaller download; slower build).
+compression: maximum
 # Auto-update source: the public releases repo.
 publish:
   provider: github

@@ -361,4 +361,45 @@ export const EN: Record<string, string> = {
   "تسجيل": "Register",
   "ما عندي حساب — تسجيل": "I don't have an account — Register",
   "عندي حساب — دخول": "I have an account — Log in",
+  // —— Profit: per-site rent/electricity + live difficulty ——
+  "الإيجار/الشهر": "Rent/month",
+  "سعر الكهرباء الافتراضي لكل كيلوواط/ساعة (بعملتك)": "Default electricity price per kWh (in your currency)",
+  "⚡ كفاءة الأجهزة تُقرأ تلقائياً من موديل كل جهاز — ما تحتاج تدخلها. الطاقة تُحسب لكل جهاز حسب موديله.":
+    "⚡ Device efficiency is read automatically from each device's model — no need to enter it. Power is computed per device by its model.",
+  "لكل موقع: الإيجار + سعر الكهرباء": "Per site: rent + electricity price",
+  "الإيجار شهري (0 لو ما فيه). سعر الكهرباء اتركه 0 عشان يستخدم الافتراضي فوق.":
+    "Rent is monthly (0 if none). Leave electricity at 0 to use the default above.",
+  "الكهرباء/kWh": "Electricity/kWh",
+  "صعوبة الشبكة المباشرة": "Live network difficulty",
+  "قيمة تقديرية — تعذّر الجلب المباشر": "Estimated value — live fetch failed",
+  "صعوبة الشبكة 🟢": "Network difficulty 🟢",
+  "صعوبة (تقديري)": "Difficulty (estimated)",
+  // —— Remote scan / test-IP / remove-absent ——
+  "فحص أجهزة «{name}» وحذف اللي ما يردّ عليها ماينر فعلاً (الأجهزة المتّصلة تبقى). الأجهزة المطفيّة تماماً بتنحذف أيضاً — متأكد؟":
+    "Scan «{name}» and remove devices no real miner answers on (connected devices stay). Fully powered-off devices will be removed too — are you sure?",
+  "… جاري فحص الأجهزة": "… Scanning devices",
+  "⚠️ ما قدر يوصل أي جهاز في الموقع — تأكد من شبكة لابتوب الموقع. لم يُحذف شيء.":
+    "⚠️ Couldn't reach any device at the site — check the site laptop's network. Nothing was removed.",
+  "تم حذف {removed} جهاز غير موجود · بقي {kept} متّصل": "Removed {removed} missing device(s) · {kept} still connected",
+  "اختر لابتوب المزرعة اللي يفحص شبكته — يشتغل من هنا بدون ما تدخل عليه.":
+    "Pick the farm laptop to scan its network — runs from here without logging into it.",
+  "لابتوب المزرعة (يفحص شبكته)": "Farm laptop (scans its network)",
+  "✓ {ip}: متصل · فرمور {fw} · {state} · {hash} TH · حرارة {temp}° · لوحات {boards}":
+    "✓ {ip}: connected · firmware {fw} · {state} · {hash} TH · temp {temp}° · boards {boards}",
+  "❌ {ip}: ما فيه ماينر يردّ على 4028. {err}": "❌ {ip}: no miner answering on 4028. {err}",
+  "يفحص الأجهزة ويحذف اللي ما يردّ عليها ماينر فعلاً": "Scans devices and removes those no real miner answers on",
+  "🧹 إزالة غير الموجودة": "🧹 Remove missing",
+  "🔎 اختبار IP في هذا الموقع:": "🔎 Test an IP at this site:",
+  "مثال: 192.168.0.50": "Example: 192.168.0.50",
+  "…جاري": "…working",
+  // —— Auto-discovery setting ——
+  "الاكتشاف التلقائي للأجهزة": "Automatic device discovery",
+  "يفحص شبكة كل موقع كل ١٠ دقائق ويضيف الماينرات الجديدة تلقائياً. ⚠️ على شبكات DHCP قد يضيف نسخاً مكرّرة لو تغيّر IP الجهاز — خلّه مطفياً وأضِف الأجهزة يدوياً بزر «فحص»، أو فعّله بعد ما تثبّت IP ثابت لكل ماينر.":
+    "Scans each site's network every 10 minutes and adds new miners automatically. ⚠️ On DHCP networks it may add duplicates if a device's IP changes — keep it off and add devices manually with the «Scan» button, or enable it after you set a static IP for each miner.",
+  // —— Diagnostics raw data ——
+  "بيانات الجهاز الخام (انسخها وأرسلها للدعم لو استمرّت المشكلة):":
+    "Raw device data (copy and send to support if the problem persists):",
+  // —— Command labels (shown in confirmations/toasts via t(CMD_LABEL[cmd])) ——
+  "إعادة تشغيل الجهاز (Reboot)": "Restart device (Reboot)",
+  "تغيير وضع الطاقة": "Change power mode",
 };

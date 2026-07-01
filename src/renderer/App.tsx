@@ -44,7 +44,7 @@ import { AboutDialog } from "./components/AboutDialog";
 import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
-import { t } from "./i18n";
+import { t, useLang } from "./i18n";
 import type { UpdateStatus, AgentInfo } from "../shared/api";
 
 const COLLAPSE_KEY = "mcc.collapsedSites";
@@ -112,6 +112,7 @@ function VersionBadge({
 }
 
 export function App(): React.ReactElement {
+  useLang(); // re-render the WHOLE tree the instant language changes (no memo → cascades fully)
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
