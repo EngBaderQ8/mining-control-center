@@ -53,4 +53,5 @@ export function registerIpc(bridge: ServerBridge): void {
   ipcMain.handle(CH.siteRename, (_e, siteId: string, name: string) => {
     bridge.renameSite(siteId, name);
   });
+  ipcMain.handle(CH.siteCleanupAbsent, (_e, siteId: string) => bridge.removeAbsentDevices(siteId));
 }

@@ -97,6 +97,7 @@ export const CH = {
   siteAdd: "site:add",
   siteDelete: "site:delete",
   siteRename: "site:rename",
+  siteCleanupAbsent: "site:cleanupabsent",
   // profit / network
   networkStats: "profit:netstats",
   // telegram alerts
@@ -145,6 +146,12 @@ export interface Api {
   deleteDevice(deviceId: string): Promise<void>;
   deleteSite(siteId: string): Promise<void>;
   renameSite(siteId: string, name: string): Promise<void>;
+  /** Probe every device in a site and remove ONLY those whose IP has no miner
+   *  responding (genuine phantoms); present miners are kept. No-op if the whole site
+   *  is unreachable (likely a network outage, not absent devices). */
+  removeAbsentDevices(
+    siteId: string,
+  ): Promise<{ removed: number; kept: number; siteUnreachable: boolean }>;
   setCredentials(deviceIds: string[], secret: string): Promise<void>;
   scanNetwork(
     siteName: string,

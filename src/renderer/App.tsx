@@ -418,6 +418,29 @@ export function App(): React.ReactElement {
     [reload, showToast],
   );
 
+  const onCleanupSite = useCallback(
+    async (siteId: string, siteName: string) => {
+      if (
+        !window.confirm(
+          t(
+            "فحص أجهزة «{name}» وحذف اللي ما يردّ عليها ماينر فعلاً (الأجهزة المتّصلة تبقى). الأجهزة المطفيّة تماماً بتنحذف أيضاً — متأكد؟",
+            { name: siteName },
+          ),
+        )
+      )
+        return;
+      showToast(t("… جاري فحص الأجهزة"));
+      const r = await api.removeAbsentDevices(siteId);
+      if (r.siteUnreachable) {
+        showToast(t("⚠️ ما قدر يوصل أي جهاز في الموقع — تأكد من شبكة لابتوب الموقع. لم يُحذف شيء."));
+        return;
+      }
+      await reload();
+      showToast(t("تم حذف {removed} جهاز غير موجود · بقي {kept} متّصل", { removed: r.removed, kept: r.kept }));
+    },
+    [reload, showToast],
+  );
+
   const onAddDevice = useCallback(
     async (p: NewDevicePayload) => {
       let createdSiteId: string | null = null;
@@ -618,6 +641,7 @@ export function App(): React.ReactElement {
                 onCommand={onCommand}
                 onDeleteSite={onDeleteSite}
                 onRenameSite={onRenameSite}
+                onCleanupSite={onCleanupSite}
                 onDeleteDevice={onDeleteDevice}
                 onDiagnose={setDiagDevice}
               />

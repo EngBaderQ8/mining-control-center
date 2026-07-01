@@ -16,6 +16,7 @@ interface Props {
   onCommand: (id: string, cmd: ControlCommand) => void;
   onDeleteSite: (siteId: string, siteName: string) => void;
   onRenameSite: (siteId: string, newName: string) => void;
+  onCleanupSite: (siteId: string, siteName: string) => void;
   onDeleteDevice: (deviceId: string) => void;
   onDiagnose: (device: import("../../core/model/device").Device) => void;
 }
@@ -32,6 +33,7 @@ export function SiteSection({
   onCommand,
   onDeleteSite,
   onRenameSite,
+  onCleanupSite,
   onDeleteDevice,
   onDiagnose,
 }: Props): React.ReactElement {
@@ -107,6 +109,15 @@ export function SiteSection({
             <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
               {t("تحديد كل الموقع")}
             </button>
+            {offline > 0 && (
+              <button
+                className="btn"
+                title={t("يفحص الأجهزة ويحذف اللي ما يردّ عليها ماينر فعلاً")}
+                onClick={() => onCleanupSite(site.id, site.name)}
+              >
+                {t("🧹 إزالة غير الموجودة")}
+              </button>
+            )}
             <button className="btn stop" onClick={() => onDeleteSite(site.id, site.name)}>
               {t("🗑 حذف الموقع")}
             </button>

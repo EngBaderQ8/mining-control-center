@@ -280,6 +280,51 @@ export class ServerBridge {
     if (this.connected) this.client.send({ type: "site.delete", siteId });
   }
 
+  /** Is a live miner reachable at this host right now? (Stops at the first marker.) */
+  private async probePresent(host: string, firmware: Firmware): Promise<boolean> {
+    const cmds = firmware === "whatsminer" ? ["get_version", "summary", "version"] : ["version", "summary"];
+    for (let p = 0; p < cmds.length; p++) {
+      const d = await diagnoseHost(host, 4028, 2800, cmds[p]!);
+      if (detectFromVersion(d.raw)) return true;
+      if (p === 0 && !d.connected) return false; // nothing on 4028 — dead host
+    }
+    return false;
+  }
+
+  /**
+   * Probe every device in a site and remove ONLY those whose IP has NO miner responding
+   * (genuine phantoms — e.g. an old IP left behind by a DHCP change). Miners that respond
+   * are kept (present hardware, even if not hashing). If NOTHING in the site answers it's
+   * treated as a network/agent outage and nothing is removed — so a temporary outage can
+   * never wipe a whole site. User-initiated (the safe complement to MAC auto-recognition).
+   */
+  async removeAbsentDevices(
+    siteId: string,
+  ): Promise<{ removed: number; kept: number; siteUnreachable: boolean }> {
+    const devices = this.deps.repo.listDevices().filter((d) => d.siteId === siteId);
+    if (devices.length === 0) return { removed: 0, kept: 0, siteUnreachable: false };
+    const present = new Set<string>();
+    let i = 0;
+    const worker = async (): Promise<void> => {
+      while (i < devices.length) {
+        const d = devices[i++]!;
+        if (await this.probePresent(d.host, d.firmware)) present.add(d.id);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(8, devices.length) }, worker));
+    // Network-health guard: nothing answered → likely an outage, not absent devices.
+    if (present.size === 0) return { removed: 0, kept: devices.length, siteUnreachable: true };
+    let removed = 0;
+    for (const d of devices) {
+      if (!present.has(d.id)) {
+        this.deleteDevice(d.id);
+        removed++;
+      }
+    }
+    if (removed > 0) this.requestSnapshot();
+    return { removed, kept: present.size, siteUnreachable: false };
+  }
+
   /** Rename a site. Routed through the server so it works from ANY laptop (even one
    *  that only VIEWS this site), updates the shared DB + all viewers live, and reaches
    *  the OWNING agent so it persists the new name (and re-registers it). */

@@ -36,6 +36,7 @@ const api: Api = {
   deleteDevice: (deviceId: string) => ipcRenderer.invoke(CH.deviceDelete, deviceId),
   deleteSite: (siteId: string) => ipcRenderer.invoke(CH.siteDelete, siteId),
   renameSite: (siteId: string, name: string) => ipcRenderer.invoke(CH.siteRename, siteId, name),
+  removeAbsentDevices: (siteId: string) => ipcRenderer.invoke(CH.siteCleanupAbsent, siteId),
   setCredentials: (deviceIds: string[], secret: string) =>
     ipcRenderer.invoke(CH.deviceSetSecret, deviceIds, secret),
 
