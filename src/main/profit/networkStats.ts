@@ -1,31 +1,96 @@
 import { request } from "undici";
+import WebSocket from "ws";
 import type { NetworkStats } from "../../core/profit/calc";
 
-let cache: { at: number; stats: NetworkStats } | null = null;
-const TTL_MS = 10 * 60 * 1000; // refresh at most every 10 minutes
-
 /**
- * Live BTC price (USD) + network difficulty from blockchain.info. Cached for 10
- * minutes; on failure returns the last good value (or zeros, so the UI can show
- * "price unavailable" and let the user enter it manually). Block reward is the
- * post-2024-halving subsidy (3.125 BTC); update at the next halving (~2028).
+ * BTC price + network difficulty.
+ *
+ * PRICE is LIVE: a Binance WebSocket ticker (btcusdt@ticker) pushes the last price
+ * ~once per second, kept in `livePrice`. getNetworkStats() returns it instantly, so the
+ * UI can poll every couple seconds with zero rate-limit risk. If the socket is down
+ * (or blocked), we fall back to a short-cached blockchain.info price.
+ *
+ * DIFFICULTY changes only ~every two weeks, so it's fetched from blockchain.info at most
+ * every 10 minutes. Block reward is the post-2024-halving subsidy (3.125 BTC).
  */
-export async function getNetworkStats(now = Date.now()): Promise<NetworkStats> {
-  if (cache && now - cache.at < TTL_MS) return cache.stats;
+
+let livePrice = 0;
+let livePriceAt = 0;
+let feedStarted = false;
+
+function startPriceFeed(): void {
+  if (feedStarted) return;
+  feedStarted = true;
+  connectPriceFeed();
+}
+
+function connectPriceFeed(): void {
+  let ws: WebSocket;
   try {
-    const [priceRes, diffRes] = await Promise.all([
-      request("https://blockchain.info/ticker", { headersTimeout: 8000, bodyTimeout: 8000 }),
-      request("https://blockchain.info/q/getdifficulty", { headersTimeout: 8000, bodyTimeout: 8000 }),
-    ]);
-    // Drain both bodies before any parse can throw, so neither stream leaks.
-    const [tickerText, diffText] = await Promise.all([priceRes.body.text(), diffRes.body.text()]);
-    const ticker = JSON.parse(tickerText) as Record<string, { last?: number }>;
-    const priceUsd = Number(ticker?.["USD"]?.last) || 0;
-    const difficulty = Number(diffText.trim()) || 0;
-    const stats: NetworkStats = { priceUsd, difficulty, blockRewardBtc: 3.125 };
-    if (priceUsd > 0 && difficulty > 0) cache = { at: now, stats };
-    return cache?.stats ?? stats;
+    ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@ticker");
   } catch {
-    return cache?.stats ?? { priceUsd: 0, difficulty: 0, blockRewardBtc: 3.125 };
+    setTimeout(connectPriceFeed, 15_000);
+    return;
   }
+  ws.on("message", (data: WebSocket.RawData) => {
+    try {
+      const m = JSON.parse(data.toString()) as { c?: string };
+      const p = Number(m.c);
+      if (p > 0) {
+        livePrice = p;
+        livePriceAt = Date.now();
+      }
+    } catch {
+      /* ignore malformed frame */
+    }
+  });
+  const retry = (): void => {
+    try {
+      ws.removeAllListeners();
+      ws.terminate();
+    } catch {
+      /* ignore */
+    }
+    setTimeout(connectPriceFeed, 15_000); // blockchain.info REST covers the gap
+  };
+  ws.on("close", retry);
+  ws.on("error", retry);
+}
+
+let diffCache = { at: 0, difficulty: 0 };
+let restPrice = { at: 0, price: 0 };
+const DIFF_TTL = 10 * 60 * 1000;
+const REST_PRICE_TTL = 30 * 1000;
+
+export async function getNetworkStats(now = Date.now()): Promise<NetworkStats> {
+  startPriceFeed();
+
+  // Difficulty: rarely changes — refresh at most every 10 minutes.
+  if (now - diffCache.at > DIFF_TTL) {
+    try {
+      const r = await request("https://blockchain.info/q/getdifficulty", { headersTimeout: 8000, bodyTimeout: 8000 });
+      const d = Number((await r.body.text()).trim());
+      if (d > 0) diffCache = { at: now, difficulty: d };
+    } catch {
+      /* keep the last good difficulty */
+    }
+  }
+
+  // Price: prefer the live WS feed (fresh within 60s); else a short-cached REST price.
+  let priceUsd = now - livePriceAt < 60_000 ? livePrice : 0;
+  if (priceUsd <= 0) {
+    if (now - restPrice.at > REST_PRICE_TTL) {
+      try {
+        const r = await request("https://blockchain.info/ticker", { headersTimeout: 8000, bodyTimeout: 8000 });
+        const ticker = JSON.parse(await r.body.text()) as Record<string, { last?: number }>;
+        const p = Number(ticker?.["USD"]?.last) || 0;
+        if (p > 0) restPrice = { at: now, price: p };
+      } catch {
+        /* keep the last good REST price */
+      }
+    }
+    priceUsd = restPrice.price;
+  }
+
+  return { priceUsd, difficulty: diffCache.difficulty, blockRewardBtc: 3.125 };
 }

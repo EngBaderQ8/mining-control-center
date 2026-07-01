@@ -11,7 +11,10 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
   const settings = loadProfitSettings();
 
   useEffect(() => {
-    void api.getNetworkStats().then(setNet);
+    const f = (): void => void api.getNetworkStats().then(setNet);
+    f();
+    const id = setInterval(f, 5000); // keep per-site profit fresh with the live price
+    return () => clearInterval(id);
   }, []);
 
   const cur = settings.currency;

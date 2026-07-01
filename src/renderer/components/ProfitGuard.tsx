@@ -38,7 +38,7 @@ export function ProfitGuard({
       void api.getNetworkStats().then(setNet);
     };
     f();
-    const id = setInterval(f, 10 * 60 * 1000);
+    const id = setInterval(f, 5000); // live price refresh (guard re-evaluates on fresh price)
     return () => clearInterval(id);
   }, []);
 

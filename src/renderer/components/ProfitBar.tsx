@@ -32,7 +32,7 @@ export function ProfitBar({ groups }: { groups: SiteGroup[] }): React.ReactEleme
       void api.getNetworkStats().then(setNet);
     };
     fetchNet();
-    const timer = setInterval(fetchNet, 10 * 60 * 1000); // price + difficulty refresh
+    const timer = setInterval(fetchNet, 2000); // live price (WS-backed) refresh ~every 2s
     return () => clearInterval(timer);
   }, []);
 
