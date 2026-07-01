@@ -17,6 +17,18 @@ interface Props {
   onDeleteSite: (siteId: string, siteName: string) => void;
   onRenameSite: (siteId: string, newName: string) => void;
   onCleanupSite: (siteId: string, siteName: string) => void;
+  onTestHost: (
+    siteId: string,
+    ip: string,
+  ) => Promise<{
+    connected: boolean;
+    firmware: string | null;
+    state: string;
+    hashrateTHs: number;
+    maxTempC: number;
+    boardsFound: number;
+    error?: string;
+  }>;
   onDeleteDevice: (deviceId: string) => void;
   onDiagnose: (device: import("../../core/model/device").Device) => void;
 }
@@ -34,12 +46,41 @@ export function SiteSection({
   onDeleteSite,
   onRenameSite,
   onCleanupSite,
+  onTestHost,
   onDeleteDevice,
   onDiagnose,
 }: Props): React.ReactElement {
   const { site, views } = group;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(site.name);
+  const [testIp, setTestIp] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const runTest = async (): Promise<void> => {
+    const ip = testIp.trim();
+    if (!ip || testBusy) return;
+    setTestBusy(true);
+    setTestResult(null);
+    try {
+      const r = await onTestHost(site.id, ip);
+      setTestResult(
+        r.connected
+          ? t("✓ {ip}: متصل · فرمور {fw} · {state} · {hash} TH · حرارة {temp}° · لوحات {boards}", {
+              ip,
+              fw: r.firmware ?? t("؟"),
+              state: r.state,
+              hash: r.hashrateTHs.toFixed(1),
+              temp: r.maxTempC,
+              boards: r.boardsFound,
+            })
+          : t("❌ {ip}: ما فيه ماينر يردّ على 4028. {err}", { ip, err: r.error ?? "" }),
+      );
+    } catch (e) {
+      setTestResult(t("⚠ تعذّر الاختبار: ") + String(e));
+    } finally {
+      setTestBusy(false);
+    }
+  };
   const saveRename = (): void => {
     const name = draft.trim();
     if (name && name !== site.name) onRenameSite(site.id, name);
@@ -125,16 +166,41 @@ export function SiteSection({
         )}
       </div>
       {!collapsed && (
-        <DeviceTable
-          views={views}
-          selectedIds={selectedIds}
-          sort={sort}
-          onSort={onSort}
-          onToggle={onToggle}
-          onCommand={onCommand}
-          onDeleteDevice={onDeleteDevice}
-          onDiagnose={onDiagnose}
-        />
+        <>
+          <div
+            className="row"
+            style={{ gap: 6, alignItems: "center", padding: "8px 10px 4px", flexWrap: "wrap" }}
+          >
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{t("🔎 اختبار IP في هذا الموقع:")}</span>
+            <input
+              className="input"
+              placeholder={t("مثال: 192.168.0.50")}
+              value={testIp}
+              disabled={testBusy}
+              onChange={(e) => setTestIp(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void runTest();
+              }}
+              style={{ width: 150, fontSize: 12.5 }}
+            />
+            <button className="btn sm" disabled={testBusy || !testIp.trim()} onClick={() => void runTest()}>
+              {testBusy ? t("…جاري") : t("اختبار")}
+            </button>
+            {testResult && (
+              <span style={{ fontSize: 12, color: "var(--muted)", direction: "rtl" }}>{testResult}</span>
+            )}
+          </div>
+          <DeviceTable
+            views={views}
+            selectedIds={selectedIds}
+            sort={sort}
+            onSort={onSort}
+            onToggle={onToggle}
+            onCommand={onCommand}
+            onDeleteDevice={onDeleteDevice}
+            onDiagnose={onDiagnose}
+          />
+        </>
       )}
     </div>
   );

@@ -520,6 +520,25 @@ export class ServerBridge {
     }
   }
 
+  /** Test a single IP AT a specific site — runs locally if we own the site, else routes
+   *  to that site's farm laptop (so it uses that site's own router/subnet). Lets the
+   *  office computer test an IP on any site without picking an agent. */
+  async testHostAtSite(siteId: string, ip: string): Promise<Awaited<ReturnType<ServerBridge["testHost"]>>> {
+    if (this.ownsSite(siteId)) return this.testHost(ip);
+    const fail = {
+      connected: false, gotData: false, sample: "", firmware: null, state: "offline",
+      hashrateTHs: 0, maxTempC: 0, summarySample: "", boardsFound: 0, statsChainSample: "",
+    };
+    const r = await this.sendAgentOp({ siteId }, "testHost", { ip });
+    if (!r.ok || !r.data)
+      return { ...fail, ...(r.error ? { error: r.error } : {}) } as Awaited<ReturnType<ServerBridge["testHost"]>>;
+    try {
+      return JSON.parse(r.data) as Awaited<ReturnType<ServerBridge["testHost"]>>;
+    } catch {
+      return fail as Awaited<ReturnType<ServerBridge["testHost"]>>;
+    }
+  }
+
   /** Diagnose a single IP on a REMOTE farm from a viewer: route the probe to the farm
    *  laptop (agentId), which reaches the miner on its LAN. */
   async testHostVia(agentId: string, ip: string): Promise<Awaited<ReturnType<ServerBridge["testHost"]>>> {

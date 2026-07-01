@@ -98,6 +98,7 @@ export const CH = {
   deviceScanVia: "device:scanvia",
   deviceTest: "device:test",
   deviceTestVia: "device:testvia",
+  deviceTestSite: "device:testsite",
   deviceDiagnose: "device:diagnose",
   localIps: "device:localips",
   deviceSetSecret: "device:setsecret",
@@ -202,6 +203,24 @@ export interface Api {
   /** Diagnose an IP on a REMOTE farm via a chosen farm laptop (agentId). */
   testHostVia(
     agentId: string,
+    ip: string,
+  ): Promise<{
+    connected: boolean;
+    gotData: boolean;
+    sample: string;
+    firmware: string | null;
+    state: string;
+    hashrateTHs: number;
+    maxTempC: number;
+    summarySample: string;
+    boardsFound: number;
+    statsChainSample: string;
+    error?: string;
+  }>;
+  /** Test an IP AT a specific site — routes to that site's farm laptop (its own
+   *  router/subnet), so each site tests IPs on its own network. */
+  testHostAtSite(
+    siteId: string,
     ip: string,
   ): Promise<{
     connected: boolean;

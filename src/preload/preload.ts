@@ -24,6 +24,7 @@ const api: Api = {
     ipcRenderer.invoke(CH.deviceScanVia, agentId, siteName, base, secret),
   testHost: (ip: string) => ipcRenderer.invoke(CH.deviceTest, ip),
   testHostVia: (agentId: string, ip: string) => ipcRenderer.invoke(CH.deviceTestVia, agentId, ip),
+  testHostAtSite: (siteId: string, ip: string) => ipcRenderer.invoke(CH.deviceTestSite, siteId, ip),
   getLocalIps: () => ipcRenderer.invoke(CH.localIps),
   diagnoseDevice: (host: string) => ipcRenderer.invoke(CH.deviceDiagnose, host),
   getNetworkStats: () => ipcRenderer.invoke(CH.networkStats),

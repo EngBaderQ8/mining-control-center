@@ -645,6 +645,7 @@ export function App(): React.ReactElement {
                 onDeleteSite={onDeleteSite}
                 onRenameSite={onRenameSite}
                 onCleanupSite={onCleanupSite}
+                onTestHost={(siteId, ip) => api.testHostAtSite(siteId, ip)}
                 onDeleteDevice={onDeleteDevice}
                 onDiagnose={setDiagDevice}
               />
