@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectFromVersion } from "../../../src/core/discovery/detect";
+import { detectFromVersion, extractWhatsminerModel } from "../../../src/core/discovery/detect";
 
 describe("detectFromVersion", () => {
   it("detects LuxOS, Braiins, Vnish, and falls back to stock", () => {
@@ -53,5 +53,21 @@ describe("detectFromVersion", () => {
     expect(d).not.toBeNull();
     expect(d?.firmware).toBe("stock");
     expect(d?.model).toContain("S19 XP+ Hyd");
+  });
+});
+
+describe("extractWhatsminerModel", () => {
+  it("reads minertype (newer get.device.info)", () => {
+    expect(extractWhatsminerModel('{"Msg":{"minertype":"M30S+V50","fw_ver":"20250915.16"}}')).toBe("M30S+V50");
+  });
+  it("reads Model (legacy devdetails)", () => {
+    expect(extractWhatsminerModel('{"DEVDETAILS":[{"Model":"M50S"}]}')).toBe("M50S");
+  });
+  it("reads a Whatsminer Type and strips the vendor prefix", () => {
+    expect(extractWhatsminerModel('{"STATS":[{"Type":"WhatsMiner M60S"}]}')).toBe("M60S");
+  });
+  it("returns null when only a firmware version is present", () => {
+    expect(extractWhatsminerModel('{"Msg":{"fw_ver":"20250915.16","api_ver":"2.0"}}')).toBeNull();
+    expect(extractWhatsminerModel('{"minertype":"20250915.16"}')).toBeNull(); // version, not a model
   });
 });

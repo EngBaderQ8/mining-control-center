@@ -60,6 +60,27 @@ export function detectFromVersion(raw: string): Detected | null {
 }
 
 /**
+ * Pull a real Whatsminer MODEL (e.g. "M30S+", "M50S", "M60S") from ANY btminer reply —
+ * the newer get.device.info (minertype), or legacy devdetails/stats/get_miner_info
+ * (Model / Type). Returns a clean model, or null when the reply carries only a firmware
+ * version (so we never re-introduce the version-as-name bug). Field-name-agnostic by regex
+ * so it works regardless of which command/firmware answered.
+ */
+export function extractWhatsminerModel(raw: string): string | null {
+  const text = raw.replace(/\0/g, "");
+  const m =
+    /"minertype"\s*:\s*"([^"]+)"/i.exec(text) ??
+    /"miner_type"\s*:\s*"([^"]+)"/i.exec(text) ??
+    /"Model"\s*:\s*"([^"]+)"/i.exec(text) ??
+    /"Type"\s*:\s*"(WhatsMiner[^"]*|M\d[^"]*)"/i.exec(text);
+  let model = m?.[1]?.trim().replace(/^whatsminer\s+/i, "");
+  if (!model) return null;
+  // Guard: some firmwares put a version string in these fields — never accept that.
+  if (/^\d{6,}|^rel\d|\d{8}/i.test(model)) return null;
+  return model;
+}
+
+/**
  * Extract a stable hardware identity (MAC address) from any raw miner reply. Done by
  * REGEX over the whole text — not a fixed field name — so it works regardless of which
  * command/firmware exposed it (Whatsminer get_miner_info, an Antminer field, etc.).

@@ -18,11 +18,11 @@ import { ServerClient, type AuthResult } from "./serverClient";
 import { AgentRuntime } from "./runtime";
 import { subnetHosts, planRescan, type DiscoveredDevice } from "../../core/discovery/scan";
 import { hostsToRescan } from "../../core/discovery/rescan";
-import { detectFromVersion, extractMac } from "../../core/discovery/detect";
+import { detectFromVersion, extractMac, extractWhatsminerModel } from "../../core/discovery/detect";
 import { pollDevice } from "../../core/monitor/poller";
 import { parseDeviceHealth, type DeviceHealth } from "../../core/diagnose/parse";
 import { localPrivateBases, localIpv4s } from "../discovery/localSubnet";
-import { diagnoseHost } from "../transport/tcp";
+import { diagnoseHost, tcp4028 } from "../transport/tcp";
 
 export interface BridgeDeps {
   config: ConnectionConfig;
@@ -565,7 +565,8 @@ export class ServerBridge {
           // Capture a stable MAC so a later IP change is recognised as the same box.
           let hwId = extractMac(rawAll);
           if (!hwId) hwId = (await this.probeIdentity(host, det.firmware)).mac;
-          found.push({ host, firmware: det.firmware, model: det.model, ...(hwId ? { hwId } : {}) });
+          const model = await this.bestModel(host, det); // real Whatsminer minertype when available
+          found.push({ host, firmware: det.firmware, model, ...(hwId ? { hwId } : {}) });
         }
       }
     };
@@ -775,6 +776,39 @@ export class ServerBridge {
     return { mac, firmware: fw };
   }
 
+  /** Deep-probe a Whatsminer for its REAL model (minertype), when the basic
+   *  version/get_version/summary didn't reveal it. Tries the newer btminer
+   *  {"cmd":"get.device.info"} envelope (raw via tcp4028) and legacy {"command":...}
+   *  commands (devdetails / stats / get_miner_info). Returns a clean model or null. */
+  private async probeWhatsminerModel(host: string): Promise<string | null> {
+    const attempts: Array<() => Promise<string>> = [
+      () => tcp4028(host, 4028, JSON.stringify({ cmd: "get.device.info" }), 2800),
+      () => tcp4028(host, 4028, JSON.stringify({ cmd: "get.device.info", info: "miner" }), 2800),
+      () => diagnoseHost(host, 4028, 2800, "devdetails").then((d) => d.raw),
+      () => diagnoseHost(host, 4028, 2800, "stats").then((d) => d.raw),
+      () => diagnoseHost(host, 4028, 2800, "get_miner_info").then((d) => d.raw),
+    ];
+    for (const a of attempts) {
+      try {
+        const model = extractWhatsminerModel(await a());
+        if (model) return model;
+      } catch {
+        /* try the next command/format */
+      }
+    }
+    return null;
+  }
+
+  /** Best model for a detected device: the detected one, or — for a Whatsminer that only
+   *  gave a generic label — a deeper probe for its real minertype (M30S/M50S/M60…). */
+  private async bestModel(host: string, det: { firmware: Firmware; model: string }): Promise<string> {
+    if (det.firmware === "whatsminer" && (det.model === "Whatsminer" || det.model === "ASIC")) {
+      const real = await this.probeWhatsminerModel(host);
+      if (real) return real;
+    }
+    return det.model;
+  }
+
   /** One-time backfill of MACs for registered devices that don't have one yet, so the
    *  rescan can recognise an IP change. Offline devices simply don't respond (retried a
    *  later sweep). Bounded concurrency to stay gentle on the site network. */
@@ -805,9 +839,15 @@ export class ServerBridge {
     // Matches an auto-generated version-string name: a long digit run, a "Rel2-…" build,
     // or an embedded YYYYMMDD. NOT a normal model like "M50S" or "Whatsminer".
     const VER_RE = /^\d{6,}|^rel\d|\.\d{8}\.|-\d{8}|\d{8}\.\d/i;
+    // Re-process a Whatsminer if its name/model is a version string, empty, OR still the
+    // generic "Whatsminer" placeholder (so we can upgrade it to the real model once found).
     const bad = this.deps.repo
       .listDevices()
-      .filter((d) => d.firmware === "whatsminer" && (VER_RE.test(d.name) || VER_RE.test(d.model) || d.model === ""));
+      .filter(
+        (d) =>
+          d.firmware === "whatsminer" &&
+          (VER_RE.test(d.name) || VER_RE.test(d.model) || d.model === "" || d.model === "Whatsminer"),
+      );
     if (bad.length === 0) return;
     let i = 0;
     const worker = async (): Promise<void> => {
@@ -822,13 +862,14 @@ export class ServerBridge {
           }
         }
         if (!det || det.firmware !== "whatsminer") continue; // offline, or not a Whatsminer anymore
-        // With the detection fix, an unknown Whatsminer returns "Whatsminer" — still a clean
-        // upgrade from a version string. A real model (M50S…) comes through when the miner exposes it.
-        const model = det.model && !VER_RE.test(det.model) ? det.model : "Whatsminer";
+        const model = await this.bestModel(d.host, det); // real minertype (M50S…) or "Whatsminer"
         const cur = this.deps.repo.listDevices().find((x) => x.id === d.id);
         if (!cur) continue;
         const last = cur.host.split(".").pop() ?? "";
-        const newName = VER_RE.test(cur.name) ? `${model}-${last}` : cur.name; // never rename a user's custom name
+        // Rewrite ONLY an auto-generated name (versiony OR the generic "Whatsminer-<octet>") —
+        // never a name the user typed.
+        const auto = VER_RE.test(cur.name) || /^whatsminer-\d+$/i.test(cur.name);
+        const newName = auto ? `${model}-${last}` : cur.name;
         if (cur.model === model && cur.name === newName) continue; // nothing changed
         const fixed = { ...cur, model, name: newName };
         this.deps.repo.upsertDevice(fixed); // persist locally
