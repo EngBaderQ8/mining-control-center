@@ -1,5 +1,8 @@
 import { randomUUID, verify as cryptoVerify } from "node:crypto";
 import { get as httpsGet } from "node:https";
+import { get as httpGet } from "node:http";
+import type { SensorConfig, SensorReading } from "../../core/model/sensor";
+import { parseShelly, evalEnv } from "../../core/sensors/shelly";
 import type { Device, Site, DeviceStatus, Firmware } from "../../core/model/device";
 import type { ControlCommand, Transport, FlashTransport } from "../../core/drivers/types";
 import type { CommandOutcome } from "../../core/model/result";
@@ -62,6 +65,8 @@ export class ServerBridge {
   private rescanTimer: ReturnType<typeof setInterval> | null = null;
   private initialRescan: ReturnType<typeof setTimeout> | null = null;
   private rescanning = false;
+  private sensorTimer: ReturnType<typeof setInterval> | null = null;
+  private sensorAlertedAt = new Map<string, number>(); // sensorId -> last alert epoch (throttle)
   private flashing = new Set<string>(); // deviceIds currently being flashed (per-device lock)
 
   constructor(private deps: BridgeDeps) {
@@ -117,8 +122,123 @@ export class ServerBridge {
   dispose(): void {
     if (this.initialRescan) clearTimeout(this.initialRescan);
     if (this.rescanTimer) clearInterval(this.rescanTimer);
+    if (this.sensorTimer) clearInterval(this.sensorTimer);
     this.initialRescan = null;
     this.rescanTimer = null;
+    this.sensorTimer = null;
+  }
+
+  /** GET a small JSON document from a sensor on the LAN (plain HTTP, short timeout). */
+  private httpGetJson(host: string, path: string, timeoutMs = 4000): Promise<unknown> {
+    const h = host.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+    return new Promise((resolve, reject) => {
+      const req = httpGet(`http://${h}${path}`, { timeout: timeoutMs }, (res) => {
+        if ((res.statusCode ?? 0) >= 400) {
+          res.resume();
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (c) => {
+          body += c;
+          if (body.length > 200_000) req.destroy(); // sensor JSON is tiny; cap junk
+        });
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            reject(new Error("bad JSON"));
+          }
+        });
+      });
+      req.on("timeout", () => req.destroy(new Error("timeout")));
+      req.on("error", reject);
+    });
+  }
+
+  /** Persist a site's sensor list locally and (re)start the climate sweep. */
+  private applySetSensors(siteId: string, list: SensorConfig[]): void {
+    this.deps.config.setSensors(
+      siteId,
+      list.map((x) => ({ ...x, siteId })),
+    );
+    this.refreshSensorPolling();
+  }
+
+  /** Poll (now) the sensors configured for a site (or all sites when siteId is empty). */
+  private async readSensors(siteId: string): Promise<SensorReading[]> {
+    const all = this.deps.config.get().sensors ?? [];
+    const mine = siteId ? all.filter((s) => s.siteId === siteId) : all;
+    return Promise.all(mine.map((c) => this.pollSensor(c)));
+  }
+
+  /** Save a site's room sensors — LOCALLY if this machine owns the site, else routed to
+   *  the owning farm laptop (so the office PC configures a remote site's sensors). */
+  async setSensorsAtSite(siteId: string, list: SensorConfig[]): Promise<{ ok: boolean; error?: string }> {
+    if (this.ownsSite(siteId)) {
+      this.applySetSensors(siteId, list);
+      return { ok: true };
+    }
+    const r = await this.sendAgentOp({ siteId }, "setSensors", { siteId, sensors: JSON.stringify(list) });
+    return { ok: r.ok, ...(r.error ? { error: r.error } : {}) };
+  }
+
+  /** Read a site's room sensors — locally if owned, else from the owning farm laptop. */
+  async getSensorsAtSite(siteId: string): Promise<SensorReading[]> {
+    if (this.ownsSite(siteId)) return this.readSensors(siteId);
+    const r = await this.sendAgentOp({ siteId }, "getSensors", { siteId });
+    if (!r.ok || !r.data) return [];
+    try {
+      return JSON.parse(r.data) as SensorReading[];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Read one Shelly sensor: try Gen1 /status then Gen2/3 /rpc/Shelly.GetStatus. */
+  private async pollSensor(cfg: SensorConfig): Promise<SensorReading> {
+    let lastErr = "لم يستجب";
+    for (const path of ["/status", "/rpc/Shelly.GetStatus"]) {
+      try {
+        const r = parseShelly(await this.httpGetJson(cfg.host, path));
+        if (r) return { ...cfg, ...r, ok: true, at: Date.now() };
+      } catch (e) {
+        lastErr = (e as Error).message;
+      }
+    }
+    return { ...cfg, ok: false, at: Date.now(), error: lastErr };
+  }
+
+  /** (Re)start the background sensor sweep: poll each configured sensor every 60s and
+   *  raise an OS+Telegram alert (throttled 30m per sensor) when a room breaches its limit. */
+  private refreshSensorPolling(): void {
+    if (this.sensorTimer) {
+      clearInterval(this.sensorTimer);
+      this.sensorTimer = null;
+    }
+    if ((this.deps.config.get().sensors ?? []).length === 0) return;
+    const tick = async (): Promise<void> => {
+      for (const cfg of this.deps.config.get().sensors ?? []) {
+        const r = await this.pollSensor(cfg);
+        if (!r.ok) continue;
+        const high = evalEnv(r, {
+          ...(cfg.maxTempC ? { maxTempC: cfg.maxTempC } : {}),
+          ...(cfg.maxHumidity ? { maxHumidity: cfg.maxHumidity } : {}),
+        }).find((i) => i.severity === "high");
+        if (!high) continue;
+        const last = this.sensorAlertedAt.get(cfg.id) ?? 0;
+        if (Date.now() - last < 30 * 60 * 1000) continue; // throttle repeats
+        this.sensorAlertedAt.set(cfg.id, Date.now());
+        this.deps.notify(
+          high.code === "roomHot"
+            ? `🌡️ حرارة غرفة «${cfg.name}» وصلت ${Math.round(high.value)}° (الحد ${high.limit}°) — تأكد من التبريد`
+            : `💧 رطوبة غرفة «${cfg.name}» وصلت ${Math.round(high.value)}% (الحد ${high.limit}%)`,
+        );
+      }
+    };
+    void tick();
+    this.sensorTimer = setInterval(() => void tick(), 60 * 1000);
   }
 
   authStatus(): AuthStatus {
@@ -759,6 +879,15 @@ export class ServerBridge {
         case "testHost":
           data = JSON.stringify(await this.testHost(p["ip"] ?? ""));
           break;
+        case "setSensors": {
+          const siteId = p["siteId"] ?? "";
+          this.applySetSensors(siteId, JSON.parse(p["sensors"] ?? "[]") as SensorConfig[]);
+          data = JSON.stringify({ ok: true });
+          break;
+        }
+        case "getSensors":
+          data = JSON.stringify(await this.readSensors(p["siteId"] || ""));
+          break;
         default:
           this.client.send({ type: "agentop.result", opId: m.opId, ok: false, error: "عملية غير معروفة" });
           return;
@@ -790,6 +919,7 @@ export class ServerBridge {
     }
     this.client.send({ type: "snapshot.request" });
     this.service.startMonitoring(); // poll local devices -> pushStatuses to server
+    this.refreshSensorPolling(); // resume room-climate alerts from persisted config
     // On (re)connect, pick up any update the owner uploaded to their server.
     const base = this.serverBase();
     if (base) this.deps.checkServerUpdate?.(base);

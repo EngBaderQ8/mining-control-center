@@ -4,8 +4,10 @@ import type { ControlCommand } from "../core/drivers/types";
 import type { Alert } from "../core/alerts/rules";
 import type { Snapshot } from "../main/service";
 import type { AgentInfo } from "./protocol";
+import type { SensorConfig, SensorReading } from "../core/model/sensor";
 
 export type { Device, DeviceStatus, Site, CommandOutcome, ControlCommand, Alert, Snapshot, AgentInfo };
+export type { SensorConfig, SensorReading };
 
 // The central server is a fixed deployment detail — site staff never type it.
 // The app fills it automatically and only asks for email + password. Change this
@@ -107,6 +109,9 @@ export const CH = {
   siteDelete: "site:delete",
   siteRename: "site:rename",
   siteCleanupAbsent: "site:cleanupabsent",
+  // room climate sensors (Shelly)
+  sensorsGet: "sensors:get",
+  sensorsSet: "sensors:set",
   // profit / network
   networkStats: "profit:netstats",
   // telegram alerts
@@ -235,6 +240,10 @@ export interface Api {
     statsChainSample: string;
     error?: string;
   }>;
+  /** Read a site's room sensors (routes to that site's farm laptop, which polls them). */
+  getSensorsAtSite(siteId: string): Promise<SensorReading[]>;
+  /** Save a site's room sensors (name/IP/thresholds) on its farm laptop. */
+  setSensorsAtSite(siteId: string, sensors: SensorConfig[]): Promise<{ ok: boolean; error?: string }>;
   getLocalIps(): Promise<string[]>;
   diagnoseDevice(host: string): Promise<{
     reachable: boolean;

@@ -1,7 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { SiteGroup, SortKey, SortState } from "../state/store";
 import type { ControlCommand } from "../../core/drivers/types";
 import { DeviceTable } from "./DeviceTable";
+import { SensorsDialog } from "./SensorsDialog";
+import { api } from "../ipc";
+import { evalEnv } from "../../core/sensors/shelly";
+import type { SensorReading } from "../../core/model/sensor";
 import { t } from "../i18n";
 
 interface Props {
@@ -53,6 +57,17 @@ export function SiteSection({
   const { site, views } = group;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(site.name);
+  const [sensors, setSensors] = useState<SensorReading[]>([]);
+  const [sensorsOpen, setSensorsOpen] = useState(false);
+  const loadSensors = React.useCallback((): void => {
+    void api.getSensorsAtSite(site.id).then(setSensors).catch(() => setSensors([]));
+  }, [site.id]);
+  // Poll this site's room sensors for the header badge (the agent alerts independently).
+  useEffect(() => {
+    loadSensors();
+    const id = setInterval(loadSensors, 60_000);
+    return () => clearInterval(id);
+  }, [loadSensors]);
   const [testIp, setTestIp] = useState("");
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -93,6 +108,26 @@ export function SiteSection({
   const siteTHs = views.reduce((sum, v) => sum + (v.status?.hashrateTHs ?? 0), 0);
   const siteState = online + warning === 0 ? "offline" : offline + warning > 0 ? "warning" : "online";
 
+  // Room-climate badge: the worst of this site's reachable sensors.
+  const okReadings = sensors.filter((s) => s.ok);
+  let climate: { label: string; color: string } | null = null;
+  if (okReadings.length > 0) {
+    let sev = 0; // 0 ok · 1 warn · 2 high
+    for (const r of okReadings) {
+      for (const i of evalEnv(r, {
+        ...(r.maxTempC ? { maxTempC: r.maxTempC } : {}),
+        ...(r.maxHumidity ? { maxHumidity: r.maxHumidity } : {}),
+      })) {
+        sev = Math.max(sev, i.severity === "high" ? 2 : 1);
+      }
+    }
+    const hottest = okReadings.reduce((a, b) => ((b.tempC ?? -1) > (a.tempC ?? -1) ? b : a));
+    const parts: string[] = [];
+    if (hottest.tempC !== undefined) parts.push(`${hottest.tempC.toFixed(0)}°`);
+    if (hottest.humidity !== undefined) parts.push(`${Math.round(hottest.humidity)}%`);
+    climate = { label: parts.join(" · "), color: sev === 2 ? "var(--red)" : sev === 1 ? "var(--amber)" : "var(--green)" };
+  }
+
   return (
     <div className="site">
       <div className="sitehead">
@@ -114,6 +149,14 @@ export function SiteSection({
             {offline > 0 && <span className="off">{t(" · {offline} غير متصل", { offline })}</span>} · {siteTHs.toFixed(0)} TH/s
           </span>
         </button>
+        {climate && (
+          <span
+            title={t("حرارة/رطوبة الغرفة")}
+            style={{ fontSize: 12.5, fontWeight: 700, color: climate.color, marginInlineStart: 8, whiteSpace: "nowrap" }}
+          >
+            🌡️ {climate.label}
+          </span>
+        )}
         <span className="spacer" style={{ marginInlineStart: "auto" }} />
         {editing ? (
           <>
@@ -149,6 +192,9 @@ export function SiteSection({
             </button>
             <button className="btn" onClick={() => onSelectSite(views.map((v) => v.device.id))}>
               {t("تحديد كل الموقع")}
+            </button>
+            <button className="btn" title={t("حسّاسات حرارة/رطوبة الغرفة")} onClick={() => setSensorsOpen(true)}>
+              {t("🌡️ حسّاسات")}
             </button>
             {offline > 0 && (
               <button
@@ -201,6 +247,15 @@ export function SiteSection({
             onDiagnose={onDiagnose}
           />
         </>
+      )}
+      {sensorsOpen && (
+        <SensorsDialog
+          siteId={site.id}
+          siteName={site.name}
+          initial={sensors}
+          onClose={() => setSensorsOpen(false)}
+          onSaved={loadSensors}
+        />
       )}
     </div>
   );

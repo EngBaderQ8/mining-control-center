@@ -3,6 +3,7 @@ import { CH } from "../shared/api";
 import type { ServerBridge } from "./agent/serverBridge";
 import type { Device, Site } from "../core/model/device";
 import type { ControlCommand } from "../core/drivers/types";
+import type { SensorConfig } from "../core/model/sensor";
 
 /** Wire request/response IPC channels to the server bridge. */
 export function registerIpc(bridge: ServerBridge): void {
@@ -61,4 +62,8 @@ export function registerIpc(bridge: ServerBridge): void {
     bridge.renameSite(siteId, name);
   });
   ipcMain.handle(CH.siteCleanupAbsent, (_e, siteId: string) => bridge.removeAbsentDevices(siteId));
+  ipcMain.handle(CH.sensorsGet, (_e, siteId: string) => bridge.getSensorsAtSite(siteId));
+  ipcMain.handle(CH.sensorsSet, (_e, siteId: string, sensors: SensorConfig[]) =>
+    bridge.setSensorsAtSite(siteId, sensors),
+  );
 }

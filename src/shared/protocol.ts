@@ -95,7 +95,7 @@ export interface UpdateNow {
 // management op — remove-absent, rescan — on the agent that owns the site. The server
 // routes it by site→agent and relays the result back, so everything is doable remotely
 // without logging into the farm laptop. No secrets travel this channel.
-export type AgentOp = "removeAbsent" | "rescan" | "scan" | "setSecret" | "testHost";
+export type AgentOp = "removeAbsent" | "rescan" | "scan" | "setSecret" | "testHost" | "setSensors" | "getSensors";
 export interface AgentOpSend {
   type: "agentop.send";
   opId: string;

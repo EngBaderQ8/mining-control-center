@@ -41,6 +41,8 @@ const api: Api = {
   deleteSite: (siteId: string) => ipcRenderer.invoke(CH.siteDelete, siteId),
   renameSite: (siteId: string, name: string) => ipcRenderer.invoke(CH.siteRename, siteId, name),
   removeAbsentDevices: (siteId: string) => ipcRenderer.invoke(CH.siteCleanupAbsent, siteId),
+  getSensorsAtSite: (siteId: string) => ipcRenderer.invoke(CH.sensorsGet, siteId),
+  setSensorsAtSite: (siteId, sensors) => ipcRenderer.invoke(CH.sensorsSet, siteId, sensors),
   setCredentials: (deviceIds: string[], secret: string) =>
     ipcRenderer.invoke(CH.deviceSetSecret, deviceIds, secret),
 

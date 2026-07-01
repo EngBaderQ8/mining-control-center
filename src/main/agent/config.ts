@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import type { SensorConfig } from "../../core/model/sensor";
 
 export interface ConnectionState {
   agentId: string;
@@ -8,6 +9,7 @@ export interface ConnectionState {
   serverAddr?: string; // host:port of the VPS
   fingerprint?: string; // pinned server cert SHA-256 fingerprint
   token?: string; // JWT from login
+  sensors?: SensorConfig[]; // room climate sensors this agent polls on its sites' LANs
 }
 
 /**
@@ -33,6 +35,7 @@ export class ConnectionConfig {
       ...(loaded.serverAddr !== undefined ? { serverAddr: loaded.serverAddr } : {}),
       ...(loaded.fingerprint !== undefined ? { fingerprint: loaded.fingerprint } : {}),
       ...(loaded.token !== undefined ? { token: loaded.token } : {}),
+      ...(Array.isArray(loaded.sensors) ? { sensors: loaded.sensors } : {}),
     };
     // Only write on first run (when we minted a new agentId); never let a write
     // failure crash startup.
@@ -71,6 +74,13 @@ export class ConnectionConfig {
 
   clearToken(): void {
     delete this.state.token;
+    this.persist();
+  }
+
+  /** Replace the sensor list for ONE site (leaves other sites' sensors intact). */
+  setSensors(siteId: string, list: SensorConfig[]): void {
+    const others = (this.state.sensors ?? []).filter((s) => s.siteId !== siteId);
+    this.state.sensors = [...others, ...list];
     this.persist();
   }
 }
