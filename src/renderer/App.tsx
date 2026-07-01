@@ -45,7 +45,7 @@ import { LoginScreen } from "./components/LoginScreen";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { t } from "./i18n";
-import type { UpdateStatus } from "../shared/api";
+import type { UpdateStatus, AgentInfo } from "../shared/api";
 
 const COLLAPSE_KEY = "mcc.collapsedSites";
 function loadCollapsed(): Set<string> {
@@ -115,6 +115,7 @@ export function App(): React.ReactElement {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [agents, setAgents] = useState<AgentInfo[]>([]); // farm laptops, for remote scan targeting
   const [statusById, setStatusById] = useState<Map<string, DeviceStatus>>(new Map());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
@@ -197,6 +198,7 @@ export function App(): React.ReactElement {
     const snap = await api.getSnapshot();
     setSites(snap.sites);
     setDevices(snap.devices);
+    setAgents(snap.agents ?? []);
     setStatusById((prev) => {
       const next = new Map(prev);
       for (const s of snap.statuses) next.set(s.deviceId, s);
@@ -245,6 +247,7 @@ export function App(): React.ReactElement {
     const offSnapshot = api.onSnapshot((snap) => {
       setSites(snap.sites);
       setDevices(snap.devices);
+      setAgents(snap.agents ?? []);
       setStatusById(() => new Map(snap.statuses.map((s) => [s.deviceId, s])));
     });
     const offStatuses = api.onStatuses((statuses) => {
@@ -652,9 +655,12 @@ export function App(): React.ReactElement {
 
       {scanOpen && (
         <ScanDialog
+          agents={agents.filter((a) => a.online)}
           onClose={() => setScanOpen(false)}
-          onScan={async (siteName, base, secret) => {
-            const r = await api.scanNetwork(siteName, base, secret);
+          onScan={async (siteName, base, secret, agentId) => {
+            const r = agentId
+              ? await api.scanNetworkVia(agentId, siteName, base, secret)
+              : await api.scanNetwork(siteName, base, secret);
             await reload();
             return r;
           }}

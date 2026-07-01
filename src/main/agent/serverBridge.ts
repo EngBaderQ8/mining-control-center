@@ -271,16 +271,37 @@ export class ServerBridge {
     this.service.setRecovery(s);
   }
 
-  /** Set the web/control password for the given local devices (encrypted at rest,
-   *  never sent to the server). Needed for control on miners whose password isn't
-   *  the default root:root. */
-  setSecrets(deviceIds: string[], secret: string): void {
-    // An empty password CLEARS the stored secret, so the device reverts to the
-    // firmware default (lets the user undo a wrong saved password).
+  /** Store the web/control password locally (encrypted at rest) for devices THIS agent
+   *  owns. An empty password CLEARS it (reverts to the firmware default). */
+  private setSecretsLocal(deviceIds: string[], secret: string): void {
     for (const id of deviceIds) {
       if (secret) this.deps.repo.setSecret(id, this.deps.encrypt(secret));
       else this.deps.repo.clearSecret(id);
     }
+  }
+
+  /**
+   * Set device passwords from anywhere: for devices this machine owns, store locally;
+   * for devices owned by another agent (i.e. the office computer setting a remote
+   * farm's passwords), route to that farm's agent grouped by site so it stores them.
+   * (The password rides the user's own cert-pinned server — needed so remote control
+   * works on miners with non-default passwords.)
+   */
+  async setCredentials(deviceIds: string[], secret: string): Promise<void> {
+    const localIds = new Set(this.deps.repo.listDevices().map((d) => d.id));
+    const siteOf = new Map(this.snapshot.devices.map((d) => [d.id, d.siteId]));
+    const localTargets: string[] = [];
+    const remoteBySite = new Map<string, string[]>();
+    for (const id of deviceIds) {
+      if (localIds.has(id)) localTargets.push(id);
+      else {
+        const siteId = siteOf.get(id);
+        if (siteId) remoteBySite.set(siteId, [...(remoteBySite.get(siteId) ?? []), id]);
+      }
+    }
+    if (localTargets.length) this.setSecretsLocal(localTargets, secret);
+    for (const [siteId, ids] of remoteBySite)
+      await this.sendAgentOp({ siteId }, "setSecret", { deviceIds: ids.join(","), secret });
   }
 
   /** Delete a device locally (so this agent won't re-register it) and on the server. */
@@ -322,7 +343,7 @@ export class ServerBridge {
     siteId: string,
   ): Promise<{ removed: number; kept: number; siteUnreachable: boolean }> {
     if (this.ownsSite(siteId)) return this.removeAbsentLocal(siteId);
-    const r = await this.sendAgentOp(siteId, "removeAbsent");
+    const r = await this.sendAgentOp({ siteId }, "removeAbsent");
     if (!r.ok || !r.data) return { removed: 0, kept: 0, siteUnreachable: true };
     try {
       return JSON.parse(r.data) as { removed: number; kept: number; siteUnreachable: boolean };
@@ -476,6 +497,46 @@ export class ServerBridge {
     return { found: found.length, reachable: true, bases, connected, responded };
   }
 
+  /** Scan a REMOTE farm's LAN from a viewer (office computer): route the scan to the
+   *  chosen farm laptop (agentId), which scans its own subnet and adds the site +
+   *  devices locally. Returns the same shape as a local scan. */
+  async scanNetworkVia(
+    agentId: string,
+    siteName: string,
+    base?: string,
+    secret?: string,
+  ): Promise<{ found: number; reachable: boolean; bases: string[]; connected: number; responded: number }> {
+    const fail = { found: 0, reachable: false, bases: [] as string[], connected: 0, responded: 0 };
+    const r = await this.sendAgentOp({ agentId }, "scan", {
+      siteName,
+      ...(base ? { base } : {}),
+      ...(secret ? { secret } : {}),
+    });
+    if (!r.ok || !r.data) return fail;
+    try {
+      return JSON.parse(r.data) as typeof fail & { found: number };
+    } catch {
+      return fail;
+    }
+  }
+
+  /** Diagnose a single IP on a REMOTE farm from a viewer: route the probe to the farm
+   *  laptop (agentId), which reaches the miner on its LAN. */
+  async testHostVia(agentId: string, ip: string): Promise<Awaited<ReturnType<ServerBridge["testHost"]>>> {
+    const fail = {
+      connected: false, gotData: false, sample: "", firmware: null, state: "offline",
+      hashrateTHs: 0, maxTempC: 0, summarySample: "", boardsFound: 0, statsChainSample: "",
+    };
+    const r = await this.sendAgentOp({ agentId }, "testHost", { ip });
+    if (!r.ok || !r.data)
+      return { ...fail, ...(r.error ? { error: r.error } : {}) } as Awaited<ReturnType<ServerBridge["testHost"]>>;
+    try {
+      return JSON.parse(r.data) as Awaited<ReturnType<ServerBridge["testHost"]>>;
+    } catch {
+      return fail as Awaited<ReturnType<ServerBridge["testHost"]>>;
+    }
+  }
+
   /**
    * Auto-discovery sweep: for every known site, probe the UNREGISTERED IPs in its
    * subnet(s). A found miner whose MAC matches an existing device is the SAME box on a
@@ -620,11 +681,12 @@ export class ServerBridge {
     return Promise.all(deviceIds.map((id) => this.sendCommand(id, command, params)));
   }
 
-  /** Viewer side: run a site-scoped op on the OWNING agent via the server, awaiting its
-   *  result. Long timeout — probing a whole subnet can take tens of seconds. */
+  /** Viewer side: run a management op on the OWNING agent via the server (routed by
+   *  site OR agentId), awaiting its result. Long timeout — probing/scanning a whole
+   *  subnet can take tens of seconds. */
   private sendAgentOp(
-    siteId: string,
-    op: "removeAbsent" | "rescan",
+    target: { siteId?: string; agentId?: string },
+    op: import("../../shared/protocol").AgentOp,
     params?: Record<string, string>,
   ): Promise<{ ok: boolean; data?: string; error?: string }> {
     if (!this.connected) return Promise.resolve({ ok: false, error: "غير متصل بالخادم" });
@@ -638,20 +700,49 @@ export class ServerBridge {
         clearTimeout(timer);
         resolve(r);
       });
-      this.client.send({ type: "agentop.send", opId, siteId, op, ...(params ? { params } : {}) });
+      this.client.send({
+        type: "agentop.send",
+        opId,
+        ...(target.siteId ? { siteId: target.siteId } : {}),
+        ...(target.agentId ? { agentId: target.agentId } : {}),
+        op,
+        ...(params ? { params } : {}),
+      });
     });
   }
 
-  /** Agent side: the server routed a site op here (we own the site) — run it and
-   *  report the result back over the same channel. */
+  /** Agent side: the server routed an op here (we own the site/agent) — run it locally
+   *  and report the result back over the same channel. Everything the office computer
+   *  can trigger runs here on the farm laptop. */
   private async handleAgentOp(m: AgentOpExec): Promise<void> {
     try {
+      const p = m.params ?? {};
       let data = "{}";
-      if (m.op === "removeAbsent") data = JSON.stringify(await this.removeAbsentLocal(m.siteId));
-      else if (m.op === "rescan") data = JSON.stringify(await this.rescanKnownSites());
-      else {
-        this.client.send({ type: "agentop.result", opId: m.opId, ok: false, error: "عملية غير معروفة" });
-        return;
+      switch (m.op) {
+        case "removeAbsent":
+          if (!m.siteId) throw new Error("siteId required");
+          data = JSON.stringify(await this.removeAbsentLocal(m.siteId));
+          break;
+        case "rescan":
+          data = JSON.stringify(await this.rescanKnownSites());
+          break;
+        case "scan":
+          data = JSON.stringify(
+            await this.scanNetwork(p["siteName"] ?? "", p["base"] || undefined, p["secret"] || undefined),
+          );
+          break;
+        case "setSecret": {
+          const ids = (p["deviceIds"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+          this.setSecretsLocal(ids, p["secret"] ?? "");
+          data = JSON.stringify({ ok: true, count: ids.length });
+          break;
+        }
+        case "testHost":
+          data = JSON.stringify(await this.testHost(p["ip"] ?? ""));
+          break;
+        default:
+          this.client.send({ type: "agentop.result", opId: m.opId, ok: false, error: "عملية غير معروفة" });
+          return;
       }
       this.client.send({ type: "agentop.result", opId: m.opId, ok: true, data });
     } catch (e) {
@@ -803,7 +894,12 @@ export class ServerBridge {
   private onServerMessage(m: ServerMessage): void {
     switch (m.type) {
       case "snapshot":
-        this.snapshot = { sites: m.sites, devices: m.devices, statuses: m.statuses };
+        this.snapshot = {
+          sites: m.sites,
+          devices: m.devices,
+          statuses: m.statuses,
+          ...(m.agents ? { agents: m.agents } : {}),
+        };
         this.deps.emitSnapshot(this.snapshot);
         break;
       case "status.update": {

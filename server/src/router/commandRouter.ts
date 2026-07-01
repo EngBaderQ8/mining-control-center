@@ -31,6 +31,11 @@ export class CommandRouter {
     this.agents.delete(agentId);
   }
 
+  /** Is this agent currently connected (has a live socket)? */
+  isAgentOnline(agentId: string): boolean {
+    return this.agents.has(agentId);
+  }
+
   /** Fire-and-forget send to a specific agent (no response promise) — used for the
    *  long-running firmware flash job, which reports back asynchronously, not within
    *  routeCommand's short timeout. Returns false if that agent isn't connected. */

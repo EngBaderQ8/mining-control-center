@@ -38,12 +38,18 @@ export function registerIpc(bridge: ServerBridge): void {
   ipcMain.handle(CH.deviceScan, (_e, siteName: string, base?: string, secret?: string) =>
     bridge.scanNetwork(siteName, base, secret),
   );
+  ipcMain.handle(
+    CH.deviceScanVia,
+    (_e, agentId: string, siteName: string, base?: string, secret?: string) =>
+      bridge.scanNetworkVia(agentId, siteName, base, secret),
+  );
   ipcMain.handle(CH.deviceTest, (_e, ip: string) => bridge.testHost(ip));
+  ipcMain.handle(CH.deviceTestVia, (_e, agentId: string, ip: string) => bridge.testHostVia(agentId, ip));
   ipcMain.handle(CH.deviceDiagnose, (_e, host: string) => bridge.diagnoseDevice(host));
   ipcMain.handle(CH.localIps, () => bridge.getLocalIps());
-  ipcMain.handle(CH.deviceSetSecret, (_e, deviceIds: string[], secret: string) => {
-    bridge.setSecrets(deviceIds, secret);
-  });
+  ipcMain.handle(CH.deviceSetSecret, (_e, deviceIds: string[], secret: string) =>
+    bridge.setCredentials(deviceIds, secret),
+  );
   ipcMain.handle(CH.deviceDelete, (_e, deviceId: string) => {
     bridge.deleteDevice(deviceId);
   });

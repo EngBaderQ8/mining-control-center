@@ -66,17 +66,25 @@ export class ConnectionHub {
         this.router.resolveAgentOp(msg.opId, { ok: msg.ok, data: msg.data, error: msg.error });
         break;
       case "agentop.send": {
-        // A viewer runs a site-scoped op on the agent that owns the site.
-        const agentId = this.repo.siteAgent(this.userId, msg.siteId);
+        // Route a management op to the OWNING agent: by explicit agentId (e.g. scanning
+        // a brand-new farm) or by the site's owner. Both are verified to belong to THIS
+        // user — a viewer can never target another tenant's agent.
+        const agentId = msg.agentId
+          ? this.repo.agentOwner(msg.agentId) === this.userId
+            ? msg.agentId
+            : null
+          : msg.siteId
+            ? this.repo.siteAgent(this.userId, msg.siteId)
+            : null;
         if (!agentId) {
-          this.send({ type: "agentop.ack", opId: msg.opId, ok: false, error: "no agent for this site" });
+          this.send({ type: "agentop.ack", opId: msg.opId, ok: false, error: "no agent to run this op" });
           break;
         }
         try {
           const r = await this.router.routeAgentOp(agentId, {
             type: "agentop.exec",
             opId: msg.opId,
-            siteId: msg.siteId,
+            ...(msg.siteId ? { siteId: msg.siteId } : {}),
             op: msg.op,
             ...(msg.params ? { params: msg.params } : {}),
           });
@@ -102,12 +110,7 @@ export class ConnectionHub {
         break;
       }
       case "snapshot.request":
-        this.send({
-          type: "snapshot",
-          sites: this.repo.listSites(this.userId),
-          devices: this.repo.listDevices(this.userId),
-          statuses: this.repo.listStatuses(this.userId),
-        });
+        this.send(this.snapshot());
         break;
       case "device.delete":
         this.repo.deleteDevice(this.userId, msg.deviceId);
@@ -159,14 +162,23 @@ export class ConnectionHub {
     }
   }
 
-  /** Push a fresh full snapshot to every socket of this user (after a structural change). */
-  private broadcastSnapshot(): void {
-    this.broadcast(this.userId, {
+  /** Build this user's full snapshot, including their farm laptops (agents) + live
+   *  online state, so a viewer can target a remote scan at a specific farm. */
+  private snapshot(): ServerMessage {
+    return {
       type: "snapshot",
       sites: this.repo.listSites(this.userId),
       devices: this.repo.listDevices(this.userId),
       statuses: this.repo.listStatuses(this.userId),
-    });
+      agents: this.repo
+        .listUserAgents(this.userId)
+        .map((a) => ({ id: a.id, name: a.name, online: this.router.isAgentOnline(a.id) })),
+    };
+  }
+
+  /** Push a fresh full snapshot to every socket of this user (after a structural change). */
+  private broadcastSnapshot(): void {
+    this.broadcast(this.userId, this.snapshot());
   }
 
   onClose(): void {

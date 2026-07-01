@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../ipc";
+import type { AgentInfo } from "../../shared/api";
 import { t } from "../i18n";
 
 interface Props {
+  agents: AgentInfo[]; // online farm laptops the scan can be routed to
   onClose: () => void;
   onScan: (
     siteName: string,
     base: string,
     secret: string,
+    agentId?: string,
   ) => Promise<{
     found: number;
     reachable: boolean;
@@ -17,10 +20,12 @@ interface Props {
   }>;
 }
 
-export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
+export function ScanDialog({ agents, onClose, onScan }: Props): React.ReactElement {
   const [siteName, setSiteName] = useState("");
   const [base, setBase] = useState("");
   const [secret, setSecret] = useState("");
+  // Which farm laptop runs the scan. Default to the first one; empty = this machine.
+  const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
   const [detectedIps, setDetectedIps] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -43,7 +48,7 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     setBusy(true);
     setResult(null);
     try {
-      const r = await onScan(siteName.trim(), base.trim(), secret);
+      const r = await onScan(siteName.trim(), base.trim(), secret, agentId || undefined);
       const scanned = r.bases.length ? r.bases.join("، ") : "—";
       const diag = t("(النطاق {scanned} · اتصل بـ {connected} جهاز على 4028 · ردّ {responded})", {
         scanned,
@@ -75,7 +80,7 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
     setTestBusy(true);
     setTestResult(null);
     try {
-      const r = await api.testHost(testIp.trim());
+      const r = agentId ? await api.testHostVia(agentId, testIp.trim()) : await api.testHost(testIp.trim());
       if (!r.connected) {
         setTestResult(
           t("❌ ما قدر يتصل بـ {ip} على المنفذ 4028. ({error})", {
@@ -108,8 +113,28 @@ export function ScanDialog({ onClose, onScan }: Props): React.ReactElement {
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
         <h3>{t("إضافة موقع وفحص أجهزته")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          {t("شغّل هذا على لابتوب الموقع (الموصول بشبكة الأسيكات). بيضيف كل جهاز يلقاه تلقائياً.")}
+          {agents.length > 0
+            ? t("اختر لابتوب المزرعة اللي يفحص شبكته — يشتغل من هنا بدون ما تدخل عليه.")
+            : t("شغّل هذا على لابتوب الموقع (الموصول بشبكة الأسيكات). بيضيف كل جهاز يلقاه تلقائياً.")}
         </p>
+
+        {agents.length > 0 && (
+          <div className="field">
+            <label>{t("لابتوب المزرعة (يفحص شبكته)")}</label>
+            <select
+              className="input"
+              value={agentId}
+              disabled={busy}
+              onChange={(e) => setAgentId(e.target.value)}
+            >
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="field">
           <label>{t("اسم الموقع")}</label>

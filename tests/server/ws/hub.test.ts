@@ -110,6 +110,37 @@ describe("ConnectionHub", () => {
     expect(sent[0]).toMatchObject({ type: "agentop.ack", opId: "x", ok: false });
   });
 
+  it("routes an agent-scoped op (scan a NEW farm) by agentId to that farm laptop", async () => {
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
+    const agentSent: ServerMessage[] = [];
+    const agentHub = new ConnectionHub(uid, (m) => agentSent.push(m), repo, router, broadcast, flashSequencer);
+    await agentHub.handleMessage({ type: "agent.hello", agentId: "ag1", name: "farm" });
+
+    const viewerSent: ServerMessage[] = [];
+    const viewerHub = new ConnectionHub(uid, (m) => viewerSent.push(m), repo, router, broadcast, flashSequencer);
+    const done = viewerHub.handleMessage({
+      type: "agentop.send", opId: "op2", agentId: "ag1", op: "scan", params: { siteName: "New Farm" },
+    });
+    expect(agentSent.find((m) => m.type === "agentop.exec")).toMatchObject({ type: "agentop.exec", opId: "op2", op: "scan" });
+    await agentHub.handleMessage({
+      type: "agentop.result", opId: "op2", ok: true, data: '{"found":5,"reachable":true,"bases":[],"connected":5,"responded":5}',
+    });
+    await done;
+    expect(viewerSent.find((m) => m.type === "agentop.ack")).toMatchObject({ type: "agentop.ack", opId: "op2", ok: true });
+  });
+
+  it("refuses an agent-scoped op targeting an agentId owned by ANOTHER tenant (isolation)", async () => {
+    const { repo, router, uid, broadcast, flashSequencer } = setup();
+    const other = repo.createUser("other@x.com", "h");
+    const otherHub = new ConnectionHub(other, () => {}, repo, router, broadcast, flashSequencer);
+    await otherHub.handleMessage({ type: "agent.hello", agentId: "ag1", name: "theirs" });
+
+    const sent: ServerMessage[] = [];
+    const hub = new ConnectionHub(uid, (m) => sent.push(m), repo, router, broadcast, flashSequencer);
+    await hub.handleMessage({ type: "agentop.send", opId: "z", agentId: "ag1", op: "scan" });
+    expect(sent[0]).toMatchObject({ type: "agentop.ack", opId: "z", ok: false });
+  });
+
   it("broadcasts a live snapshot when a NEW site/device registers, but stays silent on identical reconnect re-register", async () => {
     const { repo, router, uid, broadcast, broadcasts, flashSequencer } = setup();
     const hub = new ConnectionHub(uid, () => {}, repo, router, broadcast, flashSequencer);

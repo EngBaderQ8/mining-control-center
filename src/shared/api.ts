@@ -3,8 +3,9 @@ import type { CommandOutcome } from "../core/model/result";
 import type { ControlCommand } from "../core/drivers/types";
 import type { Alert } from "../core/alerts/rules";
 import type { Snapshot } from "../main/service";
+import type { AgentInfo } from "./protocol";
 
-export type { Device, DeviceStatus, Site, CommandOutcome, ControlCommand, Alert, Snapshot };
+export type { Device, DeviceStatus, Site, CommandOutcome, ControlCommand, Alert, Snapshot, AgentInfo };
 
 // The central server is a fixed deployment detail — site staff never type it.
 // The app fills it automatically and only asks for email + password. Change this
@@ -94,7 +95,9 @@ export const CH = {
   deviceBulk: "device:bulk",
   deviceAdd: "device:add",
   deviceScan: "device:scan",
+  deviceScanVia: "device:scanvia",
   deviceTest: "device:test",
+  deviceTestVia: "device:testvia",
   deviceDiagnose: "device:diagnose",
   localIps: "device:localips",
   deviceSetSecret: "device:setsecret",
@@ -169,7 +172,38 @@ export interface Api {
     connected: number;
     responded: number;
   }>;
+  /** Scan a REMOTE farm's LAN via a chosen farm laptop (agentId) — for the office
+   *  computer to add miners without being on the miners' network. */
+  scanNetworkVia(
+    agentId: string,
+    siteName: string,
+    base?: string,
+    secret?: string,
+  ): Promise<{
+    found: number;
+    reachable: boolean;
+    bases: string[];
+    connected: number;
+    responded: number;
+  }>;
   testHost(ip: string): Promise<{
+    connected: boolean;
+    gotData: boolean;
+    sample: string;
+    firmware: string | null;
+    state: string;
+    hashrateTHs: number;
+    maxTempC: number;
+    summarySample: string;
+    boardsFound: number;
+    statsChainSample: string;
+    error?: string;
+  }>;
+  /** Diagnose an IP on a REMOTE farm via a chosen farm laptop (agentId). */
+  testHostVia(
+    agentId: string,
+    ip: string,
+  ): Promise<{
     connected: boolean;
     gotData: boolean;
     sample: string;

@@ -93,6 +93,13 @@ export class ServerRepo {
       .all() as ReturnType<ServerRepo["listAllAgents"]>;
   }
 
+  /** This user's registered agents (farm laptops), for remote scan targeting. */
+  listUserAgents(userId: string): Array<{ id: string; name: string }> {
+    return this.db
+      .prepare(`SELECT id,name FROM agents WHERE userId=? ORDER BY name`)
+      .all(userId) as Array<{ id: string; name: string }>;
+  }
+
   setSuspended(userId: string, suspended: boolean): void {
     this.db.prepare(`UPDATE users SET suspended=? WHERE id=?`).run(suspended ? 1 : 0, userId);
   }

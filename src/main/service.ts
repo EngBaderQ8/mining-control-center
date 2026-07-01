@@ -53,6 +53,7 @@ export interface Snapshot {
   sites: Site[];
   devices: Device[];
   statuses: DeviceStatus[];
+  agents?: import("../shared/protocol").AgentInfo[];
 }
 
 export class MiningService {

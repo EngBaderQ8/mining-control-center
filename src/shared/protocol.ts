@@ -57,11 +57,18 @@ export interface SiteRename {
 }
 
 // Server -> Viewer
+/** A farm laptop (agent) of this account, for remote scan targeting from a viewer. */
+export interface AgentInfo {
+  id: string;
+  name: string;
+  online: boolean;
+}
 export interface SnapshotMsg {
   type: "snapshot";
   sites: Site[];
   devices: Device[];
   statuses: DeviceStatus[];
+  agents?: AgentInfo[];
 }
 export interface CommandAck {
   type: "command.ack";
@@ -88,18 +95,22 @@ export interface UpdateNow {
 // management op — remove-absent, rescan — on the agent that owns the site. The server
 // routes it by site→agent and relays the result back, so everything is doable remotely
 // without logging into the farm laptop. No secrets travel this channel.
+export type AgentOp = "removeAbsent" | "rescan" | "scan" | "setSecret" | "testHost";
 export interface AgentOpSend {
   type: "agentop.send";
   opId: string;
-  siteId: string; // routes to the agent that owns this site
-  op: "removeAbsent" | "rescan";
+  // Route target: by site (the agent owning it) OR directly by agentId (for ops with
+  // no site yet, e.g. scanning a new farm). At least one must be set.
+  siteId?: string;
+  agentId?: string;
+  op: AgentOp;
   params?: Record<string, string>;
 }
 export interface AgentOpExec {
   type: "agentop.exec";
   opId: string;
-  siteId: string;
-  op: "removeAbsent" | "rescan";
+  siteId?: string;
+  op: AgentOp;
   params?: Record<string, string>;
 }
 export interface AgentOpResult {
