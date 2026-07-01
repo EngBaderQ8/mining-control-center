@@ -24,6 +24,11 @@ import { parseDeviceHealth, type DeviceHealth } from "../../core/diagnose/parse"
 import { localPrivateBases, localIpv4s } from "../discovery/localSubnet";
 import { diagnoseHost, tcp4028 } from "../transport/tcp";
 
+/** A detection that identified nothing specific — a bare "stock ASIC". We keep probing
+ *  past this so a later command (e.g. summary's MHS → Whatsminer) can give a real id. */
+const isGenericDet = (d: { firmware: Firmware; model: string }): boolean =>
+  d.firmware === "stock" && d.model === "ASIC";
+
 export interface BridgeDeps {
   config: ConnectionConfig;
   repo: DeviceRepo;
@@ -540,25 +545,7 @@ export class ServerBridge {
     const worker = async (): Promise<void> => {
       while (i < hosts.length) {
         const host = hosts[i++]!;
-        let conn = false;
-        let det: ReturnType<typeof detectFromVersion> = null;
-        let gotData = false;
-        let rawAll = "";
-        // Antminer answers `version`; some Whatsminer firmware only answers
-        // `get_version`, and a few only reveal themselves via `summary`. 2.8s
-        // timeout for Whatsminer's slower handshake.
-        const cmds = ["version", "get_version", "summary"];
-        for (let p = 0; p < cmds.length; p++) {
-          const d = await diagnoseHost(host, 4028, 2800, cmds[p]!);
-          if (d.connected) conn = true;
-          if (d.raw) rawAll += d.raw;
-          if (d.gotData) {
-            gotData = true;
-            det = detectFromVersion(d.raw);
-            if (det) break;
-          }
-          if (p === 0 && !d.connected) break; // nothing on 4028 — dead host, skip alternates
-        }
+        const { det, rawAll, connected: conn, gotData } = await this.detectStrongest(host);
         if (conn) connected++;
         if (gotData) responded++;
         if (det) {
@@ -776,6 +763,34 @@ export class ServerBridge {
     return { mac, firmware: fw };
   }
 
+  /** Probe a host's version/get_version/summary and return the STRONGEST detection —
+   *  it keeps probing past a bare "stock ASIC" so a later command (e.g. summary's MHS)
+   *  can reveal a Whatsminer. Also returns the concatenated raw (for MAC) + connectivity. */
+  private async detectStrongest(
+    host: string,
+  ): Promise<{ det: ReturnType<typeof detectFromVersion>; rawAll: string; connected: boolean; gotData: boolean }> {
+    let det: ReturnType<typeof detectFromVersion> = null;
+    let rawAll = "";
+    let connected = false;
+    let gotData = false;
+    const cmds = ["version", "get_version", "summary"];
+    for (let p = 0; p < cmds.length; p++) {
+      const d = await diagnoseHost(host, 4028, 2800, cmds[p]!);
+      if (d.connected) connected = true;
+      if (d.raw) rawAll += d.raw;
+      if (d.gotData) {
+        gotData = true;
+        const cand = detectFromVersion(d.raw);
+        if (cand) {
+          if (!det || (isGenericDet(det) && !isGenericDet(cand))) det = cand; // upgrade the id
+          if (det && !isGenericDet(det)) break; // strong id → stop probing
+        }
+      }
+      if (p === 0 && !d.connected) break; // nothing on 4028 — dead host
+    }
+    return { det, rawAll, connected, gotData };
+  }
+
   /** Deep-probe a Whatsminer for its REAL model (minertype), when the basic
    *  version/get_version/summary didn't reveal it. Tries the newer btminer
    *  {"cmd":"get.device.info"} envelope (raw via tcp4028) and legacy {"command":...}
@@ -830,53 +845,40 @@ export class ServerBridge {
     await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
   }
 
-  /** Repair Whatsminer devices whose auto-generated NAME/model is a firmware-VERSION
-   *  string (from the old detection bug that used fw_ver as the model). Re-detects the
-   *  real model from the live miner and rewrites name+model in place — locally AND on the
-   *  server (so the office-PC viewer updates too). Only touches whatsminer rows with a
-   *  versiony name/model; never a name the user chose. Idempotent + bounded concurrency. */
-  private async backfillWhatsminerNames(): Promise<void> {
-    // Matches an auto-generated version-string name: a long digit run, a "Rel2-…" build,
-    // or an embedded YYYYMMDD. NOT a normal model like "M50S" or "Whatsminer".
+  /** Repair devices whose stored identity is generic or wrong — most importantly a REAL
+   *  Whatsminer that landed as "stock/ASIC" (its reply talked MHS but carried no name
+   *  marker), or a version-string name from the old fw_ver bug. Re-detects firmware + model
+   *  + control-port from the live miner (strongest id, with a deep model probe for a
+   *  Whatsminer) and rewrites it in place — locally AND on the server. Only rewrites an
+   *  auto-generated name, never one the user typed. Idempotent + bounded concurrency. */
+  private async backfillDeviceIdentity(): Promise<void> {
     const VER_RE = /^\d{6,}|^rel\d|\.\d{8}\.|-\d{8}|\d{8}\.\d/i;
-    // Re-process a Whatsminer if its name/model is a version string, empty, OR still the
-    // generic "Whatsminer" placeholder (so we can upgrade it to the real model once found).
-    const bad = this.deps.repo
+    const stale = this.deps.repo
       .listDevices()
       .filter(
-        (d) =>
-          d.firmware === "whatsminer" &&
-          (VER_RE.test(d.name) || VER_RE.test(d.model) || d.model === "" || d.model === "Whatsminer"),
+        (d) => d.model === "" || d.model === "ASIC" || d.model === "Whatsminer" || VER_RE.test(d.model) || VER_RE.test(d.name),
       );
-    if (bad.length === 0) return;
+    if (stale.length === 0) return;
     let i = 0;
     const worker = async (): Promise<void> => {
-      while (i < bad.length) {
-        const d = bad[i++]!;
-        let det: ReturnType<typeof detectFromVersion> = null;
-        for (const cmd of ["version", "get_version", "summary"]) {
-          const r = await diagnoseHost(d.host, 4028, 2800, cmd);
-          if (r.gotData) {
-            det = detectFromVersion(r.raw);
-            if (det) break;
-          }
-        }
-        if (!det || det.firmware !== "whatsminer") continue; // offline, or not a Whatsminer anymore
-        const model = await this.bestModel(d.host, det); // real minertype (M50S…) or "Whatsminer"
+      while (i < stale.length) {
+        const d = stale[i++]!;
+        const { det } = await this.detectStrongest(d.host);
+        if (!det) continue; // offline — retry next session
+        const model = await this.bestModel(d.host, det); // real Whatsminer model when exposed
         const cur = this.deps.repo.listDevices().find((x) => x.id === d.id);
         if (!cur) continue;
         const last = cur.host.split(".").pop() ?? "";
-        // Rewrite ONLY an auto-generated name (versiony OR the generic "Whatsminer-<octet>") —
-        // never a name the user typed.
-        const auto = VER_RE.test(cur.name) || /^whatsminer-\d+$/i.test(cur.name);
+        const auto = VER_RE.test(cur.name) || /^(whatsminer|asic)-\d+$/i.test(cur.name);
         const newName = auto ? `${model}-${last}` : cur.name;
-        if (cur.model === model && cur.name === newName) continue; // nothing changed
-        const fixed = { ...cur, model, name: newName };
+        const controlPort = det.firmware === "stock" || det.firmware === "vnish" ? 80 : 4028;
+        if (cur.firmware === det.firmware && cur.model === model && cur.name === newName) continue; // no change
+        const fixed = { ...cur, firmware: det.firmware, model, name: newName, controlPort };
         this.deps.repo.upsertDevice(fixed); // persist locally
-        this.agent?.registerDevice(fixed); // push to server -> viewer sees the corrected name
+        this.agent?.registerDevice(fixed); // push to server -> viewer updates the identity
       }
     };
-    await Promise.all(Array.from({ length: Math.min(4, bad.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(4, stale.length) }, worker));
     this.requestSnapshot();
   }
 
@@ -1008,13 +1010,13 @@ export class ServerBridge {
     this.client.send({ type: "snapshot.request" });
     this.service.startMonitoring(); // poll local devices -> pushStatuses to server
     this.refreshSensorPolling(); // resume room-climate alerts from persisted config
-    // One-time repair of Whatsminer devices misnamed with a firmware-version string
-    // (old detection bug). Runs on THIS agent's own devices, shortly after connecting.
+    // One-time repair of mis-identified devices (real Whatsminers stored as "stock/ASIC",
+    // version-string names…). Runs on THIS agent's own devices, shortly after connecting.
     if (!this.wmFixDone && !this.wmFixTimer) {
       this.wmFixTimer = setTimeout(() => {
         this.wmFixTimer = null;
         this.wmFixDone = true;
-        void this.backfillWhatsminerNames();
+        void this.backfillDeviceIdentity();
       }, 20_000);
     }
     // On (re)connect, pick up any update the owner uploaded to their server.

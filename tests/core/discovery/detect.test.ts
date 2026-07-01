@@ -31,6 +31,16 @@ describe("detectFromVersion", () => {
     expect(d?.model).toBe("Antminer S19 XP+ Hyd");
   });
 
+  it("identifies a Whatsminer by its MHS hashrate unit, even with NO name markers", () => {
+    const summary = '{"STATUS":[{"STATUS":"S"}],"SUMMARY":[{"MHS av":92000000,"MHS 5s":93000000,"Temperature":75}]}';
+    expect(detectFromVersion(summary)?.firmware).toBe("whatsminer");
+  });
+
+  it("does NOT mistake an Antminer (GHS) for a Whatsminer", () => {
+    const summary = '{"STATUS":[{"STATUS":"S"}],"SUMMARY":[{"GHS av":95000,"GHS 5s":96000}]}';
+    expect(detectFromVersion(summary)?.firmware).toBe("stock");
+  });
+
   it("does NOT use fw_ver as the Whatsminer model — falls back to a clean 'Whatsminer'", () => {
     const wm = '{"STATUS":[{"STATUS":"S"}],"Msg":{"api_ver":"2.0.7","fw_ver":"20250915.16"}}';
     const d = detectFromVersion(wm);

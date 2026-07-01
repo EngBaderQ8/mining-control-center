@@ -27,7 +27,12 @@ export function detectFromVersion(raw: string): Detected | null {
   // Whatsminer markers added: it answers cgminer `version` (Type "WhatsMiner …")
   // or new-style `get_version` (platform H6OS/M6OS, api_ver/fw_ver), and reports
   // hashrate in MHS (never GHS) — none of the Antminer markers apply.
-  const isWhatsminer = /whatsminer|microbt|btminer|"api_ver"|"fw_ver"|H6OS|M6OS/i.test(text);
+  // Whatsminer reports hashrate in MHS; Antminer/cgminer in GHS. So a reply that talks MHS
+  // (and NOT GHS) is a Whatsminer even when it carries none of the name markers — this is
+  // what the poller already keys on, and it stops real Whatsminers landing as "stock/ASIC".
+  const isWhatsminer =
+    /whatsminer|microbt|btminer|"api_ver"|"fw_ver"|H6OS|M6OS/i.test(text) ||
+    (/\bMHS\b/i.test(text) && !/\bGHS\b/i.test(text));
   const isMiner =
     versionRow !== null ||
     isWhatsminer ||
