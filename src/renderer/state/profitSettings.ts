@@ -1,8 +1,11 @@
+/** Fallback efficiency (J/TH) for a model NOT in the catalog. The app reads each
+ *  known model's real efficiency automatically; this only covers unrecognised models. */
+export const FALLBACK_JPERTH = 25;
+
 export interface ProfitSettings {
   currency: string; // label e.g. "ريال", "$"
   usdRate: number; // user-currency units per 1 USD (1 => USD)
   electricityPerKwh: number; // GLOBAL default price, in the user's currency
-  jPerTh: number; // efficiency (J/TH)
   manualPriceUsd: number; // 0 => use the live price
   // Per-site overrides (keyed by siteId). Rent is a MONTHLY amount in the user's
   // currency; electricity overrides the global per-kWh price for that site only.
@@ -16,7 +19,6 @@ export const PROFIT_DEFAULTS: ProfitSettings = {
   currency: "$",
   usdRate: 1,
   electricityPerKwh: 0.05,
-  jPerTh: 18.5,
   manualPriceUsd: 0,
   rentPerMonthBySite: {},
   electricityBySite: {},

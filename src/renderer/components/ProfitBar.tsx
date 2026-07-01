@@ -9,6 +9,7 @@ import {
   saveProfitSettings,
   money,
   FALLBACK_DIFFICULTY,
+  FALLBACK_JPERTH,
   siteElectricity,
   siteRentMonthly,
   type ProfitSettings,
@@ -53,7 +54,7 @@ export function ProfitBar({ groups }: { groups: SiteGroup[] }): React.ReactEleme
   // Total = sum of per-site results so each site's own electricity price + rent apply.
   const r: ProfitResult = groups.reduce((acc, g) => {
     const ths = g.views.reduce((s, v) => s + (v.status?.hashrateTHs ?? 0), 0);
-    const powerKw = sitePowerKw(g.views, settings.jPerTh); // per-model efficiency
+    const powerKw = sitePowerKw(g.views, FALLBACK_JPERTH); // power per device from its model
     const x = computeProfit(effectiveNet, {
       hashrateTHs: ths,
       powerKw,
@@ -199,15 +200,8 @@ function ProfitSettingsDialog({
             onChange={(e) => setS({ ...s, electricityPerKwh: num(e.target.value, s.electricityPerKwh) })}
           />
         </div>
-        <div className="field">
-          <label>{t("كفاءة الأجهزة J/TH (افتراضي 18.5 لـ S19 XP+ Hyd)")}</label>
-          <input
-            className="input"
-            type="number"
-            step="0.1"
-            value={s.jPerTh}
-            onChange={(e) => setS({ ...s, jPerTh: num(e.target.value, s.jPerTh) })}
-          />
+        <div style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 8px" }}>
+          {t("⚡ كفاءة الأجهزة تُقرأ تلقائياً من موديل كل جهاز — ما تحتاج تدخلها. الطاقة تُحسب لكل جهاز حسب موديله.")}
         </div>
         <div className="field">
           <label>{t("سعر BTC يدوياً بالدولار (اتركه 0 للسعر التلقائي المباشر)")}</label>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../ipc";
 import { computeProfit, powerKwFromHashrate, type NetworkStats } from "../../core/profit/calc";
 import { guardDecision, DEFAULT_GUARD, type GuardSettings } from "../../core/guard/decide";
-import { loadProfitSettings, FALLBACK_DIFFICULTY } from "../state/profitSettings";
+import { loadProfitSettings, FALLBACK_DIFFICULTY, FALLBACK_JPERTH } from "../state/profitSettings";
 import { t } from "../i18n";
 
 const KEY = "mcc.guard";
@@ -48,7 +48,7 @@ export function ProfitGuard({
     { priceUsd, difficulty: net?.difficulty || FALLBACK_DIFFICULTY, blockRewardBtc: net?.blockRewardBtc ?? 3.125 },
     {
       hashrateTHs,
-      powerKw: powerKwFromHashrate(hashrateTHs, ps.jPerTh),
+      powerKw: powerKwFromHashrate(hashrateTHs, FALLBACK_JPERTH),
       electricityPerKwh: ps.electricityPerKwh,
       usdRate: ps.usdRate,
     },

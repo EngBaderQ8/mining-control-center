@@ -4,7 +4,7 @@ import { api } from "../ipc";
 import type { SiteGroup } from "../state/store";
 import { computeProfit, type NetworkStats } from "../../core/profit/calc";
 import { sitePowerKw } from "../state/store";
-import { loadProfitSettings, money, FALLBACK_DIFFICULTY, siteElectricity, siteRentMonthly } from "../state/profitSettings";
+import { loadProfitSettings, money, FALLBACK_DIFFICULTY, FALLBACK_JPERTH, siteElectricity, siteRentMonthly } from "../state/profitSettings";
 
 export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactElement {
   const [net, setNet] = useState<NetworkStats | null>(null);
@@ -26,7 +26,7 @@ export function SiteBreakdown({ groups }: { groups: SiteGroup[] }): React.ReactE
     .map((g) => {
       const online = g.views.filter((v) => v.status?.state === "online").length;
       const ths = g.views.reduce((s, v) => s + (v.status?.hashrateTHs ?? 0), 0);
-      const powerKw = sitePowerKw(g.views, settings.jPerTh); // per-model efficiency
+      const powerKw = sitePowerKw(g.views, FALLBACK_JPERTH); // power per device from its model
       const r = computeProfit(effNet, {
         hashrateTHs: ths,
         powerKw,
