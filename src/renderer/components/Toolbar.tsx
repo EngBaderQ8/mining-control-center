@@ -61,8 +61,8 @@ export function Toolbar({
       <button className="btn" onClick={onAddDevice}>
         + {t("إضافة يدوي")}
       </button>
-      <button className="btn" onClick={onTelegram} title={t("تنبيهات على جوالك عبر تيليجرام")}>
-        🔔 {t("تنبيهات الجوال")}
+      <button className="btn" onClick={onTelegram} title={t("تنبيهات على هاتفك عبر تيليجرام")}>
+        🔔 {t("تنبيهات الهاتف")}
       </button>
       <button className="btn" onClick={onRecovery} title={t("إصلاح ذاتي تلقائي للأجهزة")}>
         🤖 {t("الإصلاح الذاتي")}

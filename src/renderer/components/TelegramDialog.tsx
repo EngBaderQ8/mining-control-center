@@ -49,7 +49,7 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
       // Save first so the report uses the latest settings.
       await api.setTelegram({ ...s, token: s.token.trim(), chatId: s.chatId.trim() });
       const r = await api.sendDailyReport();
-      setMsg(r.ok ? t("✅ أُرسل التقرير اليومي على تيليجرام — شوف جوالك.") : `⚠ ${r.error ?? ""}`);
+      setMsg(r.ok ? t("✅ أُرسل التقرير اليومي على تيليجرام — شوف هاتفك.") : `⚠ ${r.error ?? ""}`);
     } finally {
       setBusy(false);
     }
@@ -58,9 +58,9 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
   return (
     <div className="overlay" onClick={busy ? undefined : onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 480 }}>
-        <h3>🔔 {t("تنبيهات الجوال عبر تيليجرام")}</h3>
+        <h3>🔔 {t("تنبيهات الهاتف عبر تيليجرام")}</h3>
         <p className="subtitle" style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          {t("يوصلك إشعار على جوالك فوراً لما يتوقف جهاز أو يسخن أو ينزل الهاش.")}
+          {t("يوصلك إشعار على هاتفك فوراً لما يتوقف جهاز أو يسخن أو ينزل الهاش.")}
         </p>
 
         <ol style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.9, paddingInlineStart: 18 }}>
@@ -116,7 +116,7 @@ export function TelegramDialog({ onClose }: { onClose: () => void }): React.Reac
           📊 {t("لما تفعّل تيليجرام، يوصلك")} <b>{t("تقرير يومي تلقائي")}</b> {t("بملخص الإنتاج والمشاكل.")}
         </p>
         <p style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7, background: "var(--surface2)", padding: "8px 10px", borderRadius: 8 }}>
-          🤖 <b>{t("الأقوى — تتحكم من جوالك:")}</b> {t("أرسل للبوت أوامر مثل")} «<b>{t("الوضع")}</b>» · «<b>{t("أوقف 105")}</b>» ·
+          🤖 <b>{t("الأقوى — تتحكم من هاتفك:")}</b> {t("أرسل للبوت أوامر مثل")} «<b>{t("الوضع")}</b>» · «<b>{t("أوقف 105")}</b>» ·
           «<b>{t("شغّل الرياض")}</b>» · «<b>{t("ريبوت الكل")}</b>» · «<b>{t("مساعدة")}</b>» — {t("وينفّذ ويردّ عليك. تتحكم بمزرعتك من أي مكان!")}
         </p>
         <div className="actions" style={{ marginTop: 6 }}>
