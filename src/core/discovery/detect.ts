@@ -43,8 +43,13 @@ export function detectFromVersion(raw: string): Detected | null {
   let model = "ASIC";
   if (versionRow && typeof versionRow["Type"] === "string") model = String(versionRow["Type"]);
   else {
+    // Accept ONLY a real model marker — NEVER a firmware-version field. Whatsminer's model
+    // lives in "minertype"/"model" (e.g. "M50S+V50"); "platform" (H6OS) is the OS and
+    // "fw_ver" is the firmware VERSION. Using fw_ver as the model made the version string
+    // show up as the device name (e.g. "20250915.16-16").
     const m =
-      /"Type"\s*:\s*"([^"]+)"/i.exec(text) ?? /"(?:platform|fw_ver)"\s*:\s*"([^"]+)"/i.exec(text);
+      /"Type"\s*:\s*"([^"]+)"/i.exec(text) ??
+      /"(?:minertype|miner_type|model)"\s*:\s*"([^"]+)"/i.exec(text);
     if (m && m[1]) model = m[1];
   }
   // A bare cgminer `version` on Whatsminer may not carry "Type" — make the label

@@ -31,6 +31,20 @@ describe("detectFromVersion", () => {
     expect(d?.model).toBe("Antminer S19 XP+ Hyd");
   });
 
+  it("does NOT use fw_ver as the Whatsminer model — falls back to a clean 'Whatsminer'", () => {
+    const wm = '{"STATUS":[{"STATUS":"S"}],"Msg":{"api_ver":"2.0.7","fw_ver":"20250915.16"}}';
+    const d = detectFromVersion(wm);
+    expect(d?.firmware).toBe("whatsminer");
+    expect(d?.model).toBe("Whatsminer"); // never the firmware-version string
+  });
+
+  it("reads the real Whatsminer model from minertype when present", () => {
+    const wm = '{"STATUS":[{"STATUS":"S"}],"Msg":{"minertype":"M50S+V50","fw_ver":"20250915.16"}}';
+    const d = detectFromVersion(wm);
+    expect(d?.firmware).toBe("whatsminer");
+    expect(d?.model).toBe("M50S+V50");
+  });
+
   it("still detects a miner from MALFORMED JSON (bmminer quirk)", () => {
     // Missing closing brace / trailing junk but clear miner markers.
     const malformed =

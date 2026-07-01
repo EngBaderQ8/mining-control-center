@@ -67,6 +67,8 @@ export class ServerBridge {
   private rescanning = false;
   private sensorTimer: ReturnType<typeof setInterval> | null = null;
   private sensorAlertedAt = new Map<string, number>(); // sensorId -> last alert epoch (throttle)
+  private wmFixTimer: ReturnType<typeof setTimeout> | null = null;
+  private wmFixDone = false; // one-time Whatsminer name repair (per app session)
   private flashing = new Set<string>(); // deviceIds currently being flashed (per-device lock)
 
   constructor(private deps: BridgeDeps) {
@@ -123,9 +125,11 @@ export class ServerBridge {
     if (this.initialRescan) clearTimeout(this.initialRescan);
     if (this.rescanTimer) clearInterval(this.rescanTimer);
     if (this.sensorTimer) clearInterval(this.sensorTimer);
+    if (this.wmFixTimer) clearTimeout(this.wmFixTimer);
     this.initialRescan = null;
     this.rescanTimer = null;
     this.sensorTimer = null;
+    this.wmFixTimer = null;
   }
 
   /** GET a small JSON document from a sensor on the LAN (plain HTTP, short timeout). */
@@ -792,6 +796,49 @@ export class ServerBridge {
     await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
   }
 
+  /** Repair Whatsminer devices whose auto-generated NAME/model is a firmware-VERSION
+   *  string (from the old detection bug that used fw_ver as the model). Re-detects the
+   *  real model from the live miner and rewrites name+model in place — locally AND on the
+   *  server (so the office-PC viewer updates too). Only touches whatsminer rows with a
+   *  versiony name/model; never a name the user chose. Idempotent + bounded concurrency. */
+  private async backfillWhatsminerNames(): Promise<void> {
+    // Matches an auto-generated version-string name: a long digit run, a "Rel2-…" build,
+    // or an embedded YYYYMMDD. NOT a normal model like "M50S" or "Whatsminer".
+    const VER_RE = /^\d{6,}|^rel\d|\.\d{8}\.|-\d{8}|\d{8}\.\d/i;
+    const bad = this.deps.repo
+      .listDevices()
+      .filter((d) => d.firmware === "whatsminer" && (VER_RE.test(d.name) || VER_RE.test(d.model) || d.model === ""));
+    if (bad.length === 0) return;
+    let i = 0;
+    const worker = async (): Promise<void> => {
+      while (i < bad.length) {
+        const d = bad[i++]!;
+        let det: ReturnType<typeof detectFromVersion> = null;
+        for (const cmd of ["version", "get_version", "summary"]) {
+          const r = await diagnoseHost(d.host, 4028, 2800, cmd);
+          if (r.gotData) {
+            det = detectFromVersion(r.raw);
+            if (det) break;
+          }
+        }
+        if (!det || det.firmware !== "whatsminer") continue; // offline, or not a Whatsminer anymore
+        // With the detection fix, an unknown Whatsminer returns "Whatsminer" — still a clean
+        // upgrade from a version string. A real model (M50S…) comes through when the miner exposes it.
+        const model = det.model && !VER_RE.test(det.model) ? det.model : "Whatsminer";
+        const cur = this.deps.repo.listDevices().find((x) => x.id === d.id);
+        if (!cur) continue;
+        const last = cur.host.split(".").pop() ?? "";
+        const newName = VER_RE.test(cur.name) ? `${model}-${last}` : cur.name; // never rename a user's custom name
+        if (cur.model === model && cur.name === newName) continue; // nothing changed
+        const fixed = { ...cur, model, name: newName };
+        this.deps.repo.upsertDevice(fixed); // persist locally
+        this.agent?.registerDevice(fixed); // push to server -> viewer sees the corrected name
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, bad.length) }, worker));
+    this.requestSnapshot();
+  }
+
   async sendCommand(
     deviceId: string,
     command: ControlCommand,
@@ -920,6 +967,15 @@ export class ServerBridge {
     this.client.send({ type: "snapshot.request" });
     this.service.startMonitoring(); // poll local devices -> pushStatuses to server
     this.refreshSensorPolling(); // resume room-climate alerts from persisted config
+    // One-time repair of Whatsminer devices misnamed with a firmware-version string
+    // (old detection bug). Runs on THIS agent's own devices, shortly after connecting.
+    if (!this.wmFixDone && !this.wmFixTimer) {
+      this.wmFixTimer = setTimeout(() => {
+        this.wmFixTimer = null;
+        this.wmFixDone = true;
+        void this.backfillWhatsminerNames();
+      }, 20_000);
+    }
     // On (re)connect, pick up any update the owner uploaded to their server.
     const base = this.serverBase();
     if (base) this.deps.checkServerUpdate?.(base);
