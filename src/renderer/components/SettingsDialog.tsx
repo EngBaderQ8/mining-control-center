@@ -83,6 +83,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }): React.Reac
               checked={s.runInBackground}
               onChange={(v) => update({ runInBackground: v })}
             />
+            <Toggle
+              label={t("الاكتشاف التلقائي للأجهزة")}
+              desc={t("يفحص شبكة كل موقع كل ١٠ دقائق ويضيف الماينرات الجديدة تلقائياً. ⚠️ على شبكات DHCP قد يضيف نسخاً مكرّرة لو تغيّر IP الجهاز — خلّه مطفياً وأضِف الأجهزة يدوياً بزر «فحص»، أو فعّله بعد ما تثبّت IP ثابت لكل ماينر.")}
+              checked={s.autoDiscovery}
+              onChange={(v) => update({ autoDiscovery: v })}
+            />
             <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 12, lineHeight: 1.7 }}>
               {t("💡 للمتابعة ٢٤/٧: فعّل «التشغيل التلقائي» + «يبدأ مصغّراً». تلقاه دايماً بأيقونة بجانب ساعة ويندوز.")}
             </p>

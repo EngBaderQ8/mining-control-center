@@ -418,6 +418,7 @@ function startApp(): void {
   ipcMain.handle(CH.appSettingsSet, (_e, partial: Partial<AppSettings>) => {
     const next = appSettings?.set(partial) ?? DEFAULT_APP_SETTINGS;
     applyLoginItem(next);
+    bridgeRef?.setAutoDiscovery(next.autoDiscovery); // start/stop the sweep live
     return next;
   });
   ipcMain.handle(CH.openExternal, (_e, url: string) => openExternalSafe(url));
@@ -437,6 +438,8 @@ function startApp(): void {
     bridgeRef = bridge; // module-scope handle so before-quit can stop its timers
     registerIpc(bridge);
     bridge.resume(); // reconnect if already logged in
+    // Auto-discovery is opt-in — start its sweep only if the user enabled it.
+    bridge.setAutoDiscovery(appSettings?.get().autoDiscovery ?? false);
     // Apply persisted self-healing settings + handlers (needs the live bridge).
     if (recoveryConfig) bridge.setRecovery(recoveryConfig.get());
     ipcMain.handle(CH.recoveryGet, () => recoveryConfig?.get());

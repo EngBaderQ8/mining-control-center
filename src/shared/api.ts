@@ -51,12 +51,17 @@ export interface AppSettings {
   // quits the app. One flag governs both the close behavior and staying alive.
   runInBackground: boolean;
   startMinimized: boolean; // when launched at startup, start hidden in the tray
+  // Periodically re-scan each site's subnet and AUTO-ADD newly-found miners. OFF by
+  // default: on DHCP networks a miner that changes IP can be re-added on the new IP
+  // while its old entry lingers, so auto-add is opt-in. Manual scan always works.
+  autoDiscovery: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   launchAtStartup: false,
   runInBackground: true,
   startMinimized: true,
+  autoDiscovery: false,
 };
 
 export interface UpdateStatus {

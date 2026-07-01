@@ -90,10 +90,24 @@ export class ServerBridge {
       if (c) this.onConnected();
     });
 
-    // Auto-discovery: look for miners that came online after a site was set up and
-    // add them to that site automatically — once a few minutes after start, then
-    // every 10 minutes. Gentle and safe: it only probes UNREGISTERED IPs, so it
-    // never re-connects to a working miner.
+    // Auto-discovery is OPT-IN (off by default) — enabled via setAutoDiscovery() from
+    // the app setting. It only probes UNREGISTERED IPs and auto-adds newly-found miners;
+    // on DHCP networks that can create duplicates, so the user controls it.
+  }
+
+  /** Turn the periodic auto-discovery sweep on/off (from the app setting). Off = the
+   *  agent never auto-adds devices; the user scans manually when adding real miners. */
+  setAutoDiscovery(enabled: boolean): void {
+    if (this.initialRescan) {
+      clearTimeout(this.initialRescan);
+      this.initialRescan = null;
+    }
+    if (this.rescanTimer) {
+      clearInterval(this.rescanTimer);
+      this.rescanTimer = null;
+    }
+    if (!enabled) return;
+    // First sweep a few minutes after enabling, then every 10 minutes.
     this.initialRescan = setTimeout(() => void this.rescanKnownSites(), 3 * 60 * 1000);
     this.rescanTimer = setInterval(() => void this.rescanKnownSites(), 10 * 60 * 1000);
   }

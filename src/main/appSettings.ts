@@ -28,6 +28,7 @@ export class AppSettingsStore {
       launchAtStartup: !!s.launchAtStartup,
       runInBackground,
       startMinimized: runInBackground ? !!s.startMinimized : false,
+      autoDiscovery: !!s.autoDiscovery,
     };
   }
 
