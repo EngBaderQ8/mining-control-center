@@ -276,6 +276,12 @@ export function App(): React.ReactElement {
     () => groupBySite(sites, devices, statusById, filter),
     [sites, devices, statusById, filter],
   );
+  // UNFILTERED grouping — profit must always reflect the WHOLE fleet, never the current
+  // search/filter (otherwise the ⚙ profit total drops to just the filtered devices).
+  const allGroups = useMemo(
+    () => groupBySite(sites, devices, statusById, EMPTY_FILTER),
+    [sites, devices, statusById],
+  );
   const summary = useMemo(
     () => computeSummary(sites, devices, statusById),
     [sites, devices, statusById],
@@ -511,7 +517,7 @@ export function App(): React.ReactElement {
         <span className="spacer" />
         <LanguageSwitcher />
       </header>
-      <ProfitBar groups={groups} />
+      <ProfitBar groups={allGroups} />
       <div style={{ marginBottom: 14 }}>
         <ProfitGuard
           hashrateTHs={summary.totalTHs}
@@ -592,7 +598,7 @@ export function App(): React.ReactElement {
             {t("لا توجد مواقع.")}
           </div>
         ) : (
-          <SiteBreakdown groups={groups} />
+          <SiteBreakdown groups={allGroups} />
         )
       ) : view === "charts" ? (
         <HistoryCharts history={history} />
