@@ -133,6 +133,14 @@ async function main(): Promise<void> {
 
   const server = createServer({ key, cert }, (req, res) => {
     void (async () => {
+      // Public, secret-free health probe: reports whether update-signing is configured
+      // (i.e. UPDATE_PRIVATE_KEY is set) so upload failures can be diagnosed without shell
+      // access. Exposes only booleans — never any key material.
+      if ((req.url ?? "").split("?")[0] === "/health" && req.method === "GET") {
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(JSON.stringify({ ok: true, signing: !!updatePrivKey }));
+        return;
+      }
       if (handleDownload(req, res, DATA_DIR)) return;
       if (handleUpdatePublic(req, res, DATA_DIR)) return;
       if (
